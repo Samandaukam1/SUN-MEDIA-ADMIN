@@ -4002,6 +4002,10 @@ export type Database = {
         }[]
       }
       get_command_center: { Args: { p_date?: string }; Returns: Json }
+      get_content_transitions: {
+        Args: { p_content_id: string }
+        Returns: Database["public"]["Enums"]["content_status"][]
+      }
       get_employee_home: { Args: never; Returns: Json }
       get_employee_scorecards: {
         Args: { p_from: string; p_to: string; p_user_id?: string }
@@ -4145,6 +4149,10 @@ export type Database = {
           p_version_id: string
         }
         Returns: Json
+      }
+      save_content: {
+        Args: { p_content_id: string; p_payload: Json }
+        Returns: string
       }
       set_account_status: {
         Args: {

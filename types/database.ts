@@ -4071,6 +4071,25 @@ export type Database = {
           subject_name: string
         }[]
       }
+      get_attendance_day: {
+        Args: { p_date: string }
+        Returns: {
+          arrived_at: string
+          attendance_id: string
+          avatar_url: string
+          full_name: string
+          job_title: string
+          late_minutes: number
+          marked_at: string
+          marked_by_name: string
+          note: string
+          roles: Json
+          scheduled: boolean
+          status: Database["public"]["Enums"]["attendance_status"]
+          user_id: string
+          work_start_time: string
+        }[]
+      }
       get_attendance_summary: {
         Args: { p_from: string; p_to: string; p_user_id: string }
         Returns: Json

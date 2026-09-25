@@ -8,7 +8,11 @@
     "start": "next start",
     "lint": "eslint .",
     "supabase": "supabase",
-    "supabase:check": "supabase --version"
+    "db:start": "supabase start -x logflare,vector,supavisor,imgproxy,mailpit",
+    "db:reset": "supabase db reset",
+    "db:test": "supabase test db",
+    "db:lint": "supabase db lint --level warning",
+    "db:types": "supabase gen types typescript --local --schema public > types/database.ts && cp types/database.ts '../SUNMEDIA USER/types/database.ts'"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

@@ -9,6 +9,89 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      announcement_reads: {
+        Row: {
+          announcement_id: string
+          read_at: string
+          user_id: string
+        }
+        Insert: {
+          announcement_id: string
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          announcement_id?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_reads_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcements: {
+        Row: {
+          audience_roles: string[] | null
+          author_id: string | null
+          body: string
+          created_at: string
+          deleted_at: string | null
+          expires_at: string | null
+          id: string
+          is_pinned: boolean
+          published_at: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          audience_roles?: string[] | null
+          author_id?: string | null
+          body: string
+          created_at?: string
+          deleted_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_pinned?: boolean
+          published_at?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          audience_roles?: string[] | null
+          author_id?: string | null
+          body?: string
+          created_at?: string
+          deleted_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_pinned?: boolean
+          published_at?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcements_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app_settings: {
         Row: {
           description: string | null
@@ -812,6 +895,59 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "clients_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_events: {
+        Row: {
+          all_day: boolean
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          ends_at: string
+          id: string
+          kind: string
+          location: string | null
+          starts_at: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          all_day?: boolean
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          ends_at: string
+          id?: string
+          kind?: string
+          location?: string | null
+          starts_at: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          all_day?: boolean
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          ends_at?: string
+          id?: string
+          kind?: string
+          location?: string | null
+          starts_at?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_events_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -2904,6 +3040,73 @@ export type Database = {
         }
         Relationships: []
       }
+      shared_documents: {
+        Row: {
+          category: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          file_id: string | null
+          id: string
+          is_pinned: boolean
+          title: string
+          updated_at: string
+          updated_by: string | null
+          url: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          file_id?: string | null
+          id?: string
+          is_pinned?: boolean
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+          url?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          file_id?: string | null
+          id?: string
+          is_pinned?: boolean
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_documents_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shared_documents_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shared_documents_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shooting_attendance: {
         Row: {
           arrived_at: string | null
@@ -3626,6 +3829,10 @@ export type Database = {
         }
       }
       authorize_password_reset: { Args: { p_user_id: string }; Returns: string }
+      change_staff_role: {
+        Args: { p_role_key: string; p_user_id: string }
+        Returns: undefined
+      }
       claim_push_deliveries: {
         Args: { p_limit?: number }
         Returns: {
@@ -3806,6 +4013,27 @@ export type Database = {
         }[]
       }
       get_my_context: { Args: never; Returns: Json }
+      get_team_directory: {
+        Args: never
+        Returns: {
+          account_status: Database["public"]["Enums"]["account_status"]
+          attendance_status: Database["public"]["Enums"]["attendance_status"]
+          avatar_url: string
+          department: string
+          due_today: number
+          email: string
+          employee_status: Database["public"]["Enums"]["employee_status"]
+          full_name: string
+          job_title: string
+          late_minutes: number
+          open_tasks: number
+          overdue_tasks: number
+          phone: string
+          roles: Json
+          shootings_today: number
+          user_id: string
+        }[]
+      }
       mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number }
       provision_client_user: {
         Args: {
@@ -3977,6 +4205,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_staff_permissions: {
+        Args: { p_permissions: string[]; p_user_id: string }
+        Returns: undefined
       }
       submit_content_version: {
         Args: {

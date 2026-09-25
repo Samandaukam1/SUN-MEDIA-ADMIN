@@ -139,3 +139,25 @@ export const PERMISSION_LABEL: Record<string, string> = {
   'client.reports.view': 'Hisobotlarni ko‘rish',
   'client.files.upload': 'Fayl yuklash',
 };
+
+export const PERMISSION_MODULE_LABEL: Record<string, string> = {
+  clients: 'Mijozlar',
+  commercial: 'Tijorat',
+  dashboard: 'Boshqaruv paneli',
+  files: 'Fayllar',
+  team: 'Jamoa',
+  attendance: 'Davomat',
+  production: 'Ishlab chiqarish',
+  content: 'Kontent',
+  analytics: 'Analitika',
+  reports: 'Hisobotlar',
+  reporting: 'Hisobot va analitika',
+  system: 'Tizim',
+  workspace: 'Ish joyi',
+  client: 'Mijoz kabineti',
+  projects: 'Loyihalar',
+  tasks: 'Vazifalar',
+  approvals: 'Tasdiqlash',
+  notifications: 'Bildirishnomalar',
+  chat: 'Chat',
+};

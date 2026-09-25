@@ -14,6 +14,14 @@ const NAV: { title: string; items: NavItem[] }[] = [
       { href: '/clients', label: 'Mijozlar', icon: 'briefcase', anyOf: ['clients.read_all', 'clients.manage'] },
     ],
   },
+  {
+    title: 'Tizim',
+    items: [
+      { href: '/workspace', label: 'Ish joyi', icon: 'megaphone', permission: 'workspace.manage' },
+      { href: '/roles', label: 'Rollar va ruxsatlar', icon: 'shield', anyOf: ['roles.manage', 'employees.manage'] },
+      { href: '/settings', label: 'Sozlamalar', icon: 'settings', anyOf: ['settings.manage', 'employees.manage'] },
+    ],
+  },
 ];
 
 export function navigationFor(context: StaffContext) {

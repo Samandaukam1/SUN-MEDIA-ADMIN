@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
+import { AccessEditor } from '@/components/accounts/AccessEditor';
 import { AccountActions } from '@/components/accounts/AccountActions';
 import { StaffProfileForm } from '@/components/accounts/StaffProfileForm';
 import { PageHeader } from '@/components/panel/PageHeader';
@@ -127,33 +128,39 @@ export default async function EmployeePage({ params, searchParams }: { params: P
       ) : null}
 
       {active === 'access' ? (
-        <div className="grid max-w-5xl gap-6 lg:grid-cols-2">
-          <Card>
-            <SectionTitle>Rollar</SectionTitle>
-            <ul className="space-y-2">
-              {roles.map((r) => (
-                <li key={r.key} className="flex items-center justify-between rounded-xl bg-surface-2 px-4 py-3 text-sm">
-                  <span className="font-medium">{r.name}</span>
-                  <span className="font-mono text-xs text-subtle">{r.key}</span>
-                </li>
-              ))}
-            </ul>
+        canManage ? (
+          <Card className="max-w-5xl">
+            <AccessPanel userId={person.id} currentRole={roles[0]?.key ?? ''} granted={person.extra.map((p) => p.permission_key)} context={context} />
           </Card>
-          <Card>
-            <SectionTitle>Qo‘shimcha ruxsatlar</SectionTitle>
-            {person.extra.length === 0 ? (
-              <p className="text-sm text-muted">Faqat rol ruxsatlari ishlaydi.</p>
-            ) : (
-              <ul className="flex flex-wrap gap-2">
-                {person.extra.map((p) => (
-                  <li key={p.permission_key}>
-                    <Badge tone="info">{PERMISSION_LABEL[p.permission_key] ?? p.permission_key}</Badge>
+        ) : (
+          <div className="grid max-w-5xl gap-6 lg:grid-cols-2">
+            <Card>
+              <SectionTitle>Rollar</SectionTitle>
+              <ul className="space-y-2">
+                {roles.map((r) => (
+                  <li key={r.key} className="flex items-center justify-between rounded-xl bg-surface-2 px-4 py-3 text-sm">
+                    <span className="font-medium">{r.name}</span>
+                    <span className="font-mono text-xs text-subtle">{r.key}</span>
                   </li>
                 ))}
               </ul>
-            )}
-          </Card>
-        </div>
+            </Card>
+            <Card>
+              <SectionTitle>Qo‘shimcha ruxsatlar</SectionTitle>
+              {person.extra.length === 0 ? (
+                <p className="text-sm text-muted">Faqat rol ruxsatlari ishlaydi.</p>
+              ) : (
+                <ul className="flex flex-wrap gap-2">
+                  {person.extra.map((p) => (
+                    <li key={p.permission_key}>
+                      <Badge tone="info">{PERMISSION_LABEL[p.permission_key] ?? p.permission_key}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
+        )
       ) : null}
 
       {active === 'clients' ? (
@@ -183,6 +190,33 @@ export default async function EmployeePage({ params, searchParams }: { params: P
 
       {active === 'activity' ? <Activity userId={person.id} allowed={can(context, 'audit.read')} /> : null}
     </div>
+  );
+}
+
+async function AccessPanel({ userId, currentRole, granted, context }: { userId: string; currentRole: string; granted: string[]; context: Awaited<ReturnType<typeof requireStaff>> }) {
+  const supabase = await createClient();
+  const [rolesRes, grantsRes] = await Promise.all([
+    supabase.from('roles').select('id, key, name, rank').eq('scope', 'staff').order('rank'),
+    supabase.from('role_permissions').select('permission_key, role:roles(key)'),
+  ]);
+  if (rolesRes.error) throw rolesRes.error;
+  if (grantsRes.error) throw grantsRes.error;
+  const myRank = Math.min(...context.roles.map((r) => rolesRes.data.find((x) => x.key === r.key)?.rank ?? 1000));
+  const rolePermissions: Record<string, string[]> = {};
+  for (const g of grantsRes.data) {
+    if (!g.role) continue;
+    (rolePermissions[g.role.key] ??= []).push(g.permission_key);
+  }
+  return (
+    <AccessEditor
+      userId={userId}
+      currentRole={currentRole}
+      roles={rolesRes.data.map((r) => ({ key: r.key, name: r.name, disabled: r.rank < myRank }))}
+      delegable={context.permissions}
+      granted={granted}
+      rolePermissions={rolePermissions}
+      canChangeRole={can(context, 'roles.manage')}
+    />
   );
 }
 
@@ -229,6 +263,7 @@ const ACTION_LABEL: Record<string, string> = {
   'user_roles.insert': 'Rol berildi',
   'user_roles.delete': 'Rol olib tashlandi',
   'profiles.update': 'Profil yangilandi',
+  'account.role_changed': 'Rol o‘zgartirildi',
 };
 
 const WEEKDAYS = ['', 'Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh', 'Ya'];

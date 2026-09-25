@@ -3702,6 +3702,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_my_context: { Args: never; Returns: Json }
       mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number }
       publish_monthly_report: {
         Args: { p_report_id: string }
@@ -3858,6 +3859,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      touch_last_seen: { Args: never; Returns: undefined }
       unregister_push_token: { Args: { p_token: string }; Returns: undefined }
     }
     Enums: {

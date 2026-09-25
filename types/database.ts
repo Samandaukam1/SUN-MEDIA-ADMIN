@@ -4154,6 +4154,10 @@ export type Database = {
         Args: { p_content_id: string; p_payload: Json }
         Returns: string
       }
+      save_shooting: {
+        Args: { p_payload: Json; p_shooting_id: string }
+        Returns: string
+      }
       set_account_status: {
         Args: {
           p_reason?: string
@@ -4246,6 +4250,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      toggle_shot_item: {
+        Args: { p_done: boolean; p_index: number; p_shooting_id: string }
+        Returns: Json
       }
       touch_last_seen: { Args: never; Returns: undefined }
       unregister_push_token: { Args: { p_token: string }; Returns: undefined }

@@ -3663,6 +3663,24 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_activity_feed: {
+        Args: { p_before?: number; p_client_id?: string; p_limit?: number }
+        Returns: {
+          action: string
+          actor_avatar: string
+          actor_id: string
+          actor_name: string
+          changes: Json
+          client_id: string
+          client_name: string
+          entity_id: string
+          entity_type: string
+          id: number
+          label: string
+          occurred_at: string
+          subject_name: string
+        }[]
+      }
       get_attendance_summary: {
         Args: { p_from: string; p_to: string; p_user_id: string }
         Returns: Json
@@ -3684,6 +3702,7 @@ export type Database = {
           title: string
         }[]
       }
+      get_client_home: { Args: { p_client_id: string }; Returns: Json }
       get_client_resource_report: {
         Args: { p_from: string; p_to: string }
         Returns: {
@@ -3693,6 +3712,7 @@ export type Database = {
         }[]
       }
       get_command_center: { Args: { p_date?: string }; Returns: Json }
+      get_employee_home: { Args: never; Returns: Json }
       get_employee_scorecards: {
         Args: { p_from: string; p_to: string; p_user_id?: string }
         Returns: {
@@ -3878,7 +3898,9 @@ export type Database = {
       content_status:
         | "idea"
         | "script"
+        | "ready_for_shoot"
         | "shooting"
+        | "shot"
         | "editing"
         | "internal_review"
         | "client_review"
@@ -3939,7 +3961,12 @@ export type Database = {
       report_status: "draft" | "published" | "archived"
       request_status: "pending" | "approved" | "rejected" | "cancelled"
       revision_status: "open" | "in_progress" | "resolved" | "cancelled"
-      shooting_attendance_status: "pending" | "arrived" | "absent" | "late"
+      shooting_attendance_status:
+        | "pending"
+        | "arrived"
+        | "absent"
+        | "excused"
+        | "late"
       shooting_status:
         | "planned"
         | "confirmed"
@@ -4137,7 +4164,9 @@ export const Constants = {
       content_status: [
         "idea",
         "script",
+        "ready_for_shoot",
         "shooting",
+        "shot",
         "editing",
         "internal_review",
         "client_review",
@@ -4204,7 +4233,13 @@ export const Constants = {
       report_status: ["draft", "published", "archived"],
       request_status: ["pending", "approved", "rejected", "cancelled"],
       revision_status: ["open", "in_progress", "resolved", "cancelled"],
-      shooting_attendance_status: ["pending", "arrived", "absent", "late"],
+      shooting_attendance_status: [
+        "pending",
+        "arrived",
+        "absent",
+        "excused",
+        "late",
+      ],
       shooting_status: [
         "planned",
         "confirmed",

@@ -6,7 +6,9 @@ type Enums = Database['public']['Enums'];
 export const CONTENT_STATUS: Record<Enums['content_status'], { label: string; tone: BadgeTone }> = {
   idea: { label: 'G‘oya', tone: 'neutral' },
   script: { label: 'Ssenariy', tone: 'info' },
+  ready_for_shoot: { label: 'Syomkaga tayyor', tone: 'info' },
   shooting: { label: 'Syomka', tone: 'violet' },
+  shot: { label: 'Tasvirga olindi', tone: 'violet' },
   editing: { label: 'Montaj', tone: 'accent' },
   internal_review: { label: 'Ichki tekshiruv', tone: 'info' },
   client_review: { label: 'Mijoz tasdig‘ida', tone: 'warning' },
@@ -40,6 +42,7 @@ export const SHOOTING_ATTENDANCE_STATUS: Record<Enums['shooting_attendance_statu
   arrived: { label: 'Keldi', tone: 'success' },
   late: { label: 'Kechikdi', tone: 'warning' },
   absent: { label: 'Kelmadi', tone: 'danger' },
+  excused: { label: 'Sababli', tone: 'info' },
 };
 
 export const PLATFORM_LABEL: Record<Enums['social_platform'], string> = {

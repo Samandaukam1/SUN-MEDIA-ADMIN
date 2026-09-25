@@ -316,19 +316,19 @@ select lives_ok(
 reset role;
 select is((select status::text from public.content_items where id = pg_temp.id('reel')), 'revision', 'content moved to REVISION');
 select is((select revision_count from public.content_items where id = pg_temp.id('reel')), 1, 'revision counted');
-select is((select count(*)::int from public.revision_comments), 2, 'timecoded comments stored');
+select is((select count(*)::int from public.revision_comments where revision_id in (select id from public.revisions where content_id = pg_temp.id('reel'))), 2, 'timecoded comments stored');
 select ok(exists (select 1 from public.notifications where user_id = pg_temp.id('editor') and type = 'approval.changes_requested'),
   'editor notified about requested changes');
 
 select pg_temp.login('editor');
-select is((select array_agg(timecode_ms order by timecode_ms) from public.revision_comments), array[13000, 27000],
+select is((select array_agg(timecode_ms order by timecode_ms) from public.revision_comments where revision_id in (select id from public.revisions where content_id = pg_temp.id('reel'))), array[13000, 27000],
   'editor sees comments on the timeline');
-select lives_ok($$update public.revision_comments set is_resolved = true where timecode_ms = 13000$$, 'editor resolves a comment');
+select lives_ok($$update public.revision_comments set is_resolved = true where timecode_ms = 13000 and revision_id in (select id from public.revisions where content_id = pg_temp.id('reel'))$$, 'editor resolves a comment');
 reset role;
 
 select pg_temp.login('client_safi');
 select throws_ok(
-  $$update public.revision_comments set is_resolved = false where timecode_ms = 13000$$,
+  $$update public.revision_comments set is_resolved = false where timecode_ms = 13000 and revision_id in (select id from public.revisions where content_id = pg_temp.id('reel'))$$,
   '42501', null, 'client cannot un-resolve staff work');
 reset role;
 

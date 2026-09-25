@@ -25,16 +25,18 @@ export default async function SettingsPage() {
   const start = get('attendance.workday_start');
   const grace = get('attendance.late_grace_minutes');
   const domain = get('accounts.login_domain');
+  const approvalWindow = get('approvals.client_window_hours');
 
   return (
     <div>
-      <PageHeader eyebrow="Tizim" title="Sozlamalar" description="Ish haftasi, ish boshlanish vaqti va akkaunt standartlari." />
+      <PageHeader eyebrow="Tizim" title="Sozlamalar" description="Ish haftasi, ish boshlanish vaqti, akkaunt standartlari va tasdiq muddati." />
       <Card className="max-w-3xl">
         <SettingsForm
           workDays={Array.isArray(days) ? days.map(Number) : [1, 2, 3, 4, 5, 6]}
           workdayStart={typeof start === 'string' ? start : '09:00'}
           lateGrace={typeof grace === 'number' ? grace : 10}
           loginDomain={typeof domain === 'string' ? domain : 'sunmedia.uz'}
+          approvalWindow={typeof approvalWindow === 'number' ? approvalWindow : 48}
           editable={can(context, 'settings.manage')}
         />
       </Card>

@@ -18,9 +18,9 @@ const DAYS = [
   [7, 'Yakshanba'],
 ] as const;
 
-type Props = { workDays: number[]; workdayStart: string; lateGrace: number; loginDomain: string; editable: boolean };
+type Props = { workDays: number[]; workdayStart: string; lateGrace: number; loginDomain: string; approvalWindow: number; editable: boolean };
 
-export function SettingsForm({ workDays, workdayStart, lateGrace, loginDomain, editable }: Props) {
+export function SettingsForm({ workDays, workdayStart, lateGrace, loginDomain, approvalWindow, editable }: Props) {
   const [state, action] = useActionState<ActionState, FormData>(updateAgencySettings, idle);
   const errors = state.status === 'error' ? state.fieldErrors ?? {} : {};
   return (
@@ -49,6 +49,19 @@ export function SettingsForm({ workDays, workdayStart, lateGrace, loginDomain, e
           <h2 className="mb-1 text-base font-semibold">Akkauntlar</h2>
           <p className="mb-4 text-sm text-muted">“Xodim qo‘shish” formasida login shu domen bilan taklif qilinadi.</p>
           <TextInput label="Login domeni" name="login_domain" defaultValue={loginDomain} error={errors.login_domain} placeholder="sunmedia.uz" />
+        </section>
+        <section className="max-w-lg">
+          <h2 className="mb-1 text-base font-semibold">Tasdiqlash</h2>
+          <p className="mb-4 text-sm text-muted">Versiya mijozga yuborilganda tasdiq muddati shu vaqtga qo‘yiladi (agar menejer boshqa muddat belgilamagan bo‘lsa).</p>
+          <TextInput
+            label="Mijoz tasdig‘i uchun muddat (soat)"
+            name="approval_window_hours"
+            type="number"
+            min={1}
+            max={336}
+            defaultValue={approvalWindow}
+            error={errors.approval_window_hours}
+          />
         </section>
       </fieldset>
       {editable ? (

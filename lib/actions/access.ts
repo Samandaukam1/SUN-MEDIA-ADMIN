@@ -51,6 +51,7 @@ const settingsSchema = z.object({
   work_days: z.array(z.coerce.number().int().min(1).max(7)).min(1, 'Kamida bitta ish kuni tanlang'),
   workday_start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Vaqt HH:MM ko‘rinishida'),
   late_grace_minutes: z.coerce.number().int().min(0).max(120),
+  approval_window_hours: z.coerce.number().int('Butun son kiriting').min(1, 'Kamida 1 soat').max(336, 'Ko‘pi bilan 14 kun (336 soat)'),
   login_domain: z
     .string()
     .trim()
@@ -65,6 +66,7 @@ export async function updateAgencySettings(_: ActionState, formData: FormData): 
     work_days: formData.getAll('work_days'),
     workday_start: formData.get('workday_start'),
     late_grace_minutes: formData.get('late_grace_minutes'),
+    approval_window_hours: formData.get('approval_window_hours'),
     login_domain: formData.get('login_domain'),
   });
   if (!parsed.success) return { status: 'error', message: 'Formadagi xatolarni tuzating.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
@@ -75,6 +77,7 @@ export async function updateAgencySettings(_: ActionState, formData: FormData): 
     { key: 'attendance.workday_start', value: v.workday_start },
     { key: 'attendance.late_grace_minutes', value: v.late_grace_minutes },
     { key: 'accounts.login_domain', value: v.login_domain },
+    { key: 'approvals.client_window_hours', value: v.approval_window_hours },
   ];
   for (const row of rows) {
     const { error } = await supabase.from('app_settings').update({ value: row.value }).eq('key', row.key);

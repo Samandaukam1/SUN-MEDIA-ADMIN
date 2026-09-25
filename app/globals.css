@@ -1,19 +1,23 @@
 @import 'tailwindcss';
 
 :root {
-  --bg: #f6f6f4;
+  /* SUN MEDIA: ink, brushed silver and one lime accent (the "I" in MEDIA). */
+  --bg: #f4f4f5;
   --surface: #ffffff;
-  --surface-2: #efefec;
-  --border: #e6e6e1;
-  --border-strong: #d4d4ce;
-  --text: #0b0d12;
-  --muted: #555b66;
-  --subtle: #8a909b;
-  --accent: #d98a0b;
+  --surface-2: #ededef;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --text: #0b0b0c;
+  --muted: #52525b;
+  --subtle: #8b8b93;
+  --accent: #0b0b0c;
   --accent-fg: #ffffff;
-  --accent-soft: rgb(217 138 11 / 0.12);
-  --success: #059669;
-  --success-soft: rgb(5 150 105 / 0.1);
+  --accent-soft: rgb(212 252 24 / 0.36);
+  --accent-on-soft: #2f3a00;
+  --brand: #d4fc18;
+  --on-brand: #0b0b0c;
+  --success: #15803d;
+  --success-soft: rgb(21 128 61 / 0.1);
   --warning: #b45309;
   --warning-soft: rgb(180 83 9 / 0.1);
   --danger: #dc2626;
@@ -22,36 +26,39 @@
   --info-soft: rgb(37 99 235 / 0.08);
   --violet: #7c3aed;
   --violet-soft: rgb(124 58 237 / 0.08);
-  --sidebar: #0b0d12;
-  --sidebar-text: #a3a9b6;
-  --sidebar-active: #f3f4f6;
+  --sidebar: #0b0b0c;
+  --sidebar-text: #a1a1aa;
+  --sidebar-active: #fafafa;
+  --shadow: 0 1px 2px rgb(24 24 27 / 0.04), 0 4px 16px rgb(24 24 27 / 0.04);
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0b0d12;
-    --surface: #12151c;
-    --surface-2: #181c25;
-    --border: #232835;
-    --border-strong: #303646;
-    --text: #f3f4f6;
-    --muted: #a3a9b6;
-    --subtle: #6b7280;
-    --accent: #f5a524;
-    --accent-fg: #0b0d12;
-    --accent-soft: rgb(245 165 36 / 0.14);
-    --success: #34d399;
-    --success-soft: rgb(52 211 153 / 0.14);
+    --bg: #09090b;
+    --surface: #141416;
+    --surface-2: #1c1c1f;
+    --border: #26262a;
+    --border-strong: #36363c;
+    --text: #f4f4f5;
+    --muted: #a1a1aa;
+    --subtle: #71717a;
+    --accent: #d4fc18;
+    --accent-fg: #0b0b0c;
+    --accent-soft: rgb(212 252 24 / 0.13);
+    --accent-on-soft: #d4fc18;
+    --success: #4ade80;
+    --success-soft: rgb(74 222 128 / 0.13);
     --warning: #fbbf24;
-    --warning-soft: rgb(251 191 36 / 0.14);
+    --warning-soft: rgb(251 191 36 / 0.13);
     --danger: #f87171;
-    --danger-soft: rgb(248 113 113 / 0.14);
+    --danger-soft: rgb(248 113 113 / 0.13);
     --info: #60a5fa;
-    --info-soft: rgb(96 165 250 / 0.14);
+    --info-soft: rgb(96 165 250 / 0.13);
     --violet: #a78bfa;
-    --violet-soft: rgb(167 139 250 / 0.14);
-    --sidebar: #0e1016;
+    --violet-soft: rgb(167 139 250 / 0.13);
+    --sidebar: #0e0e10;
+    --shadow: none;
     color-scheme: dark;
   }
 }
@@ -68,6 +75,9 @@
   --color-accent: var(--accent);
   --color-accent-fg: var(--accent-fg);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-on-soft: var(--accent-on-soft);
+  --color-brand: var(--brand);
+  --color-on-brand: var(--on-brand);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
@@ -97,4 +107,13 @@ body {
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+.shadow-card {
+  box-shadow: var(--shadow);
+}
+
+dialog::backdrop {
+  background: rgb(9 9 11 / 0.5);
+  backdrop-filter: blur(2px);
 }

@@ -22,7 +22,31 @@ SUPABASE_SECRET_KEY=<supabase start: SECRET_KEY>
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-Lokal seed hisoblari: `owner@sunmedia.local`, `admin@sunmedia.local` … parol `SunMedia2026!` (faqat lokal).
+Lokal seed hisoblari (parol hammasida `SunMedia2026!`, faqat lokal):
+
+| Rol | Login |
+|---|---|
+| Owner | `owner@sunmedia.local` |
+| Admin | `admin@sunmedia.local` |
+| Project Manager | `manager@sunmedia.local`, `pm@sunmedia.local` |
+| SMM | `smm@sunmedia.local` |
+| Operator | `operator@sunmedia.local` |
+| Montajyor | `editor@sunmedia.local` |
+| Dizayner | `designer@sunmedia.local` |
+| Kopirayter | `copywriter@sunmedia.local` |
+| Mijoz egasi (SAFI) | `safi@client.local` |
+| Mijoz xodimi (SAFI) | `safi.employee@client.local` |
+| Mijoz egasi (WeDrink) | `wedrink@client.local` |
+
+## Akkaunt yaratish (Team → Xodim qo‘shish, Mijoz → Loginlar)
+
+1. Server action chaqiruvchining sessiyasini tekshiradi.
+2. Faqat Auth login `auth.admin.createUser` bilan **server**da yaratiladi (service role faqat `lib/accounts.ts` ichida, `server-only`).
+3. Rol, xodim yozuvi, mijoz jamoasi va ruxsatlarni `provision_staff_member` / `provision_client_user` RPC'lari **admin'ning o‘z sessiyasi** bilan yozadi: permission, rang (o‘zidan yuqori rol berib bo‘lmaydi), mijoz doirasi va “faqat yangi login” tekshiruvlari bazada. Xato bo‘lsa login o‘chiriladi.
+4. Vaqtinchalik parol (`X9fa-K82p!` ko‘rinishi, CSPRNG) faqat bir marta ko‘rsatiladi va hech qayerda saqlanmaydi. “Parolni tiklash” yangi parol beradi (`authorize_password_reset` + audit).
+5. Holat: Faol / To‘xtatilgan / O‘chirilgan (`set_account_status`). Bloklanganda RLS darhol yopiladi va Auth ban ochiq sessiyalarni tugatadi.
+
+Barcha amallar `audit_logs`ga yoziladi (`account.created`, `account.password_reset`, `account.status_changed`).
 
 ## Baza
 

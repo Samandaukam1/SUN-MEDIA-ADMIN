@@ -60,3 +60,82 @@ export const PLATFORM_LABEL: Record<Enums['social_platform'], string> = {
 export function lookup<T>(map: Record<string, T>, key: string | null | undefined, fallback: T): T {
   return (key && map[key]) || fallback;
 }
+
+export const ACCOUNT_STATUS: Record<Enums['account_status'], { label: string; tone: BadgeTone }> = {
+  active: { label: 'Faol', tone: 'success' },
+  suspended: { label: 'To‘xtatilgan', tone: 'warning' },
+  disabled: { label: 'O‘chirilgan', tone: 'danger' },
+};
+
+export const EMPLOYMENT_TYPE: Record<Enums['employment_type'], string> = {
+  full_time: 'To‘liq stavka',
+  part_time: 'Yarim stavka',
+  contractor: 'Shartnoma asosida',
+  intern: 'Amaliyotchi',
+};
+
+export const EMPLOYEE_STATUS: Record<Enums['employee_status'], { label: string; tone: BadgeTone }> = {
+  active: { label: 'Ishlamoqda', tone: 'success' },
+  on_leave: { label: 'Ta’tilda', tone: 'violet' },
+  terminated: { label: 'Ishdan ketgan', tone: 'neutral' },
+};
+
+export const TEAM_ROLE_LABEL: Record<Enums['team_role'], string> = {
+  account_manager: 'Account manager',
+  project_manager: 'Project manager',
+  smm_manager: 'SMM manager',
+  operator: 'Operator',
+  editor: 'Montajyor',
+  designer: 'Dizayner',
+  copywriter: 'Kopirayter',
+  assistant: 'Assistent',
+};
+
+export const CLIENT_STATUS: Record<Enums['client_status'], { label: string; tone: BadgeTone }> = {
+  active: { label: 'Faol', tone: 'success' },
+  paused: { label: 'Pauza', tone: 'warning' },
+  disabled: { label: 'O‘chirilgan', tone: 'danger' },
+  archived: { label: 'Arxiv', tone: 'neutral' },
+};
+
+/** Uzbek names for permissions shown in account forms. */
+export const PERMISSION_LABEL: Record<string, string> = {
+  'dashboard.view': 'Command Center',
+  'clients.read_all': 'Barcha mijozlarni ko‘rish',
+  'clients.manage': 'Mijozlarni boshqarish',
+  'employees.read': 'Xodimlarni ko‘rish',
+  'employees.manage': 'Xodim va akkauntlarni boshqarish',
+  'roles.manage': 'Rollarni boshqarish',
+  'attendance.read': 'Davomatni ko‘rish',
+  'attendance.manage': 'Davomatni belgilash',
+  'performance.read': 'KPI ko‘rish',
+  'projects.manage': 'Loyihalarni boshqarish',
+  'content.manage': 'Kontentni boshqarish',
+  'content.edit_copy': 'Matn/caption tahrirlash',
+  'publications.manage': 'Nashrlarni boshqarish',
+  'shootings.manage': 'Syomkalarni boshqarish',
+  'tasks.read_all': 'Barcha vazifalarni ko‘rish',
+  'tasks.manage': 'Vazifalarni boshqarish',
+  'approvals.manage': 'Tasdiqlashni boshqarish',
+  'files.upload': 'Fayl yuklash',
+  'files.manage': 'Fayllarni boshqarish',
+  'plans.manage': 'Tariflarni boshqarish',
+  'subscriptions.read': 'Obunalarni ko‘rish',
+  'subscriptions.manage': 'Obunalarni boshqarish',
+  'contracts.manage': 'Shartnomalarni boshqarish',
+  'finance.read': 'Moliyaviy ko‘rsatkichlar',
+  'analytics.manage': 'Analitika kiritish',
+  'reports.read': 'Hisobotlarni ko‘rish',
+  'reports.manage': 'Hisobotlarni boshqarish',
+  'notifications.manage': 'Bildirishnomalarni boshqarish',
+  'chat.manage': 'Chatlarni boshqarish',
+  'audit.read': 'Audit jurnali',
+  'settings.manage': 'Sozlamalar',
+  'client.content.view': 'Kontentni ko‘rish',
+  'client.approve': 'Kontentni tasdiqlash / o‘zgartirish so‘rash',
+  'client.plan.view': 'Tarifni ko‘rish',
+  'client.plan.request_upgrade': 'Tarifni oshirish so‘rovi',
+  'client.contracts.view': 'Shartnomalarni ko‘rish',
+  'client.reports.view': 'Hisobotlarni ko‘rish',
+  'client.files.upload': 'Fayl yuklash',
+};

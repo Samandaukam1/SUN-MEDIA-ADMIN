@@ -3,7 +3,7 @@ import type { HTMLAttributes } from 'react';
 import { cn } from './cn';
 
 export function Card({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
-  return <div {...rest} className={cn('rounded-2xl border border-line bg-surface p-5', className)} />;
+  return <div {...rest} className={cn('shadow-card rounded-2xl border border-line bg-surface p-5', className)} />;
 }
 
 export function SectionTitle({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {

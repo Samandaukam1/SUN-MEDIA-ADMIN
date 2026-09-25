@@ -441,6 +441,52 @@ export type Database = {
           },
         ]
       }
+      client_member_permissions: {
+        Row: {
+          client_id: string
+          created_at: string
+          granted_by: string | null
+          permission_key: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          granted_by?: string | null
+          permission_key: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          granted_by?: string | null
+          permission_key?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_member_permissions_client_id_user_id_fkey"
+            columns: ["client_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "client_members"
+            referencedColumns: ["client_id", "user_id"]
+          },
+          {
+            foreignKeyName: "client_member_permissions_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_member_permissions_permission_key_fkey"
+            columns: ["permission_key"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
       client_members: {
         Row: {
           client_id: string
@@ -2384,12 +2430,19 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           email: string | null
+          first_name: string | null
           full_name: string
           id: string
+          last_name: string | null
           last_seen_at: string | null
           locale: string
+          password_reset_at: string | null
           phone: string | null
+          provisioned_by: string | null
           status: Database["public"]["Enums"]["account_status"]
+          status_changed_at: string | null
+          status_changed_by: string | null
+          status_reason: string | null
           updated_at: string
         }
         Insert: {
@@ -2397,12 +2450,19 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           email?: string | null
+          first_name?: string | null
           full_name?: string
           id: string
+          last_name?: string | null
           last_seen_at?: string | null
           locale?: string
+          password_reset_at?: string | null
           phone?: string | null
+          provisioned_by?: string | null
           status?: Database["public"]["Enums"]["account_status"]
+          status_changed_at?: string | null
+          status_changed_by?: string | null
+          status_reason?: string | null
           updated_at?: string
         }
         Update: {
@@ -2410,15 +2470,37 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           email?: string | null
+          first_name?: string | null
           full_name?: string
           id?: string
+          last_name?: string | null
           last_seen_at?: string | null
           locale?: string
+          password_reset_at?: string | null
           phone?: string | null
+          provisioned_by?: string | null
           status?: Database["public"]["Enums"]["account_status"]
+          status_changed_at?: string | null
+          status_changed_by?: string | null
+          status_reason?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_provisioned_by_fkey"
+            columns: ["provisioned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_status_changed_by_fkey"
+            columns: ["status_changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       project_members: {
         Row: {
@@ -3543,6 +3625,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      authorize_password_reset: { Args: { p_user_id: string }; Returns: string }
       claim_push_deliveries: {
         Args: { p_limit?: number }
         Returns: {
@@ -3724,6 +3807,35 @@ export type Database = {
       }
       get_my_context: { Args: never; Returns: Json }
       mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number }
+      provision_client_user: {
+        Args: {
+          p_client_id: string
+          p_first_name: string
+          p_last_name: string
+          p_permissions?: string[]
+          p_phone?: string
+          p_role_key: string
+          p_title?: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      provision_staff_member: {
+        Args: {
+          p_client_ids?: string[]
+          p_department?: string
+          p_employment_type?: Database["public"]["Enums"]["employment_type"]
+          p_first_name: string
+          p_job_title?: string
+          p_last_name: string
+          p_permissions?: string[]
+          p_phone?: string
+          p_role_key: string
+          p_team_role?: Database["public"]["Enums"]["team_role"]
+          p_user_id: string
+        }
+        Returns: Json
+      }
       publish_monthly_report: {
         Args: { p_report_id: string }
         Returns: {
@@ -3806,6 +3918,22 @@ export type Database = {
         }
         Returns: Json
       }
+      set_account_status: {
+        Args: {
+          p_reason?: string
+          p_status: Database["public"]["Enums"]["account_status"]
+          p_user_id: string
+        }
+        Returns: Database["public"]["Enums"]["account_status"]
+      }
+      set_client_member_permissions: {
+        Args: {
+          p_client_id: string
+          p_permissions: string[]
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       set_content_status: {
         Args: {
           p_content_id: string
@@ -3881,9 +4009,18 @@ export type Database = {
       }
       touch_last_seen: { Args: never; Returns: undefined }
       unregister_push_token: { Args: { p_token: string }; Returns: undefined }
+      update_account_profile: {
+        Args: {
+          p_first_name: string
+          p_last_name: string
+          p_phone?: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
-      account_status: "active" | "disabled"
+      account_status: "active" | "disabled" | "suspended"
       approval_decision: "approved" | "changes_requested"
       approval_stage: "internal" | "client"
       attendance_status:
@@ -4148,7 +4285,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      account_status: ["active", "disabled"],
+      account_status: ["active", "disabled", "suspended"],
       approval_decision: ["approved", "changes_requested"],
       approval_stage: ["internal", "client"],
       attendance_status: [

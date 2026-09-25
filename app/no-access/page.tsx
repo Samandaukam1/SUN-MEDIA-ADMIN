@@ -20,7 +20,7 @@ export default async function NoAccessPage({ searchParams }: { searchParams: Pro
 
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-8 px-6 text-center">
-      <Logo size={30} />
+      <Logo width={150} />
       <div className="max-w-md">
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         <p className="mt-3 text-muted">{text}</p>

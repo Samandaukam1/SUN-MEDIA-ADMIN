@@ -40,7 +40,10 @@ declare
   u_operator uuid := pg_temp.seed_user('operator@sunmedia.local', 'Anisjon Abdullayev');
   u_editor uuid := pg_temp.seed_user('editor@sunmedia.local', 'Jasur');
   u_designer uuid := pg_temp.seed_user('designer@sunmedia.local', 'Designer');
+  u_manager uuid := pg_temp.seed_user('manager@sunmedia.local', 'Dilshod Rahimov');
+  u_copywriter uuid := pg_temp.seed_user('copywriter@sunmedia.local', 'Nodira Karimova');
   u_safi uuid := pg_temp.seed_user('safi@client.local', 'SAFI');
+  u_safi_emp uuid := pg_temp.seed_user('safi.employee@client.local', 'Madina Yusupova');
   u_wd uuid := pg_temp.seed_user('wedrink@client.local', 'WeDrink');
   c_safi uuid;
   c_wd uuid;
@@ -52,15 +55,19 @@ declare
   t_edit uuid;
   month_start date := date_trunc('month', (now() at time zone 'Asia/Tashkent')::date)::date;
 begin
+  -- Local logins use the .local domain.
+  update public.app_settings set value = '"sunmedia.local"' where key = 'accounts.login_domain';
   insert into public.user_roles (user_id, role_id)
   select x.u, r.id from (values
     (u_owner, 'owner'), (u_admin, 'admin'), (u_pm, 'project_manager'), (u_smm, 'smm_manager'),
-    (u_operator, 'operator'), (u_editor, 'editor'), (u_designer, 'designer')
+    (u_operator, 'operator'), (u_editor, 'editor'), (u_designer, 'designer'),
+    (u_manager, 'project_manager'), (u_copywriter, 'copywriter')
   ) x (u, k) join public.roles r on r.key = x.k;
 
   insert into public.employees (user_id, job_title) values
     (u_owner, 'Asoschi'), (u_admin, 'Administrator'), (u_pm, 'Project Manager'), (u_smm, 'SMM Manager'),
-    (u_operator, 'Operator'), (u_editor, 'Montajyor'), (u_designer, 'Dizayner');
+    (u_operator, 'Operator'), (u_editor, 'Montajyor'), (u_designer, 'Dizayner'),
+    (u_manager, 'Project Manager'), (u_copywriter, 'Kopirayter');
 
   insert into public.clients (name, code, industry, created_by) values ('SAFI', 'SAFI', 'Restoran', u_owner) returning id into c_safi;
   insert into public.clients (name, code, industry, created_by) values ('WeDrink', 'WEDRINK', 'Ichimliklar', u_owner) returning id into c_wd;
@@ -69,10 +76,14 @@ begin
   select c_safi, u_safi, id from public.roles where key = 'client_owner';
   insert into public.client_members (client_id, user_id, role_id)
   select c_wd, u_wd, id from public.roles where key = 'client_owner';
+  -- Client employee: sees SAFI's plan and content, approves only if an admin grants client.approve.
+  insert into public.client_members (client_id, user_id, role_id, title)
+  select c_safi, u_safi_emp, id, 'Marketing menejeri' from public.roles where key = 'client_employee';
 
   insert into public.client_team_members (client_id, user_id, team_role) values
     (c_safi, u_pm, 'account_manager'), (c_safi, u_smm, 'smm_manager'), (c_safi, u_operator, 'operator'),
     (c_safi, u_editor, 'editor'), (c_safi, u_designer, 'designer'),
+    (c_safi, u_manager, 'project_manager'), (c_safi, u_copywriter, 'copywriter'),
     (c_wd, u_pm, 'project_manager'), (c_wd, u_smm, 'smm_manager');
 
   insert into public.social_accounts (client_id, platform, handle, url) values

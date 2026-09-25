@@ -2,6 +2,7 @@
 -- Run: npx supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
+grant execute on all functions in schema extensions to authenticated, anon;
 select * from no_plan();
 
 -- ---------------------------------------------------------------------------
@@ -37,6 +38,12 @@ begin
   perform set_config('role', 'authenticated', true);
 end $$;
 
+-- Helpers are called after switching to the authenticated role.
+grant execute on function pg_temp.id(text) to authenticated, anon;
+grant execute on function pg_temp.new_user(text, text) to authenticated, anon;
+grant execute on function pg_temp.staff(text, text) to authenticated, anon;
+grant execute on function pg_temp.login(text) to authenticated, anon;
+
 -- ---------------------------------------------------------------------------
 -- Fixture (as postgres)
 -- ---------------------------------------------------------------------------
@@ -61,10 +68,10 @@ select pg_temp.staff('editor2', 'editor');
 select pg_temp.staff('operator', 'operator');
 
 insert into public.clients (id, name, code, created_by) values
-  (gen_random_uuid(), 'SAFI', 'SAFI', pg_temp.id('owner')),
-  (gen_random_uuid(), 'WeDrink', 'WEDRINK', pg_temp.id('owner'));
-insert into ids select 'safi', id from public.clients where code = 'SAFI';
-insert into ids select 'wd', id from public.clients where code = 'WEDRINK';
+  (gen_random_uuid(), 'SAFI', 'TSTSAFI', pg_temp.id('owner')),
+  (gen_random_uuid(), 'WeDrink', 'TSTWEDRINK', pg_temp.id('owner'));
+insert into ids select 'safi', id from public.clients where code = 'TSTSAFI';
+insert into ids select 'wd', id from public.clients where code = 'TSTWEDRINK';
 
 insert into public.client_members (client_id, user_id, role_id)
 select pg_temp.id('safi'), pg_temp.id('client_safi'), id from public.roles where key = 'client_owner';
@@ -104,8 +111,8 @@ values (pg_temp.id('safi'), 'Mahsulot qanday tayyorlanadi?', 'reel', 'Ssenariy',
 insert into public.content_items (client_id, title, content_type, is_client_visible)
 values (pg_temp.id('safi'), 'Ichki g''oya', 'post', false);
 reset role;
-insert into ids select 'reel', id from public.content_items where title = 'Mahsulot qanday tayyorlanadi?';
-insert into ids select 'hidden', id from public.content_items where title = 'Ichki g''oya';
+insert into ids select 'reel', id from public.content_items where title = 'Mahsulot qanday tayyorlanadi?' and client_id = pg_temp.id('safi');
+insert into ids select 'hidden', id from public.content_items where title = 'Ichki g''oya' and client_id = pg_temp.id('safi');
 
 select is((select number from public.content_items where id = pg_temp.id('reel')), 1, 'content numbered per client and type');
 select is((select created_by from public.content_items where id = pg_temp.id('reel')), pg_temp.id('pm'), 'created_by forced to caller');
@@ -114,7 +121,7 @@ select pg_temp.login('pm');
 insert into public.shootings (client_id, title, starts_at, ends_at, location_name)
 values (pg_temp.id('safi'), 'SAFI Yunusobod', now() + interval '1 hour', now() + interval '3 hours', 'SAFI Yunusobod filiali');
 reset role;
-insert into ids select 'shoot', id from public.shootings where title = 'SAFI Yunusobod';
+insert into ids select 'shoot', id from public.shootings where title = 'SAFI Yunusobod' and client_id = pg_temp.id('safi');
 update public.content_items set shooting_id = pg_temp.id('shoot') where id = pg_temp.id('reel');
 
 select pg_temp.login('pm');
@@ -126,7 +133,7 @@ insert into public.content_comments (content_id, client_id, author_id, body, vis
 insert into public.tasks (content_id, title, task_type, due_at)
 values (pg_temp.id('reel'), 'SAFI Reel #1 montaj', 'editing', now() + interval '5 hours');
 reset role;
-insert into ids select 'task', id from public.tasks where title = 'SAFI Reel #1 montaj';
+insert into ids select 'task', id from public.tasks where title = 'SAFI Reel #1 montaj' and client_id = pg_temp.id('safi');
 
 select is((select client_id from public.tasks where id = pg_temp.id('task')), pg_temp.id('safi'), 'task inherits client from content');
 
@@ -231,6 +238,11 @@ select is((select count(*)::int from public.attendance_history where user_id = p
 select ok(exists (select 1 from public.audit_logs where action = 'attendance.insert' and actor_id = pg_temp.id('admin')),
   'attendance change audited with actor');
 
+-- The local development seed has its own owner. Inside this rolled-back transaction the test
+-- owner must be the only one, otherwise the "last owner" guard is (correctly) not triggered.
+reset role;
+delete from public.user_roles ur using public.roles r
+where r.id = ur.role_id and r.key = 'owner' and ur.user_id not in (select id from ids);
 select pg_temp.login('owner');
 select throws_ok(
   $$delete from public.user_roles where user_id = pg_temp.id('owner')$$,
@@ -351,15 +363,16 @@ select ok(exists (select 1 from public.client_approvals where version_id = pg_te
 
 -- Tariff + publication → usage
 select pg_temp.login('admin');
-insert into public.plans (name, slug, price) values ('Premium', 'premium', 15000000);
+insert into public.plans (name, slug, price) values ('Premium', 'tst-premium', 15000000);
 insert into public.plan_features (plan_id, service_key, quantity)
 select id, x.k, x.q from public.plans, (values ('reels', 12), ('posts', 8), ('stories', 40), ('shooting_days', 4), ('designs', 6)) x(k, q)
-where slug = 'premium';
+where slug = 'tst-premium';
 insert into public.client_subscriptions (client_id, plan_id, starts_on, ends_on, price)
 select pg_temp.id('safi'), id, date_trunc('month', current_date)::date, (date_trunc('month', current_date) + interval '1 month - 1 day')::date, 15000000
-from public.plans where slug = 'premium';
+from public.plans where slug = 'tst-premium';
 reset role;
-select is((select count(*)::int from public.subscription_quotas), 5, 'plan features snapshotted into subscription quotas');
+select is((select count(*)::int from public.subscription_quotas q join public.client_subscriptions cs on cs.id = q.subscription_id
+           where cs.client_id = pg_temp.id('safi')), 5, 'plan features snapshotted into subscription quotas');
 
 select pg_temp.login('smm');
 select lives_ok($$select public.set_content_status(pg_temp.id('reel'), 'scheduled')$$, 'SMM schedules approved content');
@@ -376,7 +389,7 @@ select pg_temp.login('client_safi');
 select is((select used from public.subscription_usage_summary where service_key = 'reels'), 1, 'client sees Reels 1 / 12');
 select is((select planned from public.subscription_usage_summary where service_key = 'reels'), 12, 'client sees plan quantity');
 select lives_ok(
-  $$insert into public.plan_upgrade_requests (client_id, requested_plan_id, message) select pg_temp.id('safi'), id, 'Ko''proq reels kerak' from public.plans where slug = 'premium'$$,
+  $$insert into public.plan_upgrade_requests (client_id, requested_plan_id, message) select pg_temp.id('safi'), id, 'Ko''proq reels kerak' from public.plans where slug = 'tst-premium'$$,
   'client owner requests a plan upgrade');
 reset role;
 select ok(exists (select 1 from public.notifications where user_id = pg_temp.id('admin') and type = 'plan.upgrade_requested'),

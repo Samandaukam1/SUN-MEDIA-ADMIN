@@ -83,3 +83,49 @@ export async function updateAgencySettings(_: ActionState, formData: FormData): 
   revalidatePath('/settings');
   return { status: 'success', message: 'Sozlamalar saqlandi. Yangi xodimlar shu jadval bilan yaratiladi.' };
 }
+
+const RECIPIENTS = ['assignees', 'managers', 'admins', 'owners', 'client_approvers'] as const;
+
+const alertRuleSchema = z.object({
+  id: z.uuid().optional(),
+  name: z.string().trim().min(1, 'Nomini yozing').max(120),
+  target: z.enum(['task', 'content_approval']),
+  offset_minutes: z.coerce.number().int().min(-10080).max(1440),
+  recipients: z.array(z.enum(RECIPIENTS)).min(1, 'Kamida bitta qabul qiluvchini tanlang'),
+  is_active: z.boolean(),
+});
+
+/** Settings → deadline alerts (RLS: notifications.manage). Offsets are minutes relative to the deadline. */
+export async function saveAlertRule(_: ActionState, formData: FormData): Promise<ActionState> {
+  await requirePermission('notifications.manage');
+  const hours = Number(formData.get('hours') ?? 0);
+  const minutes = Number(formData.get('minutes') ?? 0);
+  const when = formData.get('when');
+  const magnitude = Math.round(Math.abs(hours) * 60 + Math.abs(minutes));
+  const parsed = alertRuleSchema.safeParse({
+    id: formData.get('id') || undefined,
+    name: formData.get('name'),
+    target: formData.get('target') ?? 'task',
+    offset_minutes: when === 'after' ? magnitude : when === 'at' ? 0 : -magnitude,
+    recipients: formData.getAll('recipients').map(String),
+    is_active: formData.get('is_active') === 'on',
+  });
+  if (!parsed.success) return { status: 'error', message: parsed.error.issues[0]?.message ?? 'Formani tekshiring.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
+  const { id, ...row } = parsed.data;
+  const supabase = await createClient();
+  const { error } = id
+    ? await supabase.from('deadline_alert_rules').update(row).eq('id', id)
+    : await supabase.from('deadline_alert_rules').insert({ ...row, title_template: `${row.name}: {task}{content}`, body_template: '{client} · muddat {due_time}' });
+  if (error) return { status: 'error', message: toUserMessage(error) };
+  revalidatePath('/settings');
+  return { status: 'success', message: 'Eslatma qoidasi saqlandi.' };
+}
+
+export async function toggleAlertRule(id: string, active: boolean): Promise<ActionState> {
+  await requirePermission('notifications.manage');
+  const supabase = await createClient();
+  const { error } = await supabase.from('deadline_alert_rules').update({ is_active: active }).eq('id', id);
+  if (error) return { status: 'error', message: toUserMessage(error) };
+  revalidatePath('/settings');
+  return { status: 'success' };
+}

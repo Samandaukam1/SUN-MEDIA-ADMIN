@@ -19,7 +19,7 @@ const NAV: { title: string; items: NavItem[] }[] = [
     items: [
       { href: '/workspace', label: 'Ish joyi', icon: 'megaphone', permission: 'workspace.manage' },
       { href: '/roles', label: 'Rollar va ruxsatlar', icon: 'shield', anyOf: ['roles.manage', 'employees.manage'] },
-      { href: '/settings', label: 'Sozlamalar', icon: 'settings', anyOf: ['settings.manage', 'employees.manage'] },
+      { href: '/settings', label: 'Sozlamalar', icon: 'settings', anyOf: ['settings.manage', 'employees.manage', 'notifications.manage'] },
     ],
   },
 ];

@@ -1751,6 +1751,7 @@ export type Database = {
           size_bytes: number | null
           status: Database["public"]["Enums"]["file_status"]
           storage_path: string | null
+          task_id: string | null
           updated_at: string
           uploaded_at: string | null
           uploaded_by: string | null
@@ -1775,6 +1776,7 @@ export type Database = {
           size_bytes?: number | null
           status?: Database["public"]["Enums"]["file_status"]
           storage_path?: string | null
+          task_id?: string | null
           updated_at?: string
           uploaded_at?: string | null
           uploaded_by?: string | null
@@ -1799,6 +1801,7 @@ export type Database = {
           size_bytes?: number | null
           status?: Database["public"]["Enums"]["file_status"]
           storage_path?: string | null
+          task_id?: string | null
           updated_at?: string
           uploaded_at?: string | null
           uploaded_by?: string | null
@@ -1832,6 +1835,13 @@ export type Database = {
             columns: ["folder_id"]
             isOneToOne: false
             referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "files_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
           {
@@ -3585,6 +3595,94 @@ export type Database = {
           },
         ]
       }
+      task_comments: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          task_id: string
+          updated_at: string
+        }
+        Insert: {
+          author_id?: string
+          body: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          task_id: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          task_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_comments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      task_dependencies: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          depends_on: string
+          task_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          depends_on: string
+          task_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          depends_on?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_dependencies_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_dependencies_depends_on_fkey"
+            columns: ["depends_on"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_dependencies_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           client_id: string | null
@@ -3870,6 +3968,7 @@ export type Database = {
           size_bytes: number | null
           status: Database["public"]["Enums"]["file_status"]
           storage_path: string | null
+          task_id: string | null
           updated_at: string
           uploaded_at: string | null
           uploaded_by: string | null
@@ -3915,6 +4014,7 @@ export type Database = {
           size_bytes: number | null
           status: Database["public"]["Enums"]["file_status"]
           storage_path: string | null
+          task_id: string | null
           updated_at: string
           uploaded_at: string | null
           uploaded_by: string | null
@@ -4119,6 +4219,7 @@ export type Database = {
           size_bytes: number | null
           status: Database["public"]["Enums"]["file_status"]
           storage_path: string | null
+          task_id: string | null
           updated_at: string
           uploaded_at: string | null
           uploaded_by: string | null
@@ -4156,6 +4257,10 @@ export type Database = {
       }
       save_shooting: {
         Args: { p_payload: Json; p_shooting_id: string }
+        Returns: string
+      }
+      save_task: {
+        Args: { p_payload: Json; p_task_id: string }
         Returns: string
       }
       set_account_status: {

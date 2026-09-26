@@ -59,6 +59,25 @@ Barcha amallar `audit_logs`ga yoziladi (`account.created`, `account.password_res
 
 Cloud'ga: `npx supabase link --project-ref <ref>` → `npx supabase db push`. Seed cloud'ga **yuborilmaydi**.
 
+`npm run test:unit` — Edge Function'larning sof mantiqiy qismlari (Node test runner).
+
+## Push bildirishnomalar
+
+Zanjir: hodisa → `notifications` + `notification_deliveries` (navbat) → baza `pg_net` orqali `push-dispatch` Edge Function'ni chaqiradi (har daqiqada qayta urinish ham bor) → Expo Push API → natija `complete_push_deliveries` ga yoziladi. O‘lik token (`DeviceNotRegistered`) avtomatik o‘chiriladi.
+
+Lokal: `supabase/functions/.env.example` → `supabase/functions/.env`, so‘ng `npx supabase functions serve --env-file supabase/functions/.env`. Vault sirlari `seed.sql` da lokal uchun yaratiladi.
+
+Production (bir marta):
+
+1. Mobil ilovani EAS loyihasi bilan quring (`EAS_PROJECT_ID` — Expo push token berishi uchun shart).
+2. `npx supabase functions deploy push-dispatch`
+3. `npx supabase secrets set PUSH_DISPATCH_SECRET=<uzun tasodifiy qator>` (Expo'da "Enhanced security" yoqilgan bo‘lsa `EXPO_ACCESS_TOKEN` ham).
+4. SQL Editor'da vault sirlari:
+   ```sql
+   select vault.create_secret('https://<project-ref>.supabase.co/functions/v1', 'sunmedia_functions_url');
+   select vault.create_secret('<o‘sha PUSH_DISPATCH_SECRET>', 'sunmedia_push_dispatch_secret');
+   ```
+
 ## Vercel
 
 Settings → Environment Variables (Production va Preview):

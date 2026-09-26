@@ -12,7 +12,8 @@
     "db:reset": "supabase db reset",
     "db:test": "supabase test db",
     "db:lint": "supabase db lint --level warning",
-    "db:types": "supabase gen types typescript --local --schema public > types/database.ts && cp types/database.ts '../SUNMEDIA USER/types/database.ts'"
+    "db:types": "supabase gen types typescript --local --schema public > types/database.ts && cp types/database.ts '../SUNMEDIA USER/types/database.ts'",
+    "test:unit": "node --test 'supabase/functions/**/*.test.ts'"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

@@ -155,3 +155,13 @@ begin
     (c_safi, 'Haftalik aksiya stories', 'story', 'script', u_smm),
     (c_wd, 'WeDrink yozgi kolleksiya', 'reel', 'editing', u_pm);
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Local push dispatch (development only; production sets its own vault secrets).
+-- The database reaches the Edge Functions through the Docker network; the secret matches
+-- supabase/functions/.env (see .env.example).
+-- ---------------------------------------------------------------------------
+select vault.create_secret('http://supabase_kong_SUNMEDIA_ADMIN:8000/functions/v1', 'sunmedia_functions_url', 'Local Edge Functions base URL')
+where not exists (select 1 from vault.secrets where name = 'sunmedia_functions_url');
+select vault.create_secret('sunmedia-local-push-secret', 'sunmedia_push_dispatch_secret', 'Local push-dispatch shared secret')
+where not exists (select 1 from vault.secrets where name = 'sunmedia_push_dispatch_secret');

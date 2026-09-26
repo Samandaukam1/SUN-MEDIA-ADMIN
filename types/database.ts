@@ -4054,6 +4054,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_group_chat: {
+        Args: { p_member_ids: string[]; p_name: string }
+        Returns: string
+      }
       generate_monthly_report: {
         Args: { p_client_id: string; p_month: string }
         Returns: {
@@ -4188,6 +4192,36 @@ export type Database = {
           total_bytes: number
         }[]
       }
+      get_inbox_counts: { Args: never; Returns: Json }
+      get_my_chats: {
+        Args: never
+        Returns: {
+          archived: boolean
+          client_code: string
+          client_id: string
+          client_logo: string
+          client_name: string
+          description: string
+          is_default: boolean
+          kind: Database["public"]["Enums"]["chat_room_kind"]
+          last_has_files: boolean
+          last_is_system: boolean
+          last_message_at: string
+          last_message_body: string
+          last_message_id: string
+          last_read_at: string
+          last_sender_id: string
+          last_sender_name: string
+          member_count: number
+          muted: boolean
+          name: string
+          peer_avatar: string
+          peer_id: string
+          peer_name: string
+          room_id: string
+          unread_count: number
+        }[]
+      }
       get_my_context: { Args: never; Returns: Json }
       get_team_directory: {
         Args: never
@@ -4210,7 +4244,9 @@ export type Database = {
           user_id: string
         }[]
       }
+      mark_chat_read: { Args: { p_room_id: string }; Returns: undefined }
       mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number }
+      open_direct_chat: { Args: { p_user_id: string }; Returns: string }
       provision_client_user: {
         Args: {
           p_client_id: string
@@ -4335,6 +4371,31 @@ export type Database = {
       save_task: {
         Args: { p_payload: Json; p_task_id: string }
         Returns: string
+      }
+      send_message: {
+        Args: {
+          p_body: string
+          p_file_ids?: string[]
+          p_reply_to?: string
+          p_room_id: string
+        }
+        Returns: {
+          body: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          is_system: boolean
+          reply_to_id: string | null
+          room_id: string
+          sender_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_account_status: {
         Args: {

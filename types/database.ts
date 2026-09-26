@@ -4234,6 +4234,7 @@ export type Database = {
         }[]
       }
       get_my_context: { Args: never; Returns: Json }
+      get_report: { Args: { p_report_id: string }; Returns: Json }
       get_team_directory: {
         Args: never
         Returns: {

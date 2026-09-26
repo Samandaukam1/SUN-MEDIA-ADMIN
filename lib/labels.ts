@@ -161,3 +161,25 @@ export const PERMISSION_MODULE_LABEL: Record<string, string> = {
   notifications: 'Bildirishnomalar',
   chat: 'Chat',
 };
+
+export const SUBSCRIPTION_STATUS: Record<Enums['subscription_status'], { label: string; tone: BadgeTone }> = {
+  scheduled: { label: 'Rejalashtirilgan', tone: 'info' },
+  active: { label: 'Faol', tone: 'success' },
+  expired: { label: 'Tugagan', tone: 'neutral' },
+  cancelled: { label: 'Bekor qilingan', tone: 'neutral' },
+};
+
+export const REQUEST_STATUS: Record<Enums['request_status'], { label: string; tone: BadgeTone }> = {
+  pending: { label: 'Kutilmoqda', tone: 'warning' },
+  approved: { label: 'Tasdiqlandi', tone: 'success' },
+  rejected: { label: 'Rad etildi', tone: 'danger' },
+  cancelled: { label: 'Bekor qilindi', tone: 'neutral' },
+};
+
+/** "3 500 000 so‘m" — UZS without decimals, other currencies with the code. */
+export function formatMoney(amount: number | string | null | undefined, currency = 'UZS'): string {
+  if (amount == null || amount === '') return '—';
+  const value = Number(amount);
+  const whole = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: currency === 'UZS' ? 0 : 2 }).format(value).replace(/ /g, ' ');
+  return currency === 'UZS' ? `${whole} so‘m` : `${whole} ${currency}`;
+}

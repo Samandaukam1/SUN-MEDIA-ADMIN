@@ -15,6 +15,12 @@ const PATHS = {
     </>
   ),
   plus: <path d="M12 5v14M5 12h14" />,
+  creditCard: (
+    <>
+      <rect x="1" y="4" width="22" height="16" rx="2" />
+      <path d="M1 10h22" />
+    </>
+  ),
   search: (
     <>
       <circle cx="11" cy="11" r="8" />

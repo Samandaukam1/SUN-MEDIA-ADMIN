@@ -8,6 +8,7 @@ import { ApprovalToggle } from '@/components/clients/ApprovalToggle';
 import { ClientProfileForm } from '@/components/clients/ClientProfileForm';
 import { RemoveTeamMember, TeamAssignForm } from '@/components/clients/TeamAssign';
 import { PageHeader } from '@/components/panel/PageHeader';
+import { ClientPlanTab } from '@/components/plans/ClientPlanTab';
 import { EmptyRow } from '@/components/panel/Stat';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
@@ -24,6 +25,7 @@ const TABS = [
   { key: 'overview', label: 'Umumiy' },
   { key: 'users', label: 'Loginlar' },
   { key: 'team', label: 'SUN MEDIA jamoasi' },
+  { key: 'plan', label: 'Tarif' },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
@@ -65,7 +67,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
     staffOptions = (staff ?? []).filter((s) => s.employee?.status !== 'terminated').map((s) => ({ id: s.id, name: s.full_name, hint: s.employee?.job_title }));
   }
 
-  const tabs = TABS.map((t) => ({
+  const tabs = TABS.filter((t) => t.key !== 'plan' || can(context, 'subscriptions.read') || can(context, 'subscriptions.manage')).map((t) => ({
     key: t.key,
     label: t.label,
     href: `/clients/${id}?tab=${t.key}`,
@@ -149,6 +151,8 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
           </Card>
         )
       ) : null}
+
+      {active === 'plan' ? <ClientPlanTab clientId={client.id} manage={can(context, 'subscriptions.manage')} /> : null}
 
       {active === 'team' ? (
         <div className="grid gap-6 xl:grid-cols-[1fr_1.1fr]">

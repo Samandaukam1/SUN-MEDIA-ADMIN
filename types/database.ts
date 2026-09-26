@@ -3951,6 +3951,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      assign_plan: {
+        Args: {
+          p_client_id: string
+          p_notes?: string
+          p_plan_id: string
+          p_price?: number
+          p_starts_on?: string
+        }
+        Returns: string
+      }
       authorize_password_reset: { Args: { p_user_id: string }; Returns: string }
       change_staff_role: {
         Args: { p_role_key: string; p_user_id: string }
@@ -4157,6 +4167,7 @@ export type Database = {
         }[]
       }
       get_client_home: { Args: { p_client_id: string }; Returns: Json }
+      get_client_plan: { Args: { p_client_id: string }; Returns: Json }
       get_client_resource_report: {
         Args: { p_from: string; p_to: string }
         Returns: {
@@ -4243,6 +4254,15 @@ export type Database = {
           shootings_today: number
           user_id: string
         }[]
+      }
+      handle_upgrade_request: {
+        Args: {
+          p_approve: boolean
+          p_request_id: string
+          p_response?: string
+          p_starts_on?: string
+        }
+        Returns: string
       }
       mark_chat_read: { Args: { p_room_id: string }; Returns: undefined }
       mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number }

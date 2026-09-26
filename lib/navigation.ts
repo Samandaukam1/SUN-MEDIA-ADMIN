@@ -6,7 +6,13 @@ export type NavItem = { href: string; label: string; icon: IconName; permission?
 
 /** Sections appear here as their modules ship; each entry is gated by the permission its page enforces. */
 const NAV: { title: string; items: NavItem[] }[] = [
-  { title: 'Boshqaruv', items: [{ href: '/', label: 'Dashboard', icon: 'activity', permission: 'dashboard.view' }] },
+  {
+    title: 'Boshqaruv',
+    items: [
+      { href: '/', label: 'Dashboard', icon: 'activity', permission: 'dashboard.view' },
+      { href: '/plans', label: 'Tariflar', icon: 'creditCard', anyOf: ['plans.manage', 'subscriptions.read', 'subscriptions.manage'] },
+    ],
+  },
   {
     title: 'Odamlar',
     items: [

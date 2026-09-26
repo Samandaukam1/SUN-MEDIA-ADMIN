@@ -4020,6 +4020,7 @@ export type Database = {
           p_mime_type: string
           p_name: string
           p_size_bytes: number
+          p_task_id?: string
         }
         Returns: {
           bucket: string | null
@@ -4137,6 +4138,20 @@ export type Database = {
           title: string
         }[]
       }
+      get_client_folders: {
+        Args: { p_client_id: string }
+        Returns: {
+          file_count: number
+          id: string
+          is_system: boolean
+          kind: Database["public"]["Enums"]["folder_kind"]
+          last_upload_at: string
+          name: string
+          parent_id: string
+          total_bytes: number
+          visibility: Database["public"]["Enums"]["visibility_level"]
+        }[]
+      }
       get_client_home: { Args: { p_client_id: string }; Returns: Json }
       get_client_resource_report: {
         Args: { p_from: string; p_to: string }
@@ -4159,6 +4174,18 @@ export type Database = {
           metrics: Json
           role_keys: string[]
           user_id: string
+        }[]
+      }
+      get_files_overview: {
+        Args: never
+        Returns: {
+          client_id: string
+          code: string
+          file_count: number
+          last_upload_at: string
+          logo_url: string
+          name: string
+          total_bytes: number
         }[]
       }
       get_my_context: { Args: never; Returns: Json }
@@ -4287,6 +4314,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      remove_file: { Args: { p_file_id: string }; Returns: undefined }
       review_content_version: {
         Args: {
           p_comments?: Json

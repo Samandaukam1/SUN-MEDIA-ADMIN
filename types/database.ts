@@ -4167,6 +4167,7 @@ export type Database = {
         }[]
       }
       get_client_home: { Args: { p_client_id: string }; Returns: Json }
+      get_client_overview: { Args: { p_client_id: string }; Returns: Json }
       get_client_plan: { Args: { p_client_id: string }; Returns: Json }
       get_client_resource_report: {
         Args: { p_from: string; p_to: string }
@@ -4255,6 +4256,10 @@ export type Database = {
           shootings_today: number
           user_id: string
         }[]
+      }
+      global_search: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: Json
       }
       handle_upgrade_request: {
         Args: {

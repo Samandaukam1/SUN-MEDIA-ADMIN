@@ -38,6 +38,13 @@ Lokal seed hisoblari (parol hammasida `SunMedia2026!`, faqat lokal):
 | Mijoz xodimi (SAFI) | `safi.employee@client.local` |
 | Mijoz egasi (WeDrink) | `wedrink@client.local` |
 
+**DEV QUICK LOGIN.** `npm run dev` + lokal Supabase bo‘lsa, `/login` sahifasida Owner va Admin tugmalari chiqadi: bir bosishda oddiy Supabase parol orqali kiradi. Production build'da bu blok (va test parol) umuman yo‘q.
+
+**Kira olmasangiz.** `npm run dev` oldidan `scripts/dev-check.mjs` qaysi Supabase'ga ulanganini va u javob berayotganini yozadi. Eng ko‘p sabab:
+
+- `npm run build` / `npm start` — bular `.env.local` (cloud) ni o‘qiydi, lokal test loginlar u yerda yo‘q → “Email yoki parol noto‘g‘ri”. Lokal test uchun faqat `npm run dev`.
+- Lokal Supabase o‘chiq (Docker) → `npm run db:start`.
+
 ## Akkaunt yaratish (Team → Xodim qo‘shish, Mijoz → Loginlar)
 
 1. Server action chaqiruvchining sessiyasini tekshiradi.

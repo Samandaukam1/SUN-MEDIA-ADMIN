@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 
 import { Logo } from '@/components/brand/Logo';
 import { safeNextPath } from '@/lib/errors';
+import { devQuickLoginAvailable, supabaseHost } from './devAccess';
 import { LoginForm } from './LoginForm';
 
 export const metadata: Metadata = { title: 'Kirish' };
@@ -12,6 +13,9 @@ const ERRORS: Record<string, string> = {
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
   const params = await searchParams;
+  const next = safeNextPath(params.next);
+  // DEV ONLY: imported behind the build-time NODE_ENV check, so production builds do not contain the panel at all.
+  const DevQuickLogin = process.env.NODE_ENV === 'development' && devQuickLoginAvailable() ? (await import('./DevQuickLogin')).DevQuickLogin : null;
   return (
     <main className="grid min-h-dvh lg:grid-cols-[1fr_1.1fr]">
       <section className="flex flex-col justify-between px-6 py-10 sm:px-12">
@@ -19,7 +23,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <div className="mx-auto w-full max-w-[400px] py-12">
           <h1 className="text-3xl font-bold tracking-tight">Boshqaruv paneli</h1>
           <p className="mt-2 mb-8 text-muted">SUN MEDIA jamoasi uchun. Hisobingiz bilan kiring.</p>
-          <LoginForm next={safeNextPath(params.next)} initialError={params.error ? ERRORS[params.error] : undefined} />
+          <LoginForm next={next} initialError={params.error ? ERRORS[params.error] : undefined} />
+          {DevQuickLogin ? <DevQuickLogin next={next} host={supabaseHost()} /> : null}
         </div>
         <p className="text-[13px] text-subtle">Hisoblarni Owner yoki Admin yaratadi.</p>
       </section>

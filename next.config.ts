@@ -42,6 +42,8 @@ const nextConfig: NextConfig = {
   // Keep the dev-only indicator away from the sidebar's account controls.
   devIndicators: { position: 'bottom-right' },
   poweredByHeader: false,
+  // Logo uploads (≤ 2 MB) go through a server action.
+  experimental: { serverActions: { bodySizeLimit: '3mb' } },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

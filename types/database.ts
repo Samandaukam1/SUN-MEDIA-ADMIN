@@ -891,6 +891,7 @@ export type Database = {
           created_by: string | null
           deleted_at: string | null
           description: string | null
+          home_logo_url: string | null
           id: string
           industry: string | null
           legal_name: string | null
@@ -909,6 +910,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
+          home_logo_url?: string | null
           id?: string
           industry?: string | null
           legal_name?: string | null
@@ -927,6 +929,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
+          home_logo_url?: string | null
           id?: string
           industry?: string | null
           legal_name?: string | null
@@ -5140,6 +5143,7 @@ export type Database = {
         Row: {
           client_id: string | null
           created_at: string
+          home_logo_url: string | null
           id: string
           inherits_agency_plan: boolean
           is_internal: boolean
@@ -5150,6 +5154,7 @@ export type Database = {
         Insert: {
           client_id?: string | null
           created_at?: string
+          home_logo_url?: string | null
           id?: string
           inherits_agency_plan?: boolean
           is_internal?: boolean
@@ -5160,6 +5165,7 @@ export type Database = {
         Update: {
           client_id?: string | null
           created_at?: string
+          home_logo_url?: string | null
           id?: string
           inherits_agency_plan?: boolean
           is_internal?: boolean
@@ -6050,6 +6056,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_home_logo: {
+        Args: { p_client: string; p_url: string }
+        Returns: undefined
       }
       set_staff_permissions: {
         Args: { p_permissions: string[]; p_user_id: string }

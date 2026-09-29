@@ -38,7 +38,7 @@ select is(
 
 select is(
   (select coalesce(array_agg(id order by id), '{}') from storage.buckets where public),
-  array['avatars'], 'only the avatar bucket is public');
+  array['avatars', 'branding'], 'only avatars and brand logos are public');
 
 -- Definer functions reachable by app users must check who is calling.
 select is(

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { HomeLogoField } from '@/components/clients/HomeLogoField';
 import { cellClass, rowClass, Table } from '@/components/panel/List';
 import { PageHeader } from '@/components/panel/PageHeader';
 import { Card, SectionTitle } from '@/components/ui/Card';
@@ -25,11 +26,16 @@ export default async function SystemSettingsPage() {
   const supabase = await createClient();
   const { data, error } = await supabase.from('app_settings').select('key, value, updated_at').order('key');
   if (error) throw error;
+  const { data: agency } = await supabase.from('workspaces').select('home_logo_url').eq('kind', 'agency').maybeSingle();
   const host = new URL(getPublicEnv().url).host;
 
   return (
     <div className="space-y-8">
       <PageHeader title="Tizim sozlamalari" description="Platformaning barcha sozlamalari. Ish jadvali va eslatmalarni “Sozlamalar” bo‘limida o‘zgartirasiz." />
+      <Card>
+        <SectionTitle>Jamoa ilovasining markaziy logosi</SectionTitle>
+        <HomeLogoField clientId={null} current={agency?.home_logo_url ?? null} fallbackLabel="SUN MEDIA" />
+      </Card>
       <Card className="grid gap-3 text-sm sm:grid-cols-3">
         <div>
           <SectionTitle>Baza</SectionTitle>

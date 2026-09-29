@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import { AccountActions } from '@/components/accounts/AccountActions';
 import { AddClientUserDialog } from '@/components/clients/AddClientUserDialog';
 import { ClientProfileForm } from '@/components/clients/ClientProfileForm';
+import { HomeLogoField } from '@/components/clients/HomeLogoField';
 import { IntegrationsTab } from '@/components/integrations/IntegrationsTab';
 import { RemoveTeamMember, TeamAssignForm } from '@/components/clients/TeamAssign';
 import { PageHeader } from '@/components/panel/PageHeader';
@@ -45,7 +46,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   const { data: client, error } = await supabase
     .from('clients')
     .select(
-      `id, name, code, legal_name, industry, website, address, description, logo_url, status, created_at,
+      `id, name, code, legal_name, industry, website, address, description, logo_url, home_logo_url, status, created_at,
        members:client_members(user_id, title, created_at, role:roles(key, name),
          profile:profiles!client_members_user_id_fkey(id, full_name, email, phone, status, last_seen_at)),
        team:client_team_members(user_id, team_role, person:profiles!client_team_members_user_id_fkey(id, full_name, avatar_url))`,
@@ -103,6 +104,12 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       />
       <Tabs items={tabs} active={active} />
 
+      {active === 'overview' && manage ? (
+        <Card className="mb-6 max-w-3xl">
+          <h2 className="mb-4 text-[15px] font-semibold">Bosh sahifa logosi</h2>
+          <HomeLogoField clientId={client.id} current={client.home_logo_url ?? client.logo_url} fallbackLabel={client.code} />
+        </Card>
+      ) : null}
       {active === 'overview' ? (
         <Card className="max-w-3xl">
           <ClientProfileForm

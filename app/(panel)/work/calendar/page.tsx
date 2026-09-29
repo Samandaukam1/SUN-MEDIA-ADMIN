@@ -19,7 +19,6 @@ const GROUPS: { key: string; label: string; types: string[] | null }[] = [
   { key: 'all', label: 'Barchasi', types: null },
   { key: 'shooting', label: 'Syomka', types: ['shooting'] },
   { key: 'edit', label: 'Montaj', types: ['content_due', 'editing_deadline', 'design_deadline'] },
-  { key: 'approval', label: 'Tasdiqlash', types: ['approval_deadline'] },
   { key: 'post', label: 'Post', types: ['publication'] },
   { key: 'meeting', label: 'Uchrashuv', types: ['meeting', 'company_meeting'] },
   { key: 'deadline', label: 'Muddat', types: ['task_deadline'] },

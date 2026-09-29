@@ -25,8 +25,28 @@ export async function requireStaff(): Promise<StaffContext> {
   return context;
 }
 
+/** The Tizim egasi (system owner): the one account above everyone, web panel only. */
+export function isSystemOwner(context: StaffContext): boolean {
+  return context.roles.some((r) => r.key === 'system_owner');
+}
+
 export function can(context: StaffContext, permission: string): boolean {
-  return context.roles.some((r) => r.key === 'owner') || context.permissions.includes(permission);
+  return isSystemOwner(context) || context.permissions.includes(permission);
+}
+
+/**
+ * The web panel is for the system owner and the admins (plus read-only oversight for the Rahbar);
+ * everyone else works in the mobile app.
+ */
+export function canUsePanel(context: StaffContext): boolean {
+  return isSystemOwner(context) || ['dashboard.view', 'employees.manage', 'clients.manage'].some((p) => context.permissions.includes(p));
+}
+
+/** Tizim boshqaruvi pages and actions. */
+export async function requireSystemOwner(): Promise<StaffContext> {
+  const context = await requireStaff();
+  if (!isSystemOwner(context)) redirect('/no-access?reason=permission');
+  return context;
 }
 
 /** Throws a redirect when the permission is missing — use at the top of protected pages. */

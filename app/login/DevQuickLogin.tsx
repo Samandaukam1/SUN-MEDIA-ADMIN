@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/Button';
 import type { SignInState } from './actions';
 import { devQuickSignInAction } from './devActions';
 
+// The web panel belongs to the Tizim egasi and the admins.
 const ACCOUNTS = [
-  { key: 'owner', label: 'Owner' },
+  { key: 'system', label: 'Tizim egasi' },
   { key: 'admin', label: 'Admin' },
 ];
 

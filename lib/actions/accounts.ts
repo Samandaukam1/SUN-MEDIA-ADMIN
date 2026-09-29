@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { createLogin, deleteLogin, setLoginBlocked, setTemporaryPassword } from '@/lib/accounts';
 import { requirePermission, requireStaff } from '@/lib/auth';
 import { toUserMessage } from '@/lib/errors';
+import { guardSystemOwner } from '@/lib/protect';
 import { createClient } from '@/lib/supabase/server';
 import { fieldErrorsFrom, type ActionState, type CredentialsState } from './state';
 
@@ -94,7 +95,6 @@ const clientUserSchema = z.object({
   phone,
   title: z.string().trim().max(80).transform((v) => v || null),
   role_key: z.enum(['client_owner', 'client_employee']),
-  can_approve: z.boolean(),
 });
 
 /** Client → Users → Add login (client owner or client employee). */
@@ -108,7 +108,6 @@ export async function createClientAccount(_: CredentialsState, formData: FormDat
     phone: formData.get('phone') ?? '',
     title: formData.get('title') ?? '',
     role_key: formData.get('role_key'),
-    can_approve: formData.get('can_approve') === 'on',
   });
   if (!parsed.success) {
     return { status: 'error', message: 'Formadagi xatolarni tuzating.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
@@ -132,8 +131,8 @@ export async function createClientAccount(_: CredentialsState, formData: FormDat
     p_last_name: input.last_name,
     p_phone: input.phone ?? undefined,
     p_title: input.title ?? undefined,
-    // Client owners approve through their role; employees only when explicitly allowed.
-    p_permissions: input.role_key === 'client_employee' && input.can_approve ? ['client.approve'] : [],
+    // Clients only follow the work and write to SUN MEDIA; no approval rights are granted any more.
+    p_permissions: [],
   });
   if (error) {
     await deleteLogin(login.userId).catch(() => undefined);
@@ -146,7 +145,8 @@ export async function createClientAccount(_: CredentialsState, formData: FormDat
 
 /** Issues a new temporary password; the database decides whether the caller may do it. */
 export async function resetAccountPassword(userId: string): Promise<CredentialsState> {
-  await requireStaff();
+  const blocked = await guardSystemOwner(userId);
+  if (blocked) return { status: 'error', message: blocked };
   const supabase = await createClient();
   const { data: email, error } = await supabase.rpc('authorize_password_reset', { p_user_id: userId });
   if (error || !email) return { status: 'error', message: toUserMessage(error) };
@@ -177,6 +177,8 @@ export async function setAccountStatus(_: ActionState, formData: FormData): Prom
   if (!parsed.success) return { status: 'error', message: 'Holatni tanlang.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
   const { user_id, status, reason, revalidate } = parsed.data;
   if (status !== 'active' && !reason) return { status: 'error', message: 'Bloklash sababini yozing.', fieldErrors: { reason: 'Sababni yozing' } };
+  const blocked = await guardSystemOwner(user_id);
+  if (blocked) return { status: 'error', message: blocked };
 
   const supabase = await createClient();
   const { data: previous, error } = await supabase.rpc('set_account_status', { p_user_id: user_id, p_status: status, p_reason: reason || undefined });
@@ -244,18 +246,4 @@ export async function updateStaffProfile(_: ActionState, formData: FormData): Pr
   revalidatePath(`/team/${input.user_id}`);
   revalidatePath('/team');
   return { status: 'success', message: 'Saqlandi.' };
-}
-
-/** Client employee approval right (client_member_permissions). */
-export async function setClientApproval(clientId: string, userId: string, allowed: boolean): Promise<ActionState> {
-  await requireStaff();
-  const supabase = await createClient();
-  const { error } = await supabase.rpc('set_client_member_permissions', {
-    p_client_id: clientId,
-    p_user_id: userId,
-    p_permissions: allowed ? ['client.approve'] : [],
-  });
-  if (error) return { status: 'error', message: toUserMessage(error) };
-  revalidatePath(`/clients/${clientId}`);
-  return { status: 'success', message: allowed ? 'Tasdiqlash huquqi berildi.' : 'Tasdiqlash huquqi olib tashlandi.' };
 }

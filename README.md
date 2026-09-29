@@ -1,5 +1,7 @@
 # SUN MEDIA — Admin panel va backend
 
+Joriy model va tekshiruv holati: [OPERATING_MODEL.md](docs/OPERATING_MODEL.md).
+
 Next.js 15 (App Router) + TypeScript. Vercel'ga deploy qilinadi. Supabase backend (migratsiyalar, RLS, testlar, Edge Functions) shu repoda: `supabase/`.
 
 To‘liq arxitektura: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -26,7 +28,8 @@ Lokal seed hisoblari (parol hammasida `SunMedia2026!`, faqat lokal):
 
 | Rol | Login |
 |---|---|
-| Owner | `owner@sunmedia.local` |
+| Tizim egasi (faqat web) | `system@sunmedia.local` |
+| Rahbar | `owner@sunmedia.local` |
 | Admin | `admin@sunmedia.local` |
 | Project Manager | `manager@sunmedia.local`, `pm@sunmedia.local` |
 | SMM | `smm@sunmedia.local` |
@@ -38,7 +41,7 @@ Lokal seed hisoblari (parol hammasida `SunMedia2026!`, faqat lokal):
 | Mijoz xodimi (SAFI) | `safi.employee@client.local` |
 | Mijoz egasi (WeDrink) | `wedrink@client.local` |
 
-**DEV QUICK LOGIN.** `npm run dev` + lokal Supabase bo‘lsa, `/login` sahifasida Owner va Admin tugmalari chiqadi: bir bosishda oddiy Supabase parol orqali kiradi. Production build'da bu blok (va test parol) umuman yo‘q.
+**DEV QUICK LOGIN.** `npm run dev` + lokal Supabase bo‘lsa, `/login` sahifasida Tizim egasi va Admin tugmalari chiqadi: bir bosishda oddiy Supabase parol orqali kiradi. Production build'da bu blok (va test parol) umuman yo‘q.
 
 **Kira olmasangiz.** `npm run dev` oldidan `scripts/dev-check.mjs` qaysi Supabase'ga ulanganini va u javob berayotganini yozadi. Eng ko‘p sabab:
 

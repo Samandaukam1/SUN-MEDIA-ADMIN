@@ -2,12 +2,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import { AddEmployeeDialog } from '@/components/accounts/AddEmployeeDialog';
 import { PageHeader } from '@/components/panel/PageHeader';
 import { EmptyRow } from '@/components/panel/Stat';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
-import { buttonClass } from '@/components/ui/Button';
+import { buttonClass, ButtonLink } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { can, requireStaff } from '@/lib/auth';
@@ -17,7 +16,7 @@ import { formatShortDateTime } from '@/lib/time';
 
 export const metadata: Metadata = { title: 'Jamoa' };
 
-type Search = { q?: string; role?: string; status?: string; new?: string };
+type Search = { q?: string; role?: string; status?: string };
 
 export default async function TeamPage({ searchParams }: { searchParams: Promise<Search> }) {
   const context = await requireStaff();
@@ -25,7 +24,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
   const params = await searchParams;
   const supabase = await createClient();
 
-  const [peopleRes, rolesRes, clientsRes, domainRes] = await Promise.all([
+  const [peopleRes, rolesRes] = await Promise.all([
     supabase
       .from('profiles')
       .select(
@@ -36,8 +35,6 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       .is('deleted_at', null)
       .order('full_name'),
     supabase.from('roles').select('key, name, rank, description').eq('scope', 'staff').order('rank'),
-    supabase.from('clients').select('id, name, code, industry').is('deleted_at', null).eq('status', 'active').order('name'),
-    supabase.from('app_settings').select('value').eq('key', 'accounts.login_domain').maybeSingle(),
   ]);
   if (peopleRes.error) throw peopleRes.error;
   if (rolesRes.error) throw rolesRes.error;
@@ -50,8 +47,6 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     .filter((p) => !params.status || p.status === params.status);
 
   const all = peopleRes.data;
-  const myRank = Math.min(...context.roles.map((r) => rolesRes.data.find((x) => x.key === r.key)?.rank ?? 1000));
-  const assignableRoles = rolesRes.data.filter((r) => r.rank >= myRank).map((r) => ({ value: r.key, label: r.name, description: r.description ?? undefined }));
   const canManage = can(context, 'employees.manage');
 
   return (
@@ -59,17 +54,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       <PageHeader
         title="Xodimlar"
         description="SUN MEDIA xodimlari, lavozimi, roli va akkaunt holati."
-        actions={
-          canManage ? (
-            <AddEmployeeDialog
-              roles={assignableRoles}
-              clients={(clientsRes.data ?? []).map((c) => ({ value: c.id, label: c.name, description: c.industry ?? c.code }))}
-              permissions={context.permissions}
-              loginDomain={typeof domainRes.data?.value === 'string' ? domainRes.data.value : 'sunmedia.uz'}
-              defaultOpen={params.new === '1'}
-            />
-          ) : null
-        }
+        actions={canManage ? <ButtonLink href="/team/new" variant="primary">+ Xodim</ButtonLink> : null}
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">

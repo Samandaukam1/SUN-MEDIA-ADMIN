@@ -7,31 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       announcement_reads: {
@@ -4152,6 +4127,22 @@ export type Database = {
           title: string
         }[]
       }
+      get_client_conversations: {
+        Args: never
+        Returns: {
+          awaiting_reply: boolean
+          client_code: string
+          client_id: string
+          client_logo: string
+          client_name: string
+          is_member: boolean
+          last_message_at: string
+          last_message_body: string
+          last_sender_name: string
+          room_id: string
+          unread_count: number
+        }[]
+      }
       get_client_folders: {
         Args: { p_client_id: string }
         Returns: {
@@ -4516,6 +4507,31 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      system_auth_events: {
+        Args: { p_limit?: number }
+        Returns: {
+          action: string
+          email: string
+          ip: string
+          occurred_at: string
+        }[]
+      }
+      system_revoke_sessions: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
+      system_sessions: {
+        Args: never
+        Returns: {
+          email: string
+          full_name: string
+          ip: string
+          last_active_at: string
+          sessions: number
+          user_agent: string
+          user_id: string
+        }[]
+      }
       toggle_shot_item: {
         Args: { p_done: boolean; p_index: number; p_shooting_id: string }
         Returns: Json
@@ -4796,9 +4812,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       account_status: ["active", "disabled", "suspended"],

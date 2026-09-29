@@ -8,7 +8,7 @@ import type { SignInState } from './actions';
 import { devQuickLoginAvailable } from './devAccess';
 
 /** DEV ONLY — local seed accounts (supabase/seed.sql). */
-const DEV_ACCOUNTS: Record<string, string> = { owner: 'owner@sunmedia.local', admin: 'admin@sunmedia.local' };
+const DEV_ACCOUNTS: Record<string, string> = { system: 'system@sunmedia.local', admin: 'admin@sunmedia.local' };
 
 /** Real email/password sign-in with a seed account; refused outside `next dev` against the local Supabase. */
 export async function devQuickSignInAction(_prev: SignInState, formData: FormData): Promise<SignInState> {

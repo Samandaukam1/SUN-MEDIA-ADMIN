@@ -22,6 +22,16 @@ export function generateTemporaryPassword(): string {
   return `${first}-${second}`;
 }
 
+/**
+ * True when the account holds the Tizim egasi (system owner) role. Used as a second guard before any
+ * service-role call; the database enforces the same rule in its RPCs and policies.
+ */
+export async function isSystemOwnerAccount(userId: string): Promise<boolean> {
+  const { data, error } = await createAdminClient().from('user_roles').select('role:roles!inner(key)').eq('user_id', userId).eq('role.key', 'system_owner').limit(1);
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
 /** "Forever" for Supabase Auth bans (100 years). */
 const BAN_FOREVER = '876000h';
 

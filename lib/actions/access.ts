@@ -3,8 +3,9 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
-import { requirePermission, requireStaff } from '@/lib/auth';
+import { requirePermission, requireStaff, requireSystemOwner } from '@/lib/auth';
 import { toUserMessage } from '@/lib/errors';
+import { guardSystemOwner } from '@/lib/protect';
 import { createClient } from '@/lib/supabase/server';
 import { fieldErrorsFrom, type ActionState } from './state';
 
@@ -21,6 +22,8 @@ export async function updateStaffAccess(_: ActionState, formData: FormData): Pro
     });
   if (!parsed.success) return { status: 'error', message: 'Formadagi xatolarni tuzating.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
   const { user_id, role_key, current_role, permissions } = parsed.data;
+  const blocked = await guardSystemOwner(user_id);
+  if (blocked) return { status: 'error', message: blocked };
   const supabase = await createClient();
 
   if (role_key !== current_role) {
@@ -35,15 +38,16 @@ export async function updateStaffAccess(_: ActionState, formData: FormData): Pro
   return { status: 'success', message: 'Rol va ruxsatlar saqlandi.' };
 }
 
-/** Roles matrix: grant or withdraw one permission for one role (RLS: roles.manage + DB guard). */
+/** Global roles matrix: only the Tizim egasi changes what a whole role may do (DB: roles.manage). */
 export async function toggleRolePermission(roleId: string, permissionKey: string, granted: boolean): Promise<ActionState> {
-  await requirePermission('roles.manage');
+  await requireSystemOwner();
   const supabase = await createClient();
   const { error } = granted
     ? await supabase.from('role_permissions').insert({ role_id: roleId, permission_key: permissionKey })
     : await supabase.from('role_permissions').delete().eq('role_id', roleId).eq('permission_key', permissionKey);
   if (error && error.code !== '23505') return { status: 'error', message: toUserMessage(error) };
   revalidatePath('/roles');
+  revalidatePath('/system/permissions');
   return { status: 'success' };
 }
 
@@ -51,7 +55,6 @@ const settingsSchema = z.object({
   work_days: z.array(z.coerce.number().int().min(1).max(7)).min(1, 'Kamida bitta ish kuni tanlang'),
   workday_start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Vaqt HH:MM ko‘rinishida'),
   late_grace_minutes: z.coerce.number().int().min(0).max(120),
-  approval_window_hours: z.coerce.number().int('Butun son kiriting').min(1, 'Kamida 1 soat').max(336, 'Ko‘pi bilan 14 kun (336 soat)'),
   login_domain: z
     .string()
     .trim()
@@ -66,7 +69,6 @@ export async function updateAgencySettings(_: ActionState, formData: FormData): 
     work_days: formData.getAll('work_days'),
     workday_start: formData.get('workday_start'),
     late_grace_minutes: formData.get('late_grace_minutes'),
-    approval_window_hours: formData.get('approval_window_hours'),
     login_domain: formData.get('login_domain'),
   });
   if (!parsed.success) return { status: 'error', message: 'Formadagi xatolarni tuzating.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
@@ -77,7 +79,6 @@ export async function updateAgencySettings(_: ActionState, formData: FormData): 
     { key: 'attendance.workday_start', value: v.workday_start },
     { key: 'attendance.late_grace_minutes', value: v.late_grace_minutes },
     { key: 'accounts.login_domain', value: v.login_domain },
-    { key: 'approvals.client_window_hours', value: v.approval_window_hours },
   ];
   for (const row of rows) {
     const { error } = await supabase.from('app_settings').update({ value: row.value }).eq('key', row.key);
@@ -87,12 +88,12 @@ export async function updateAgencySettings(_: ActionState, formData: FormData): 
   return { status: 'success', message: 'Sozlamalar saqlandi. Yangi xodimlar shu jadval bilan yaratiladi.' };
 }
 
-const RECIPIENTS = ['assignees', 'managers', 'admins', 'owners', 'client_approvers'] as const;
+const RECIPIENTS = ['assignees', 'managers', 'admins', 'owners'] as const;
 
 const alertRuleSchema = z.object({
   id: z.uuid().optional(),
   name: z.string().trim().min(1, 'Nomini yozing').max(120),
-  target: z.enum(['task', 'content_approval']),
+  target: z.literal('task'),
   offset_minutes: z.coerce.number().int().min(-10080).max(1440),
   recipients: z.array(z.enum(RECIPIENTS)).min(1, 'Kamida bitta qabul qiluvchini tanlang'),
   is_active: z.boolean(),
@@ -127,7 +128,7 @@ export async function saveAlertRule(_: ActionState, formData: FormData): Promise
 export async function toggleAlertRule(id: string, active: boolean): Promise<ActionState> {
   await requirePermission('notifications.manage');
   const supabase = await createClient();
-  const { error } = await supabase.from('deadline_alert_rules').update({ is_active: active }).eq('id', id);
+  const { error } = await supabase.from('deadline_alert_rules').update({ is_active: active }).eq('id', id).eq('target', 'task');
   if (error) return { status: 'error', message: toUserMessage(error) };
   revalidatePath('/settings');
   return { status: 'success' };

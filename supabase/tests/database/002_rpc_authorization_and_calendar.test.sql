@@ -32,7 +32,7 @@ from rpc_test_ids where key in ('owner', 'editor', 'other_editor', 'client_a_use
 
 insert into public.user_roles (user_id, role_id)
 select i.id, r.id from rpc_test_ids i join public.roles r
-  on r.key = case when i.key = 'owner' then 'owner' else 'editor' end
+  on r.key = case when i.key = 'owner' then 'system_owner' else 'editor' end
 where i.key in ('owner', 'editor', 'other_editor', 'disabled');
 insert into public.employees (user_id)
 select id from rpc_test_ids where key in ('owner', 'editor', 'other_editor', 'disabled');

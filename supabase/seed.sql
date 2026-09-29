@@ -33,6 +33,8 @@ $$;
 
 do $$
 declare
+  -- Tizim egasi: web panel only (no mobile interface, not on the attendance roster).
+  u_system uuid := pg_temp.seed_user('system@sunmedia.local', 'Tizim egasi');
   u_owner uuid := pg_temp.seed_user('owner@sunmedia.local', 'Owner');
   u_admin uuid := pg_temp.seed_user('admin@sunmedia.local', 'Admin');
   u_pm uuid := pg_temp.seed_user('pm@sunmedia.local', 'Project Manager');
@@ -59,11 +61,12 @@ begin
   update public.app_settings set value = '"sunmedia.local"' where key = 'accounts.login_domain';
   insert into public.user_roles (user_id, role_id)
   select x.u, r.id from (values
-    (u_owner, 'owner'), (u_admin, 'admin'), (u_pm, 'project_manager'), (u_smm, 'smm_manager'),
+    (u_system, 'system_owner'), (u_owner, 'owner'), (u_admin, 'admin'), (u_pm, 'project_manager'), (u_smm, 'smm_manager'),
     (u_operator, 'operator'), (u_editor, 'editor'), (u_designer, 'designer'),
     (u_manager, 'project_manager'), (u_copywriter, 'copywriter')
   ) x (u, k) join public.roles r on r.key = x.k;
 
+  insert into public.employees (user_id, job_title, work_days) values (u_system, 'Tizim egasi', '{}');
   insert into public.employees (user_id, job_title) values
     (u_owner, 'Asoschi'), (u_admin, 'Administrator'), (u_pm, 'Project Manager'), (u_smm, 'SMM Manager'),
     (u_operator, 'Operator'), (u_editor, 'Montajyor'), (u_designer, 'Dizayner'),
@@ -76,7 +79,7 @@ begin
   select c_safi, u_safi, id from public.roles where key = 'client_owner';
   insert into public.client_members (client_id, user_id, role_id)
   select c_wd, u_wd, id from public.roles where key = 'client_owner';
-  -- Client employee: sees SAFI's plan and content, approves only if an admin grants client.approve.
+  -- Client employee: sees SAFI's plan, content and reports (clients only follow the work).
   insert into public.client_members (client_id, user_id, role_id, title)
   select c_safi, u_safi_emp, id, 'Marketing menejeri' from public.roles where key = 'client_employee';
 

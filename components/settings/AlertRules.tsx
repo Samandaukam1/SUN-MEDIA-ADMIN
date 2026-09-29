@@ -18,8 +18,7 @@ const RECIPIENT_LABEL: Record<string, string> = {
   assignees: 'Mas’ul xodimlar',
   managers: 'Mijoz menejerlari',
   admins: 'Adminlar',
-  owners: 'Owner va direktor',
-  client_approvers: 'Tasdiqlovchi mijoz',
+  owners: 'Rahbar',
 };
 
 function describeOffset(minutes: number): string {
@@ -120,7 +119,6 @@ function RuleDialog({ rule }: { rule?: AlertRule }) {
           <TextInput label="Nomi" name="name" required defaultValue={rule?.name} placeholder="Masalan: Montaj: 1 soat qoldi" />
           <SelectInput label="Nimaning muddati" name="target" defaultValue={rule?.target ?? 'task'}>
             <option value="task">Vazifa muddati</option>
-            <option value="content_approval">Mijoz tasdig‘i muddati</option>
           </SelectInput>
           <div className="grid gap-4 sm:grid-cols-3">
             <SelectInput label="Qachon" name="when" value={when} onChange={(e) => setWhen(e.target.value)}>

@@ -29,7 +29,7 @@ select id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticat
 from ap_ids where key <> 'client';
 
 insert into public.user_roles (user_id, role_id)
-select i.id, r.id from ap_ids i join public.roles r on r.key = case i.key when 'owner2' then 'owner' when 'pm' then 'project_manager' else i.key end
+select i.id, r.id from ap_ids i join public.roles r on r.key = case i.key when 'owner' then 'system_owner' when 'owner2' then 'system_owner' when 'pm' then 'project_manager' else i.key end
 where i.key in ('owner', 'owner2', 'admin', 'pm', 'editor');
 insert into public.employees (user_id) select id from ap_ids where key in ('owner', 'owner2', 'admin', 'pm', 'editor');
 insert into public.clients (id, name, code) values (pg_temp.ap('client'), 'Provision test', 'PV' || upper(left(replace(pg_temp.ap('client')::text, '-', ''), 10)));
@@ -102,17 +102,17 @@ select pg_temp.ap_login('admin');
 select lives_ok(
   $$select public.provision_client_user(pg_temp.ap('new_client_emp'), pg_temp.ap('client'), 'client_employee', 'Mijoz', 'Xodimi',
       null, 'Marketing', array['client.approve'])$$,
-  'admin creates a client employee who may approve');
+  'legacy approval grants may be stored but confer no approval access');
 select throws_ok(
   $$select public.set_client_member_permissions(pg_temp.ap('client'), pg_temp.ap('new_client_emp'), array['finance.read'])$$,
   '22023', null, 'staff permissions cannot be granted to client users');
 reset role;
 
 select pg_temp.ap_login('new_client_emp');
-select ok((public.get_my_context() -> 'clients' -> 0 -> 'permissions') ? 'client.approve', 'granted approval shows in the session context');
+select ok(not ((public.get_my_context() -> 'clients' -> 0 -> 'permissions') ? 'client.approve'), 'retired approval never shows in the session context');
 reset role;
-select ok(pg_temp.ap('new_client_emp') = any (private.client_users_with_permission(pg_temp.ap('client'), 'client.approve')),
-  'granted approver receives approval alerts');
+select ok(not (pg_temp.ap('new_client_emp') = any (private.client_users_with_permission(pg_temp.ap('client'), 'client.approve'))),
+  'legacy approvers no longer receive approval alerts');
 
 select pg_temp.ap_login('admin');
 select lives_ok($$select public.set_client_member_permissions(pg_temp.ap('client'), pg_temp.ap('new_client_emp'), '{}')$$, 'approval right can be withdrawn');

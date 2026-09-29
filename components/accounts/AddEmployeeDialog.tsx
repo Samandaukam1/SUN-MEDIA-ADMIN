@@ -2,9 +2,8 @@
 
 import { useActionState, useRef, useState } from 'react';
 
-import { Button } from '@/components/ui/Button';
+import { Button, ButtonLink } from '@/components/ui/Button';
 import { cn } from '@/components/ui/cn';
-import { Dialog } from '@/components/ui/Dialog';
 import { Icon } from '@/components/ui/Icon';
 import { Checkbox, SelectInput, TextInput } from '@/components/ui/Inputs';
 import { Notice } from '@/components/ui/Notice';
@@ -19,42 +18,22 @@ type Option = { value: string; label: string; description?: string };
 type Props = {
   roles: Option[];
   clients: Option[];
+  /** Permissions this admin may pass on. */
   permissions: string[];
+  /** What each role already includes (shown ticked and locked). */
+  rolePermissions: Record<string, string[]>;
   loginDomain: string;
-  /** Opened from "+ Yaratish → Yangi xodim". */
-  defaultOpen?: boolean;
 };
 
 const STEPS = ['Asosiy ma’lumot', 'Lavozim', 'Login va ruxsat', 'Tasdiqlash'] as const;
 // Which step holds each field, so a server-side error takes the admin straight to it.
 const FIELD_STEP: Record<string, number> = { first_name: 0, last_name: 0, phone: 0, job_title: 1, role_key: 1, employment_type: 1, email: 2 };
 
-/** Jamoa → Xodimlar → + Xodim: four short steps, then the login and temporary password to hand over. */
-export function AddEmployeeDialog({ roles, clients, permissions, loginDomain, defaultOpen = false }: Props) {
-  const [open, setOpen] = useState(defaultOpen);
-  const [formKey, setFormKey] = useState(0);
-  return (
-    <>
-      <Button icon={<Icon name="plus" size={16} />} onClick={() => setOpen(true)}>
-        Xodim
-      </Button>
-      <Dialog
-        open={open}
-        onClose={() => {
-          setOpen(false);
-          setFormKey((k) => k + 1);
-        }}
-        title="Yangi xodim"
-        description="Login va vaqtinchalik parol avtomatik yaratiladi."
-        size="lg"
-      >
-        <EmployeeForm key={formKey} roles={roles} clients={clients} permissions={permissions} loginDomain={loginDomain} onDone={() => setOpen(false)} />
-      </Dialog>
-    </>
-  );
-}
-
-function EmployeeForm({ roles, clients, permissions, loginDomain, onDone }: Omit<Props, 'defaultOpen'> & { onDone: () => void }) {
+/**
+ * Jamoa → Xodim qo‘shish: four short steps, then the login and temporary password to hand over.
+ * The Auth login is created on the server; the password is shown once and never stored.
+ */
+export function EmployeeForm({ roles, clients, permissions, rolePermissions, loginDomain }: Props) {
   const [state, action] = useActionState<CredentialsState, FormData>(async (prev: CredentialsState, data: FormData) => {
     const next = await createEmployeeAccount(prev, data);
     if (next.status === 'error' && next.fieldErrors) {
@@ -73,10 +52,11 @@ function EmployeeForm({ roles, clients, permissions, loginDomain, onDone }: Omit
   const [clientIds, setClientIds] = useState<string[]>([]);
   const [email, setEmail] = useState('');
   const [emailTouched, setEmailTouched] = useState(false);
-  const [showPermissions, setShowPermissions] = useState(false);
+  const [extra, setExtra] = useState<string[]>([]);
   const stepRef = useRef<HTMLDivElement>(null);
 
   const role = roles.find((r) => r.value === roleKey);
+  const fromRole = new Set(roleKey === 'system_owner' ? permissions : (rolePermissions[roleKey] ?? []));
   const suggested = suggestLogin(first, last, loginDomain);
   const login = emailTouched ? email : email || suggested;
 
@@ -97,7 +77,9 @@ function EmployeeForm({ roles, clients, permissions, loginDomain, onDone }: Omit
           <a href={`/team/${state.userId}`} className="inline-flex h-10 items-center rounded-xl px-4 text-sm font-medium text-ink hover:bg-surface-2">
             Profilni ochish
           </a>
-          <Button onClick={onDone}>Tayyor</Button>
+          <ButtonLink href="/team" variant="primary">
+            Tayyor
+          </ButtonLink>
         </div>
       </div>
     );
@@ -207,14 +189,26 @@ function EmployeeForm({ roles, clients, permissions, loginDomain, onDone }: Omit
         <p className="text-sm text-muted">Vaqtinchalik parol avtomatik yaratiladi. Xodim birinchi kirishda uni o‘zgartiradi.</p>
         {permissions.length > 0 ? (
           <fieldset>
-            <button type="button" onClick={() => setShowPermissions((v) => !v)} className="flex items-center gap-2 text-sm font-medium text-muted hover:text-ink" aria-expanded={showPermissions}>
-              <Icon name="shield" size={16} />
-              Rolga qo‘shimcha ruxsat berish (ixtiyoriy)
-            </button>
-            <div className={showPermissions ? 'mt-3 grid gap-2 sm:grid-cols-2' : 'hidden'}>
-              {permissions.map((p) => (
-                <Checkbox key={p} name="permissions" value={p} label={PERMISSION_LABEL[p] ?? p} />
-              ))}
+            <legend className="mb-1 text-[15px] font-semibold">Bu xodim nima qila oladi?</legend>
+            <p className="mb-3 text-[13px] text-muted">
+              Belgilanganlari “{role?.label ?? 'rol'}” rolidan keladi. Qo‘shimcha ruxsat kerak bo‘lsa, yoniga belgi qo‘ying. O‘zingizda yo‘q ruxsatni bera olmaysiz.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {permissions.map((p) => {
+                const included = fromRole.has(p);
+                return (
+                  <Checkbox
+                    key={p}
+                    name={included ? undefined : 'permissions'}
+                    value={p}
+                    label={PERMISSION_LABEL[p] ?? p}
+                    description={included ? 'Roldan' : undefined}
+                    checked={included || extra.includes(p)}
+                    disabled={included}
+                    onChange={(e) => setExtra(e.target.checked ? [...extra, p] : extra.filter((x) => x !== p))}
+                  />
+                );
+              })}
             </div>
           </fieldset>
         ) : null}
@@ -228,6 +222,7 @@ function EmployeeForm({ roles, clients, permissions, loginDomain, onDone }: Omit
           <Review label="Rol" value={role?.label ?? '—'} />
           <Review label="Ish holati" value={EMPLOYMENT_TYPE[employment as keyof typeof EMPLOYMENT_TYPE]} />
           <Review label="Mijozlar" value={clients.filter((c) => clientIds.includes(c.value)).map((c) => c.label).join(', ') || '—'} />
+          <Review label="Qo‘shimcha ruxsat" value={extra.filter((p) => !fromRole.has(p)).map((p) => PERMISSION_LABEL[p] ?? p).join(', ') || '—'} />
           <Review label="Login" value={login} />
         </dl>
       ) : null}

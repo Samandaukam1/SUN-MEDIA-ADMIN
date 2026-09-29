@@ -1,6 +1,7 @@
 -- SUN MEDIA — RLS isolation, role boundaries and end-to-end workflow tests.
 -- Run: npx supabase test db
 begin;
+
 create extension if not exists pgtap with schema extensions;
 grant execute on all functions in schema extensions to authenticated, anon;
 select * from no_plan();
@@ -59,7 +60,7 @@ select pg_temp.new_user('client_safi_emp', 'SAFI Employee');
 select pg_temp.new_user('client_wd', 'WeDrink Owner');
 select pg_temp.new_user('stranger', 'No Role');
 
-select pg_temp.staff('owner', 'owner');
+select pg_temp.staff('owner', 'system_owner');
 select pg_temp.staff('admin', 'admin');
 select pg_temp.staff('pm', 'project_manager');
 select pg_temp.staff('smm', 'smm_manager');
@@ -93,8 +94,8 @@ values (pg_temp.id('wd'), 'WeDrink Reel', 'reel', 'editing');
 select is((select count(*)::int from public.folders where client_id = pg_temp.id('safi') and is_system), 9,
   'every client gets 9 system folders');
 select is((select count(*)::int from public.chat_members cm join public.chat_rooms r on r.id = cm.room_id
-           where r.client_id = pg_temp.id('safi') and r.is_default), 4,
-  'SAFI project chat has 2 client users + PM + SMM');
+           where r.client_id = pg_temp.id('safi') and r.is_default), 4 + cardinality(private.admin_user_ids()),
+  'SAFI project chat has 2 client users + PM + SMM + every admin');
 select ok(exists (select 1 from public.chat_members cm join public.chat_rooms r on r.id = cm.room_id
                   where r.kind = 'internal' and r.is_default and cm.user_id = pg_temp.id('editor')),
   'staff auto-join the internal chat');
@@ -228,7 +229,7 @@ select lives_ok(
   $$update public.shooting_attendance set status = 'arrived' where shooting_id = pg_temp.id('shoot') and user_id = pg_temp.id('operator')$$,
   'admin marks shooting attendance');
 select throws_ok(
-  $$insert into public.user_roles (user_id, role_id) select pg_temp.id('editor2'), id from public.roles where key = 'owner'$$,
+  $$insert into public.user_roles (user_id, role_id) select pg_temp.id('editor2'), id from public.roles where key = 'system_owner'$$,
   '42501', null, 'admin cannot grant the owner role');
 select ok((public.get_command_center() -> 'attendance' ->> 'late')::int >= 1, 'command center reflects attendance');
 reset role;
@@ -242,7 +243,7 @@ select ok(exists (select 1 from public.audit_logs where action = 'attendance.ins
 -- owner must be the only one, otherwise the "last owner" guard is (correctly) not triggered.
 reset role;
 delete from public.user_roles ur using public.roles r
-where r.id = ur.role_id and r.key = 'owner' and ur.user_id not in (select id from ids);
+where r.id = ur.role_id and r.key = 'system_owner' and ur.user_id not in (select id from ids);
 select pg_temp.login('owner');
 select throws_ok(
   $$delete from public.user_roles where user_id = pg_temp.id('owner')$$,
@@ -284,14 +285,8 @@ select is((select count(*)::int from public.content_versions), 0, 'client cannot
 select is((select count(*)::int from public.files where id = pg_temp.id('cut1')), 0, 'client cannot see internal cut');
 reset role;
 
-select pg_temp.login('pm');
-select lives_ok($$select public.review_content_version(pg_temp.id('v1'), 'approved', 'Mijozga yuborildi')$$, 'PM approves internally');
-reset role;
-select is((select status::text from public.content_items where id = pg_temp.id('reel')), 'client_review', 'content moved to CLIENT REVIEW');
-select ok(exists (select 1 from public.notifications where user_id = pg_temp.id('client_safi') and type = 'approval.requested'),
-  'client owner notified: video ready for approval');
-select ok(not exists (select 1 from public.notifications where user_id = pg_temp.id('client_safi_emp') and type = 'approval.requested'),
-  'client employee without approve permission is not asked to approve');
+select is((select status::text from public.content_items where id = pg_temp.id('reel')), 'internal_review', 'content stays in internal review');
+select ok(not exists (select 1 from public.notifications where user_id = pg_temp.id('client_safi') and type = 'approval.requested'), 'client is never asked to approve');
 
 select pg_temp.login('client_safi_emp');
 select throws_ok(
@@ -307,12 +302,15 @@ select throws_ok(
 reset role;
 
 select pg_temp.login('client_safi');
-select is((select count(*)::int from public.content_versions), 1, 'client sees the version sent to them');
-select is((select count(*)::int from public.files where id = pg_temp.id('cut1')), 1, 'client can now stream the cut');
+select is((select count(*)::int from public.content_versions), 0, 'internal versions stay hidden from clients');
+select is((select count(*)::int from public.files where id = pg_temp.id('cut1')), 0, 'internal cut stays hidden');
+select throws_ok($$select public.review_content_version(pg_temp.id('v1'), 'changes_requested', 'No')$$, '42501', null, 'client cannot request revisions');
+reset role;
+select pg_temp.login('pm');
 select lives_ok(
   $$select public.review_content_version(pg_temp.id('v1'), 'changes_requested', 'Ikki joyni o''zgartiring',
       '[{"timecode_ms": 13000, "body": "Logo kattaroq bo''lsin"}, {"timecode_ms": 27000, "body": "Bu kadrni almashtiring"}]')$$,
-  'client requests changes with timecoded comments');
+  'PM requests internal changes with timecoded comments');
 reset role;
 select is((select status::text from public.content_items where id = pg_temp.id('reel')), 'revision', 'content moved to REVISION');
 select is((select revision_count from public.content_items where id = pg_temp.id('reel')), 1, 'revision counted');
@@ -327,9 +325,7 @@ select lives_ok($$update public.revision_comments set is_resolved = true where t
 reset role;
 
 select pg_temp.login('client_safi');
-select throws_ok(
-  $$update public.revision_comments set is_resolved = false where timecode_ms = 13000 and revision_id in (select id from public.revisions where content_id = pg_temp.id('reel'))$$,
-  '42501', null, 'client cannot un-resolve staff work');
+select is((select count(*)::int from public.revision_comments where revision_id in (select id from public.revisions where content_id = pg_temp.id('reel'))), 0, 'client cannot access internal revision comments');
 reset role;
 
 select pg_temp.login('editor');
@@ -351,14 +347,14 @@ select lives_ok($$select public.review_content_version(pg_temp.id('v2'), 'approv
 reset role;
 
 select pg_temp.login('client_safi');
-select lives_ok($$select public.review_content_version(pg_temp.id('v2'), 'approved', 'Zo''r!')$$, 'client approves');
-select is((select count(*)::int from public.client_approvals), 2, 'client sees their approval history only (internal decisions hidden)');
+select throws_ok($$select public.review_content_version(pg_temp.id('v2'), 'approved', 'Zo''r!')$$, '22023', null, 'finished content has no client decision step');
+select is((select count(*)::int from public.client_approvals), 0, 'internal decisions stay hidden from clients');
 reset role;
 select is((select status::text from public.content_items where id = pg_temp.id('reel')), 'approved', 'content APPROVED');
 select isnt((select approved_at from public.content_items where id = pg_temp.id('reel')), null, 'approval time recorded');
 select is((select fo.kind::text from public.files f join public.folders fo on fo.id = f.folder_id where f.id = pg_temp.id('cut2')),
   'approved', 'approved cut filed into APPROVED');
-select ok(exists (select 1 from public.client_approvals where version_id = pg_temp.id('v2') and decided_by = pg_temp.id('client_safi')),
+select ok(exists (select 1 from public.client_approvals where version_id = pg_temp.id('v2') and decided_by = pg_temp.id('smm')),
   'who approved is recorded');
 
 -- Tariff + publication → usage
@@ -464,8 +460,8 @@ reset role;
 update public.tasks set due_at = now() - interval '1 minute', overdue_at = null where id = pg_temp.id('task');
 select ok(private.process_deadline_alerts() > 0, 'deadline processor sends alerts');
 select isnt((select overdue_at from public.tasks where id = pg_temp.id('task')), null, 'task marked OVERDUE');
-select ok(exists (select 1 from public.notifications where user_id = pg_temp.id('owner') and type = 'deadline.overdue'),
-  'owner notified about overdue task');
+select ok(exists (select 1 from public.notifications where user_id = any (private.users_with_roles(array['owner', 'director'])) and type = 'deadline.overdue'),
+  'the Rahbar is notified about overdue task');
 select is(private.process_deadline_alerts(), 0, 'alerts are sent once per rule and deadline');
 
 select * from finish();

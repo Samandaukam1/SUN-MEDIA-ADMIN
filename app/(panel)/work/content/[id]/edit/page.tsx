@@ -47,7 +47,6 @@ export default async function EditContentPage({ params }: { params: Promise<{ id
           priority: c.priority,
           platforms: live.map((p) => p.platform),
           dueAt: toLocalInput(c.due_at),
-          approvalDueAt: toLocalInput(c.client_approval_due_at),
           publishAt: toLocalInput(live.find((p) => p.scheduled_at)?.scheduled_at),
           description: c.description,
           script: c.script,

@@ -11,7 +11,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Card, SectionTitle } from '@/components/ui/Card';
 import { Tabs } from '@/components/ui/Tabs';
-import { can, requireStaff } from '@/lib/auth';
+import { can, isSystemOwner, requireStaff } from '@/lib/auth';
 import { ACCOUNT_STATUS, CLIENT_STATUS, EMPLOYEE_STATUS, EMPLOYMENT_TYPE, lookup, PERMISSION_LABEL, TEAM_ROLE_LABEL } from '@/lib/labels';
 import { createClient } from '@/lib/supabase/server';
 import { formatShortDateTime } from '@/lib/time';
@@ -56,7 +56,9 @@ export default async function EmployeePage({ params, searchParams }: { params: P
     : null;
   const roles = person.user_roles.map((r) => r.role).filter((r): r is NonNullable<typeof r> => !!r).sort((a, b) => a.rank - b.rank);
   const status = lookup(ACCOUNT_STATUS, person.status, ACCOUNT_STATUS.active);
-  const canManage = can(context, 'employees.manage') && person.id !== context.userId;
+  // A Tizim egasi account is managed only by the Tizim egasi (the database enforces this too).
+  const protectedAccount = roles.some((r) => r.key === 'system_owner') && !isSystemOwner(context);
+  const canManage = can(context, 'employees.manage') && person.id !== context.userId && !protectedAccount;
   const tabs = TABS.map((t) => ({ key: t.key, label: t.label, href: `/team/${id}?tab=${t.key}`, count: t.key === 'clients' ? person.teams.length : undefined }));
 
   return (
@@ -138,9 +140,8 @@ export default async function EmployeePage({ params, searchParams }: { params: P
               <SectionTitle>Rollar</SectionTitle>
               <ul className="space-y-2">
                 {roles.map((r) => (
-                  <li key={r.key} className="flex items-center justify-between rounded-xl bg-surface-2 px-4 py-3 text-sm">
-                    <span className="font-medium">{r.name}</span>
-                    <span className="font-mono text-xs text-subtle">{r.key}</span>
+                  <li key={r.key} className="rounded-xl bg-surface-2 px-4 py-3 text-sm font-medium">
+                    {r.name}
                   </li>
                 ))}
               </ul>
@@ -188,16 +189,17 @@ export default async function EmployeePage({ params, searchParams }: { params: P
         )
       ) : null}
 
-      {active === 'activity' ? <Activity userId={person.id} allowed={can(context, 'audit.read')} /> : null}
+      {active === 'activity' ? <Activity userId={person.id} allowed={isSystemOwner(context) || can(context, 'audit.read')} /> : null}
     </div>
   );
 }
 
 async function AccessPanel({ userId, currentRole, granted, context }: { userId: string; currentRole: string; granted: string[]; context: Awaited<ReturnType<typeof requireStaff>> }) {
   const supabase = await createClient();
-  const [rolesRes, grantsRes] = await Promise.all([
+  const [rolesRes, grantsRes, catalogueRes] = await Promise.all([
     supabase.from('roles').select('id, key, name, rank').eq('scope', 'staff').order('rank'),
     supabase.from('role_permissions').select('permission_key, role:roles(key)'),
+    supabase.from('permissions').select('key').eq('scope', 'staff'),
   ]);
   if (rolesRes.error) throw rolesRes.error;
   if (grantsRes.error) throw grantsRes.error;
@@ -212,7 +214,8 @@ async function AccessPanel({ userId, currentRole, granted, context }: { userId: 
       userId={userId}
       currentRole={currentRole}
       roles={rolesRes.data.map((r) => ({ key: r.key, name: r.name, disabled: r.rank < myRank }))}
-      delegable={context.permissions}
+      // The Tizim egasi holds every permission implicitly, so it may pass on the whole catalogue.
+      delegable={isSystemOwner(context) ? (catalogueRes.data ?? []).map((p) => p.key) : context.permissions}
       granted={granted}
       rolePermissions={rolePermissions}
       canChangeRole={can(context, 'roles.manage')}

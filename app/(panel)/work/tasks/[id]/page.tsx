@@ -64,6 +64,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
           ) : null}
         </div>
         <Card className="space-y-3 text-sm">
+          <Row label="Hozirgi holat" value={lookup(TASK_STATUS, t.status, TASK_STATUS.todo).label} />
           <Row label="Mas’ul" value={t.assignees.map((a) => a.person?.full_name).filter(Boolean).join(', ') || 'Biriktirilmagan'} />
           <Row label="Muddat" value={t.due_at ? formatShortDateTime(t.due_at) : '—'} danger={late} />
           <Row label="Muhimlik" value={lookup(PRIORITY, t.priority, PRIORITY.normal).label} />

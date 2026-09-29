@@ -20,7 +20,6 @@ export type ContentDefaults = {
   priority?: string;
   platforms?: string[];
   dueAt?: string;
-  approvalDueAt?: string;
   publishAt?: string;
   description?: string | null;
   script?: string | null;
@@ -111,7 +110,6 @@ export function ContentForm({ action, clients, staff, defaults = {}, editing = f
         <Card className="space-y-4">
           <p className="text-[11px] font-semibold tracking-[0.08em] text-subtle uppercase">Muddatlar</p>
           <TextInput label="Montaj muddati" name="due_at" type="datetime-local" defaultValue={defaults.dueAt} error={errors.due_at} />
-          <TextInput label="Mijoz javob berish muddati" name="client_approval_due_at" type="datetime-local" defaultValue={defaults.approvalDueAt} />
           <TextInput label="Post vaqti" name="publish_at" type="datetime-local" defaultValue={defaults.publishAt} hint="Belgilansa, kalendarda ko‘rinadi." />
         </Card>
 

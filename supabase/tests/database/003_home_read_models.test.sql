@@ -27,7 +27,7 @@ select id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticat
 from hm_ids where key in ('owner', 'editor', 'outsider_editor', 'client_a_user', 'client_b_user');
 
 insert into public.user_roles (user_id, role_id)
-select i.id, r.id from hm_ids i join public.roles r on r.key = case when i.key = 'owner' then 'owner' else 'editor' end
+select i.id, r.id from hm_ids i join public.roles r on r.key = case when i.key = 'owner' then 'system_owner' else 'editor' end
 where i.key in ('owner', 'editor', 'outsider_editor');
 insert into public.employees (user_id) select id from hm_ids where key in ('owner', 'editor', 'outsider_editor');
 
@@ -40,7 +40,7 @@ select pg_temp.hm('client_b'), pg_temp.hm('client_b_user'), id from public.roles
 
 insert into public.content_items (id, client_id, title, content_type, status, due_at)
 values (pg_temp.hm('content_a'), pg_temp.hm('client_a'), 'Home test reel A', 'reel', 'script', now() + interval '3 hours'),
-       (pg_temp.hm('content_b'), pg_temp.hm('client_b'), 'Home test reel B', 'reel', 'client_review', now() + interval '3 hours');
+       (pg_temp.hm('content_b'), pg_temp.hm('client_b'), 'Home test reel B', 'reel', 'internal_review', now() + interval '3 hours');
 insert into public.content_assignments (content_id, user_id, role) values (pg_temp.hm('content_a'), pg_temp.hm('editor'), 'editor');
 insert into public.tasks (id, client_id, content_id, title, task_type, due_at)
 values (pg_temp.hm('task_a'), pg_temp.hm('client_a'), pg_temp.hm('content_a'), 'Home test edit', 'editing', now() + interval '1 hour');
@@ -79,8 +79,8 @@ select pg_temp.hm_login('owner');
 select ok(public.get_command_center() ?& array['deadlines', 'clients', 'publications', 'activity_today'], 'command center exposes the new sections');
 select ok((public.get_command_center() -> 'deadlines' ->> 'critical')::int >= 1, 'task due within two hours counts as critical');
 select ok(exists (select 1 from jsonb_array_elements(public.get_command_center() -> 'clients') c
-                  where (c ->> 'id')::uuid = pg_temp.hm('client_b') and (c ->> 'waiting_approval')::int = 1),
-          'per-client waiting approval counter');
+                  where (c ->> 'id')::uuid = pg_temp.hm('client_b') and (c ->> 'waiting_approval')::int = 0),
+          'no client approval queue is created');
 select ok(exists (select 1 from public.get_activity_feed(50) f where f.entity_type = 'content_items'), 'owner reads the activity feed');
 reset role;
 

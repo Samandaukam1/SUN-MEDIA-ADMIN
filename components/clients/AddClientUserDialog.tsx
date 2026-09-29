@@ -6,7 +6,7 @@ import { CredentialsCard } from '@/components/accounts/CredentialsCard';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { Icon } from '@/components/ui/Icon';
-import { Checkbox, SelectInput, TextInput } from '@/components/ui/Inputs';
+import { SelectInput, TextInput } from '@/components/ui/Inputs';
 import { Notice } from '@/components/ui/Notice';
 import { SubmitButton } from '@/components/ui/SubmitButton';
 import { createClientAccount } from '@/lib/actions/accounts';
@@ -61,13 +61,11 @@ function ClientUserForm({ clientId, onDone }: { clientId: string; onDone: () => 
         <TextInput label="Telefon" name="phone" type="tel" error={errors.phone} placeholder="+998 90 123 45 67" />
         <TextInput label="Lavozimi" name="title" error={errors.title} placeholder="Marketing menejeri" />
         <SelectInput label="Rol" name="role_key" value={role} onChange={(e) => setRole(e.target.value)}>
-          <option value="client_owner">Mijoz (egasi) — tasdiqlaydi</option>
-          <option value="client_employee">Mijoz xodimi — faqat ko‘radi</option>
+          <option value="client_owner">Mijoz — tarif va hisobotni ham ko‘radi</option>
+          <option value="client_employee">Mijoz xodimi — kontent va hisobotni ko‘radi</option>
         </SelectInput>
       </div>
-      {role === 'client_employee' ? (
-        <Checkbox name="can_approve" label="Kontentni tasdiqlash huquqi" description="Belgilansa, xodim videolarni tasdiqlashi va o‘zgartirish so‘rashi mumkin." />
-      ) : null}
+      <p className="text-[13px] text-muted">Mijoz faqat kuzatadi: kontent, kalendar, tarif, hisobot va SUN MEDIA bilan chat.</p>
       <div className="flex justify-end border-t border-line pt-5">
         <SubmitButton>Login yaratish</SubmitButton>
       </div>

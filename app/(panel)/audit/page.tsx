@@ -6,7 +6,7 @@ import { EmptyRow } from '@/components/panel/Stat';
 import { Badge } from '@/components/ui/Badge';
 import { buttonClass } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { requirePermission } from '@/lib/auth';
+import { requireSystemOwner } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { formatShortDateTime } from '@/lib/time';
 
@@ -93,7 +93,7 @@ function diff(oldValues: Json, newValues: Json): { key: string; from: string; to
 type Search = { entity?: string; actor?: string; from?: string; to?: string; q?: string; page?: string };
 
 export default async function AuditPage({ searchParams }: { searchParams: Promise<Search> }) {
-  await requirePermission('audit.read');
+  await requireSystemOwner();
   const params = await searchParams;
   const page = Math.max(0, Number(params.page ?? 0) || 0);
   const supabase = await createClient();

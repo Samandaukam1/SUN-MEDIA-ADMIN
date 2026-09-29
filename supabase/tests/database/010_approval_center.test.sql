@@ -1,6 +1,6 @@
--- Approval center: a version sent to the client becomes visible with an approval deadline,
--- per-role queue counts, timecoded revision comments on the client stage. Seed-safe, rolled back.
+-- Internal review, revisions and retired client approval boundaries. Seed-safe, rolled back.
 begin;
+
 create extension if not exists pgtap with schema extensions;
 grant execute on all functions in schema extensions to authenticated, anon;
 select * from no_plan();
@@ -76,30 +76,23 @@ reset role;
 
 select is((select is_client_visible from public.content_items where id = pg_temp.ap('content')), false, 'content stays hidden during internal review');
 
-select pg_temp.ap_login('pm');
-select lives_ok($$select public.review_content_version(pg_temp.ap('v1'), 'approved')$$, 'PM approves internally');
-select is((public.get_approval_counts() ->> 'waiting_client')::int, 1, 'PM sees the version waiting on the client');
+select pg_temp.ap_login('client_owner');
+select throws_ok($$select public.review_content_version(pg_temp.ap('v1'), 'changes_requested', 'No')$$,
+  '42501', null, 'clients cannot request revisions');
+select is((public.get_approval_counts() ->> 'to_review')::int, 0, 'clients never get a decision queue');
 reset role;
 
-select ok((select is_client_visible from public.content_items where id = pg_temp.ap('content')), 'sending to the client makes the content visible');
-select ok((select client_approval_due_at between now() + interval '47 hours' and now() + interval '49 hours' from public.content_items where id = pg_temp.ap('content')),
-  'an expired approval deadline is replaced by now + the configured window');
-
-select pg_temp.ap_login('client_owner');
-select is((public.get_approval_counts() ->> 'to_review')::int, 1, 'client owner has one version to review');
-select is((select count(*)::int from public.content_versions where content_id = pg_temp.ap('content')), 1, 'client reads the version');
-select is((select count(*)::int from public.files where id = pg_temp.ap('cut1')), 1, 'client reads the cut file');
+select pg_temp.ap_login('pm');
+select throws_ok($$select public.submit_content_version(pg_temp.ap('content'), pg_temp.ap('cut1'), null, 'client')$$,
+  '42501', null, 'even managers cannot send work for client approval');
 select lives_ok($$select public.review_content_version(pg_temp.ap('v1'), 'changes_requested', 'Ikki joy',
-  '[{"timecode_ms": 3000, "body": "Logo kattaroq"}, {"timecode_ms": 15500, "body": "Musiqa pastroq"}]'::jsonb)$$, 'client requests changes with timecodes');
-select lives_ok($$insert into public.revision_comments (revision_id, timecode_ms, body)
-  select id, 20000, 'Yana bitta' from public.revisions where content_id = pg_temp.ap('content')$$, 'client adds a comment to the open revision');
-select throws_ok($$update public.revision_comments set is_resolved = true where timecode_ms = 3000$$, '42501', null, 'client cannot resolve comments');
+  '[{"timecode_ms": 3000, "body": "Logo kattaroq"}, {"timecode_ms": 15500, "body": "Musiqa pastroq"}]'::jsonb)$$,
+  'PM requests internal changes with timecodes');
 reset role;
 
 select pg_temp.ap_login('client_emp');
-select is((public.get_approval_counts() ->> 'to_review')::int, 0, 'client employee without approve permission has no queue');
-select is((select count(*)::int from public.revision_comments rc join public.revisions r on r.id = rc.revision_id where r.content_id = pg_temp.ap('content')), 3,
-  'client employee still reads the client-stage comments');
+select is((select count(*)::int from public.revision_comments rc join public.revisions r on r.id = rc.revision_id where r.content_id = pg_temp.ap('content')), 0,
+  'internal revisions stay hidden from clients');
 reset role;
 
 select pg_temp.ap_login('editor');
@@ -109,11 +102,11 @@ select lives_ok($$update public.revision_comments set is_resolved = true where t
 reset role;
 select ok((select resolved_by = pg_temp.ap('editor') from public.revision_comments where timecode_ms = 3000 and body = 'Logo kattaroq'), 'resolver recorded');
 
--- A manager-set future deadline is kept when the next version goes to the client
+-- Keep historical approval dates when saving new internal versions
 update public.content_items set client_approval_due_at = now() + interval '5 days' where id = pg_temp.ap('content');
 select pg_temp.ap_upload('cut2', 'cut v2.mp4');
 select pg_temp.ap_login('pm');
-insert into ap_ids (key, id) select 'v2', id from public.submit_content_version(pg_temp.ap('content'), pg_temp.ap('cut2'), 'Tuzatildi', 'client');
+insert into ap_ids (key, id) select 'v2', id from public.submit_content_version(pg_temp.ap('content'), pg_temp.ap('cut2'), 'Tuzatildi', 'internal');
 reset role;
 select ok((select client_approval_due_at > now() + interval '4 days' from public.content_items where id = pg_temp.ap('content')), 'future deadline kept');
 select is((select status::text from public.revisions where content_id = pg_temp.ap('content')), 'resolved', 'a new version resolves the open revision');
@@ -122,8 +115,10 @@ select pg_temp.ap_login('editor');
 select is((public.get_approval_counts() ->> 'my_revisions')::int, 0, 'no open revisions left');
 reset role;
 
+select pg_temp.ap_login('pm');
+select lives_ok($$select public.review_content_version(pg_temp.ap('v2'), 'approved', 'Tayyor')$$, 'internal approval finishes v2');
+reset role;
 select pg_temp.ap_login('client_owner');
-select lives_ok($$select public.review_content_version(pg_temp.ap('v2'), 'approved', 'Zo''r')$$, 'client approves v2');
 select is((public.get_approval_counts() ->> 'to_review')::int, 0, 'client queue cleared');
 reset role;
 select is((select status::text from public.content_items where id = pg_temp.ap('content')), 'approved', 'content approved');

@@ -4,7 +4,6 @@ import { notFound, redirect } from 'next/navigation';
 
 import { AccountActions } from '@/components/accounts/AccountActions';
 import { AddClientUserDialog } from '@/components/clients/AddClientUserDialog';
-import { ApprovalToggle } from '@/components/clients/ApprovalToggle';
 import { ClientProfileForm } from '@/components/clients/ClientProfileForm';
 import { RemoveTeamMember, TeamAssignForm } from '@/components/clients/TeamAssign';
 import { PageHeader } from '@/components/panel/PageHeader';
@@ -57,8 +56,6 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
   const manage = can(context, 'clients.manage');
   const status = lookup(CLIENT_STATUS, client.status, CLIENT_STATUS.active);
-  const { data: extra } = await supabase.from('client_member_permissions').select('user_id, permission_key').eq('client_id', id);
-  const approvers = new Set((extra ?? []).filter((x) => x.permission_key === 'client.approve').map((x) => x.user_id));
 
   let staffOptions: { id: string; name: string; hint?: string | null }[] = [];
   if (active === 'team' && manage) {
@@ -144,13 +141,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                       <Badge tone={accountStatus.tone} dot>
                         {accountStatus.label}
                       </Badge>
-                      {isOwner ? (
-                        <span className="text-[13px] text-muted">Tasdiqlaydi</span>
-                      ) : manage ? (
-                        <ApprovalToggle clientId={client.id} userId={m.user_id} allowed={approvers.has(m.user_id)} />
-                      ) : (
-                        <span className="text-[13px] text-muted">{approvers.has(m.user_id) ? 'Tasdiqlaydi' : 'Faqat ko‘radi'}</span>
-                      )}
+                      <span className="text-[13px] text-muted">Kuzatadi va SUN MEDIA bilan yozishadi</span>
                       <span className="hidden text-[13px] text-subtle lg:inline">
                         {m.profile.last_seen_at ? `Oxirgi: ${formatShortDateTime(m.profile.last_seen_at)}` : 'Hali kirmagan'}
                       </span>

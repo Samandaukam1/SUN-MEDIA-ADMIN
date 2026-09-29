@@ -11,7 +11,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import { StatusChanger } from '@/components/work/StatusChanger';
 import { setContentStatusAction } from '@/lib/actions/work';
 import { can, requireStaff } from '@/lib/auth';
-import { CONTENT_STAGES, isOverdue } from '@/lib/content';
+import { CONTENT_STAGES, isOverdue, responsibleRole } from '@/lib/content';
 import { CONTENT_STATUS, CONTENT_TYPE, lookup, PLATFORM_LABEL, PRIORITY, PUBLICATION_STATUS, TEAM_ROLE_LABEL, VERSION_STATUS } from '@/lib/labels';
 import { createClient } from '@/lib/supabase/server';
 import { formatShortDateTime } from '@/lib/time';
@@ -22,7 +22,7 @@ const TABS = [
   { key: 'main', label: 'Asosiy' },
   { key: 'script', label: 'Ssenariy' },
   { key: 'team', label: 'Jamoa' },
-  { key: 'approval', label: 'Tasdiqlash' },
+  { key: 'approval', label: 'Versiyalar' },
   { key: 'history', label: 'Tarix' },
 ] as const;
 
@@ -63,6 +63,13 @@ export default async function ContentPage({ params, searchParams }: { params: Pr
   const current = CONTENT_STAGES.findIndex((s) => s.statuses.includes(c.status));
   const overdue = isOverdue(c);
   const next = (transitions.data ?? []).map((s) => ({ value: s, label: lookup(CONTENT_STATUS, s, { label: s, tone: 'neutral' as const }).label }));
+  // "Keyingi harakat kimda?": the stage, the person holding it and the date it is due.
+  const holder = responsibleRole(c.status)
+    .map((role) => c.team.find((t) => t.role === role)?.person?.full_name)
+    .find(Boolean);
+  const post = c.publications.find((p) => p.status !== 'cancelled' && p.scheduled_at)?.scheduled_at ?? null;
+  const due = ['ready_for_shoot', 'shooting'].includes(c.status) ? (c.shooting?.starts_at ?? c.due_at) : ['approved', 'scheduled'].includes(c.status) ? post : c.due_at;
+  const owner = holder ?? (['internal_review', 'client_review'].includes(c.status) ? 'Admin' : null);
 
   return (
     <div>
@@ -80,6 +87,21 @@ export default async function ContentPage({ params, searchParams }: { params: Pr
           </>
         }
       />
+
+        <dl className="mb-5 grid grid-cols-3 divide-x divide-line rounded-2xl border border-line bg-surface text-sm">
+          <div className="px-5 py-3">
+            <dt className="text-xs text-muted">Hozirgi holat</dt>
+            <dd className="mt-0.5 font-semibold">{status.label}</dd>
+          </div>
+          <div className="px-5 py-3">
+            <dt className="text-xs text-muted">Mas’ul</dt>
+            <dd className={cn('mt-0.5 font-semibold', !owner && 'text-subtle')}>{owner ?? 'Biriktirilmagan'}</dd>
+          </div>
+          <div className="px-5 py-3">
+            <dt className="text-xs text-muted">Muddat</dt>
+            <dd className={cn('tabular mt-0.5 font-semibold', overdue && 'text-danger', !due && 'text-subtle')}>{due ? formatShortDateTime(due) : 'Belgilanmagan'}</dd>
+          </div>
+        </dl>
 
       <ol className="mb-8 flex flex-wrap gap-1.5" aria-label="Bosqichlar">
         {CONTENT_STAGES.map((s, i) => (
@@ -110,7 +132,6 @@ export default async function ContentPage({ params, searchParams }: { params: Pr
                   <Info label="Mijoz ko‘radimi" value={c.is_client_visible ? 'Ha' : 'Yo‘q, faqat jamoa'} />
                   <Info label="Syomka" value={c.shooting ? `${formatShortDateTime(c.shooting.starts_at)} · ${c.shooting.location_name ?? c.shooting.title}` : null} />
                   <Info label="Montaj muddati" value={c.due_at ? formatShortDateTime(c.due_at) : null} danger={overdue} />
-                  <Info label="Mijoz javobi" value={c.client_approval_due_at ? formatShortDateTime(c.client_approval_due_at) : null} />
                 </dl>
               </Card>
               <section>
@@ -210,7 +231,7 @@ export default async function ContentPage({ params, searchParams }: { params: Pr
                   </Card>
                 </section>
               ) : null}
-              <p className="text-sm text-muted">Videoni ko‘rib, vaqtli izoh qoldirish va tasdiqlash SUN MEDIA mobil ilovasidagi “Tasdiqlash” bo‘limida.</p>
+              <p className="text-sm text-muted">Videoni ko‘rish, vaqtli izoh va ichki tekshiruv qarori SUN MEDIA mobil ilovasida (Xabarlar → Tekshiruv). Mijoz tasdiqlamaydi — u faqat kuzatadi.</p>
             </div>
           ) : null}
 

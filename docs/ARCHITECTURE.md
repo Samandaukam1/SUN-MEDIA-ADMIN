@@ -1,5 +1,7 @@
 # SUN MEDIA — Agency Operating System: arxitektura
 
+> 2026-09-29: joriy rol va ish oqimi [OPERATING_MODEL.md](OPERATING_MODEL.md) da. Quyidagi eski owner va client approval tavsiflari tarixiy arxitektura yozuvidir.
+
 Bu hujjat SUN MEDIA tizimining yagona texnik manbasi. Kod bilan birga yangilanadi.
 
 - **Mobil ilova** (`SUN-MEDIA-USER`): Expo / React Native, TypeScript strict. Mijozlar, xodimlar va rahbariyat uchun.

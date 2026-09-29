@@ -24,7 +24,7 @@ SUPABASE_SECRET_KEY=<supabase start: SECRET_KEY>
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-Lokal seed hisoblari (parol hammasida `SunMedia2026!`, faqat lokal):
+Lokal seed hisoblari (faqat lokal; parol `supabase/seed.sql` da, cloud akkauntlarida ishlatmang):
 
 | Rol | Login |
 |---|---|

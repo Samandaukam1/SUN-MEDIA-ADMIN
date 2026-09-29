@@ -38,6 +38,7 @@ const SECTIONS: NavSection[] = [
       { href: '/clients/accounts', label: 'Mijoz akkauntlari', permission: 'clients.manage' },
       { href: '/clients/integrations', label: 'Integratsiyalar', permission: 'integrations.manage' },
       { href: '/clients/promo', label: 'Promo kodlar', permission: 'promo.manage' },
+      { href: '/clients/games', label: 'O‘yinlar', permission: 'promo.manage' },
     ],
   },
   {

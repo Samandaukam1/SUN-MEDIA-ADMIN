@@ -2013,6 +2013,327 @@ export type Database = {
           },
         ]
       }
+      game_attempts: {
+        Row: {
+          error_ratio: number | null
+          hit: boolean | null
+          n: number
+          params: Json
+          session_id: string
+          started_at: string
+          submitted_at: string | null
+          tap_ms: number | null
+          valid: boolean | null
+        }
+        Insert: {
+          error_ratio?: number | null
+          hit?: boolean | null
+          n: number
+          params: Json
+          session_id: string
+          started_at?: string
+          submitted_at?: string | null
+          tap_ms?: number | null
+          valid?: boolean | null
+        }
+        Update: {
+          error_ratio?: number | null
+          hit?: boolean | null
+          n?: number
+          params?: Json
+          session_id?: string
+          started_at?: string
+          submitted_at?: string | null
+          tap_ms?: number | null
+          valid?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_attempts_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_campaigns: {
+        Row: {
+          attempts: number
+          brand: Json
+          client_id: string
+          cooldown_minutes: number
+          created_at: string
+          created_by: string | null
+          difficulty: string
+          ends_at: string | null
+          guarantee_next: boolean
+          id: string
+          is_active: boolean
+          max_rewards_total: number | null
+          max_sessions_per_day: number
+          max_wins_per_user: number
+          reward_days: number
+          reward_plan: string
+          rewards_given: number
+          rules: string | null
+          starts_at: string
+          subtitle: string | null
+          target_score: number
+          template: string
+          title: string
+          updated_at: string
+          win_mode: string
+          win_probability: number
+        }
+        Insert: {
+          attempts?: number
+          brand?: Json
+          client_id: string
+          cooldown_minutes?: number
+          created_at?: string
+          created_by?: string | null
+          difficulty?: string
+          ends_at?: string | null
+          guarantee_next?: boolean
+          id?: string
+          is_active?: boolean
+          max_rewards_total?: number | null
+          max_sessions_per_day?: number
+          max_wins_per_user?: number
+          reward_days?: number
+          reward_plan?: string
+          rewards_given?: number
+          rules?: string | null
+          starts_at?: string
+          subtitle?: string | null
+          target_score?: number
+          template: string
+          title: string
+          updated_at?: string
+          win_mode?: string
+          win_probability?: number
+        }
+        Update: {
+          attempts?: number
+          brand?: Json
+          client_id?: string
+          cooldown_minutes?: number
+          created_at?: string
+          created_by?: string | null
+          difficulty?: string
+          ends_at?: string | null
+          guarantee_next?: boolean
+          id?: string
+          is_active?: boolean
+          max_rewards_total?: number | null
+          max_sessions_per_day?: number
+          max_wins_per_user?: number
+          reward_days?: number
+          reward_plan?: string
+          rewards_given?: number
+          rules?: string | null
+          starts_at?: string
+          subtitle?: string | null
+          target_score?: number
+          template?: string
+          title?: string
+          updated_at?: string
+          win_mode?: string
+          win_probability?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_campaigns_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_campaigns_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_campaigns_reward_plan_fkey"
+            columns: ["reward_plan"]
+            isOneToOne: false
+            referencedRelation: "saas_plans"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
+      game_rewards: {
+        Row: {
+          campaign_id: string
+          claimed_at: string
+          days: number
+          id: string
+          plan_key: string
+          session_id: string
+          subscription_id: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          campaign_id: string
+          claimed_at?: string
+          days: number
+          id?: string
+          plan_key: string
+          session_id: string
+          subscription_id?: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          campaign_id?: string
+          claimed_at?: string
+          days?: number
+          id?: string
+          plan_key?: string
+          session_id?: string
+          subscription_id?: string | null
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_rewards_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "game_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_rewards_plan_key_fkey"
+            columns: ["plan_key"]
+            isOneToOne: false
+            referencedRelation: "saas_plans"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "game_rewards_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_rewards_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_rewards_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_rewards_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_sessions: {
+        Row: {
+          attempts_used: number
+          box_index: number | null
+          campaign_id: string
+          client_id: string
+          eligible: boolean
+          expires_at: string
+          finished_at: string | null
+          flagged_reason: string | null
+          guaranteed: boolean
+          id: string
+          invalid_taps: number
+          score: number
+          started_at: string
+          status: string
+          user_id: string
+          won: boolean | null
+          workspace_id: string
+        }
+        Insert: {
+          attempts_used?: number
+          box_index?: number | null
+          campaign_id: string
+          client_id: string
+          eligible: boolean
+          expires_at?: string
+          finished_at?: string | null
+          flagged_reason?: string | null
+          guaranteed?: boolean
+          id?: string
+          invalid_taps?: number
+          score?: number
+          started_at?: string
+          status?: string
+          user_id: string
+          won?: boolean | null
+          workspace_id: string
+        }
+        Update: {
+          attempts_used?: number
+          box_index?: number | null
+          campaign_id?: string
+          client_id?: string
+          eligible?: boolean
+          expires_at?: string
+          finished_at?: string | null
+          flagged_reason?: string | null
+          guaranteed?: boolean
+          id?: string
+          invalid_taps?: number
+          score?: number
+          started_at?: string
+          status?: string
+          user_id?: string
+          won?: boolean | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_sessions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "game_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_sessions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_sessions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_deliveries: {
         Row: {
           automatic: boolean
@@ -5065,6 +5386,18 @@ export type Database = {
         Args: { p_error: string; p_lead_id: string }
         Returns: undefined
       }
+      game_finish: { Args: { p_session: string }; Returns: Json }
+      game_guarantee_next: { Args: { p_campaign: string }; Returns: undefined }
+      game_next_attempt: { Args: { p_session: string }; Returns: Json }
+      game_open_box: {
+        Args: { p_box: number; p_session: string }
+        Returns: Json
+      }
+      game_start: { Args: { p_campaign: string }; Returns: Json }
+      game_submit_attempt: {
+        Args: { p_n: number; p_session: string; p_tap_ms: number }
+        Returns: Json
+      }
       generate_monthly_report: {
         Args: { p_client_id: string; p_month: string }
         Returns: {
@@ -5309,6 +5642,7 @@ export type Database = {
       }
       get_my_context: { Args: never; Returns: Json }
       get_my_entitlements: { Args: { p_client?: string }; Returns: Json }
+      get_my_games: { Args: never; Returns: Json }
       get_report: { Args: { p_report_id: string }; Returns: Json }
       get_team_directory: {
         Args: never

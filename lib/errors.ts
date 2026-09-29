@@ -45,6 +45,11 @@ const KNOWN: Record<string, string> = {
 export function toUserMessage(error: unknown): string {
   if (!error) return 'Noma’lum xatolik.';
   const e = error as ErrorLike;
+  if (e.code === 'P0402') {
+    if (e.message === 'PRO_REQUIRED:clients.max') return 'Tarif limiti: yangi mijoz qo‘shish uchun SUN MEDIA Pro kerak.';
+    if (e.message === 'PRO_REQUIRED:employees.max') return 'Tarif limiti: yangi xodim qo‘shish uchun SUN MEDIA Pro kerak.';
+    return 'Bu imkoniyat SUN MEDIA Pro’da mavjud.';
+  }
   if (e.code && KNOWN[e.code]) return KNOWN[e.code];
   if (e.message && KNOWN[e.message]) return KNOWN[e.message];
   if (/already (been )?registered|already exists/i.test(e.message ?? '')) return KNOWN.email_exists;

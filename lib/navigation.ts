@@ -37,6 +37,7 @@ const SECTIONS: NavSection[] = [
       { href: '/clients/contracts', label: 'Shartnomalar', permission: 'contracts.manage' },
       { href: '/clients/accounts', label: 'Mijoz akkauntlari', permission: 'clients.manage' },
       { href: '/clients/integrations', label: 'Integratsiyalar', permission: 'integrations.manage' },
+      { href: '/clients/promo', label: 'Promo kodlar', permission: 'promo.manage' },
     ],
   },
   {
@@ -93,6 +94,7 @@ const SECTIONS: NavSection[] = [
       { href: '/audit', label: 'Audit log', systemOwner: true },
       { href: '/system/security', label: 'Xavfsizlik', systemOwner: true },
       { href: '/system/integrations', label: 'Integratsiyalar', systemOwner: true },
+      { href: '/system/subscriptions', label: 'Obunalar (Pro)', systemOwner: true },
       { href: '/system/settings', label: 'Tizim sozlamalari', systemOwner: true },
     ],
   },

@@ -3170,6 +3170,143 @@ export type Database = {
           },
         ]
       }
+      promo_codes: {
+        Row: {
+          audience: string
+          code: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          eligible_client_ids: string[]
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          max_redemptions: number | null
+          new_user_days: number
+          per_user_limit: number
+          per_workspace_limit: number
+          plan_key: string
+          redemption_count: number
+          reward_days: number
+          starts_at: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          audience?: string
+          code: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          eligible_client_ids?: string[]
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_redemptions?: number | null
+          new_user_days?: number
+          per_user_limit?: number
+          per_workspace_limit?: number
+          plan_key?: string
+          redemption_count?: number
+          reward_days: number
+          starts_at?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          audience?: string
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          eligible_client_ids?: string[]
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_redemptions?: number | null
+          new_user_days?: number
+          per_user_limit?: number
+          per_workspace_limit?: number
+          plan_key?: string
+          redemption_count?: number
+          reward_days?: number
+          starts_at?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promo_codes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promo_codes_plan_key_fkey"
+            columns: ["plan_key"]
+            isOneToOne: false
+            referencedRelation: "saas_plans"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
+      promo_redemptions: {
+        Row: {
+          id: string
+          promo_id: string
+          redeemed_at: string
+          subscription_id: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          id?: string
+          promo_id: string
+          redeemed_at?: string
+          subscription_id?: string | null
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          id?: string
+          promo_id?: string
+          redeemed_at?: string
+          subscription_id?: string | null
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promo_redemptions_promo_id_fkey"
+            columns: ["promo_id"]
+            isOneToOne: false
+            referencedRelation: "promo_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promo_redemptions_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promo_redemptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promo_redemptions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       push_tokens: {
         Row: {
           app_version: string | null
@@ -3423,6 +3560,111 @@ export type Database = {
           name?: string
           rank?: number
           scope?: Database["public"]["Enums"]["user_kind"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      saas_features: {
+        Row: {
+          audience: string
+          description: string
+          key: string
+          kind: string
+          name: string
+          position: number
+        }
+        Insert: {
+          audience: string
+          description?: string
+          key: string
+          kind: string
+          name: string
+          position?: number
+        }
+        Update: {
+          audience?: string
+          description?: string
+          key?: string
+          kind?: string
+          name?: string
+          position?: number
+        }
+        Relationships: []
+      }
+      saas_plan_features: {
+        Row: {
+          enabled: boolean
+          feature_key: string
+          limit_value: number | null
+          plan_key: string
+        }
+        Insert: {
+          enabled?: boolean
+          feature_key: string
+          limit_value?: number | null
+          plan_key: string
+        }
+        Update: {
+          enabled?: boolean
+          feature_key?: string
+          limit_value?: number | null
+          plan_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saas_plan_features_feature_key_fkey"
+            columns: ["feature_key"]
+            isOneToOne: false
+            referencedRelation: "saas_features"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "saas_plan_features_plan_key_fkey"
+            columns: ["plan_key"]
+            isOneToOne: false
+            referencedRelation: "saas_plans"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
+      saas_plans: {
+        Row: {
+          billing_interval: string
+          created_at: string
+          currency: string
+          description: string | null
+          is_active: boolean
+          is_public: boolean
+          key: string
+          name: string
+          price_cents: number
+          rank: number
+          updated_at: string
+        }
+        Insert: {
+          billing_interval?: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          is_active?: boolean
+          is_public?: boolean
+          key: string
+          name: string
+          price_cents?: number
+          rank: number
+          updated_at?: string
+        }
+        Update: {
+          billing_interval?: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          is_active?: boolean
+          is_public?: boolean
+          key?: string
+          name?: string
+          price_cents?: number
+          rank?: number
           updated_at?: string
         }
         Relationships: []
@@ -4029,6 +4271,61 @@ export type Database = {
           },
         ]
       }
+      subscription_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          data: Json
+          external_id: string | null
+          id: number
+          subscription_id: string | null
+          type: string
+          workspace_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          data?: Json
+          external_id?: string | null
+          id?: never
+          subscription_id?: string | null
+          type: string
+          workspace_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          data?: Json
+          external_id?: string | null
+          id?: never
+          subscription_id?: string | null
+          type?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_events_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscription_quotas: {
         Row: {
           is_included: boolean
@@ -4448,6 +4745,117 @@ export type Database = {
           },
         ]
       }
+      workspace_subscriptions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          ends_at: string | null
+          id: string
+          note: string | null
+          plan_key: string
+          provider: string | null
+          provider_ref: string | null
+          source: string
+          starts_at: string
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          id?: string
+          note?: string | null
+          plan_key: string
+          provider?: string | null
+          provider_ref?: string | null
+          source: string
+          starts_at?: string
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          id?: string
+          note?: string | null
+          plan_key?: string
+          provider?: string | null
+          provider_ref?: string | null
+          source?: string
+          starts_at?: string
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_subscriptions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workspace_subscriptions_plan_key_fkey"
+            columns: ["plan_key"]
+            isOneToOne: false
+            referencedRelation: "saas_plans"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "workspace_subscriptions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspaces: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          id: string
+          inherits_agency_plan: boolean
+          is_internal: boolean
+          kind: Database["public"]["Enums"]["workspace_kind"]
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          inherits_agency_plan?: boolean
+          is_internal?: boolean
+          kind: Database["public"]["Enums"]["workspace_kind"]
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          inherits_agency_plan?: boolean
+          is_internal?: boolean
+          kind?: Database["public"]["Enums"]["workspace_kind"]
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspaces_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       subscription_usage_summary: {
@@ -4475,6 +4883,18 @@ export type Database = {
       }
     }
     Functions: {
+      apply_billing_event: {
+        Args: {
+          p_event_id: string
+          p_period_end: string
+          p_plan: string
+          p_provider: string
+          p_status: string
+          p_subscription_ref: string
+          p_workspace: string
+        }
+        Returns: string
+      }
       archive_monthly_report: {
         Args: { p_report_id: string }
         Returns: {
@@ -4635,6 +5055,10 @@ export type Database = {
       }
       disconnect_meta_asset: {
         Args: { p_asset_id: string }
+        Returns: undefined
+      }
+      end_workspace_subscription: {
+        Args: { p_subscription: string }
         Returns: undefined
       }
       fail_meta_lead: {
@@ -4884,6 +5308,7 @@ export type Database = {
         }[]
       }
       get_my_context: { Args: never; Returns: Json }
+      get_my_entitlements: { Args: { p_client?: string }; Returns: Json }
       get_report: { Args: { p_report_id: string }; Returns: Json }
       get_team_directory: {
         Args: never
@@ -4918,6 +5343,15 @@ export type Database = {
       global_search: {
         Args: { p_limit?: number; p_query: string }
         Returns: Json
+      }
+      grant_workspace_plan: {
+        Args: {
+          p_days: number
+          p_note?: string
+          p_plan: string
+          p_workspace: string
+        }
+        Returns: string
       }
       handle_upgrade_request: {
         Args: {
@@ -5073,6 +5507,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      redeem_promo: { Args: { p_code: string }; Returns: Json }
       register_external_file: {
         Args: {
           p_client_id: string
@@ -5124,6 +5559,7 @@ export type Database = {
       }
       remove_file: { Args: { p_file_id: string }; Returns: undefined }
       request_access: { Args: never; Returns: Json }
+      request_pro_upgrade: { Args: { p_feature?: string }; Returns: undefined }
       restore_lead: { Args: { p_lead_id: string }; Returns: undefined }
       review_content_version: {
         Args: {
@@ -5503,6 +5939,7 @@ export type Database = {
         | "approved"
         | "superseded"
       visibility_level: "internal" | "client"
+      workspace_kind: "agency" | "client"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -5792,6 +6229,7 @@ export const Constants = {
         "superseded",
       ],
       visibility_level: ["internal", "client"],
+      workspace_kind: ["agency", "client"],
     },
   },
 } as const

@@ -140,14 +140,47 @@ Adminlar uni bloklay, parolini tiklay, rolini yoki ruxsatlarini o'zgartira olmay
    ```
    Birinchi yuklash Play Console'da qo'lda qilinishi mumkin. Data safety formasi Apple'dagi bilan bir xil.
 
-## 8. Xavfsizlik — qo'lda yoqiladigan narsalar
+## 8. SUN MEDIA Pro va to'lov (billing)
+
+Qanday ishlaydi:
+- **Workspace'lar.** Agentlik bitta workspace, har bir mijoz alohida workspace.
+- **SUN MEDIA workspace'i** ichki, muddatsiz Pro litsenziyasida. U hech qachon to'lov qilmaydi.
+- **Mijozlar** agentlik tarifini meros oladi. Promo yoki o'yin orqali o'zining shaxsiy Pro'siga ham ega bo'lishi mumkin.
+- **Limitlar** (Free: 1 mijoz, 3 xodim, 30 kunlik tarix va boshqalar) kodda emas. Ular
+  **Tizim boshqaruvi → Obunalar (Pro)** jadvalida sozlanadi. Narx ham shu yerda ($19.99/oy).
+- **Pro tekshiruvi bazada qilinadi**, ilova uni chetlab o'tolmaydi. Yopiq imkoniyat ochilsa, ilova "Pro'ga o'tish" oynasini ko'rsatadi.
+
+Real to'lovni ulash uchun hisob va provayder kerak: Stripe, Payme yoki Click.
+1. Provayderda $19.99/oy obuna mahsulotini yarating.
+2. Provayder webhook'ini qabul qiluvchi server funksiyasi har bir hodisani bazaga yozadi:
+   `apply_billing_event(provider, event_id, workspace_id, 'pro', status, period_end, subscription_ref)`.
+   Funksiya faqat service role uchun ochiq va bir hodisani ikki marta qayta ishlamaydi.
+3. Checkout faqat web'da bo'ladi. iOS/Android ilovada tashqi to'lov tugmasi yo'q (App Store / Play qoidalari).
+   Ilovada "Pro'ga o'tish" so'rov yuboradi, u Tizim egasiga boradi.
+   Mobil ichida sotish kerak bo'lsa, keyinchalik Apple IAP / Google Play Billing qo'shiladi.
+
+Hozircha to'lovsiz ham ishlatish mumkin: Tizim egasi **Obunalar → Obuna berish** orqali istalgan workspace'ga N kunlik yoki
+muddatsiz Pro beradi.
+
+## 9. Promo kodlar va o'yinlar
+
+- **Mijozlar → Promo kodlar**: kod, Pro muddati (3/7/30/istalgan kun), boshlanish va tugash sanasi, jami va bir kishi
+  uchun limit, kim uchunligi. Kod o'chirilmaydi, faqat to'xtatiladi.
+  Kod noto'g'ri kiritilsa, bir soatda ko'pi bilan 10 ta urinishga ruxsat bor.
+- **Mijozlar → O'yinlar**: SAFI (tutish) yoki WeDrink (quyish) shabloni, brend ranglari, urinishlar soni, qiyinlik, mukofot kunlari.
+  - Yutish qoidalari: mahorat, ehtimol %, birinchi o'yin kafolati yoki "keyingi o'yinchi yutadi".
+  - Mijozga aynan tanlangan qoida ko'rsatiladi.
+  - Natijani server hisoblaydi. Shubhali (juda aniq yoki vaqti mos kelmaydigan) o'yinlar belgilanadi va mukofot berilmaydi.
+  - O'yinlarni faqat mijozlar ko'radi.
+
+## 10. Xavfsizlik — qo'lda yoqiladigan narsalar
 
 - **Leaked password protection** (HaveIBeenPwned): Supabase → Authentication → Passwords (Pro rejada).
 - Git tarixida maxfiy kalit topilmadi, rotatsiya shart emas. Service role faqat ADMIN server env'da.
 - Test parol `SunMedia2026!` faqat preview akkauntlari uchun. Production'ga o'tishdan oldin ularning parolini
   admin paneldan tiklang yoki akkauntlarni bloklang.
 
-## 9. Web preview'ni yangilash
+## 11. Web preview’ni yangilash
 
 ```sh
 cd "SUNMEDIA USER"

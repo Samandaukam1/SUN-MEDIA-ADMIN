@@ -14,7 +14,7 @@ type Connection = { id: string; name: string; status: string; token_expires_at: 
 type AssetType = 'business' | 'page' | 'instagram' | 'ad_account' | 'lead_form';
 type Picked = { type: AssetType; external_id: string; name: string; parent_external_id?: string | null; details?: Record<string, unknown> };
 
-const STEPS = ['Meta bilan ulanish', 'Biznes / akkaunt', 'Sahifa, Instagram, reklama', 'CRM shabloni', 'Saqlash'];
+const STEPS = ['Meta login', 'Biznes / akkaunt', 'Instagram', 'Facebook sahifa', 'Reklama akkaunti', 'Lid formalar', 'CRM shabloni', 'Saqlash'];
 
 const key = (type: AssetType, id: string) => `${type}:${id}`;
 
@@ -62,7 +62,9 @@ export function MetaWizard({
     });
   }, [connectionId]);
 
-  const step = !connectionId ? 0 : !assets ? 1 : result ? 4 : 2;
+  // Steps 3–7 are chosen on one screen once Meta has listed the assets; the chips show where each choice lives.
+  const step = !connectionId ? 0 : !assets ? 1 : result ? 7 : 2;
+  const inChoice = (i: number) => !!assets && !result && i >= 1 && i <= 6;
 
   const toggle = (type: AssetType, id: string, on?: boolean) =>
     setSelected((prev) => {
@@ -103,7 +105,7 @@ export function MetaWizard({
     <Card className="space-y-6">
       <ol className="flex flex-wrap gap-2 text-[13px]" aria-label="Qadamlar">
         {STEPS.map((s, i) => (
-          <li key={s} className={cn('rounded-full border px-3 py-1', i === step ? 'border-ink bg-ink text-bg' : i < step ? 'border-line text-ink' : 'border-line text-subtle')}>
+          <li key={s} className={cn('rounded-full border px-3 py-1', i === step || inChoice(i) ? 'border-ink bg-ink text-bg' : i < step ? 'border-line text-ink' : 'border-line text-subtle')}>
             {`${i + 1}. ${s}`}
           </li>
         ))}

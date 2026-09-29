@@ -68,7 +68,7 @@ function Today({ cc }: { cc: CommandCenter }) {
     { label: 'Syomka', value: String(cc.shootings.length), href: '/work/shootings' },
     { label: 'Faol vazifa', value: String(tasks.in_progress + tasks.todo), href: '/work/tasks' },
     { label: 'Kechikkan vazifa', value: String(tasks.overdue), href: '/work/tasks?due=overdue', tone: tasks.overdue ? 'text-danger' : '' },
-    { label: 'Tasdiqlash kutmoqda', value: String(approvals.client_review + approvals.internal_review), href: '/work/approvals' },
+    { label: 'Ichki tekshiruvda', value: String(approvals.client_review + approvals.internal_review), href: '/work/content?stage=check' },
     { label: 'Davomat', value: `${arrived}/${attendance.employees}`, detail: attendance.late ? `${attendance.late} kechikdi` : null, href: '/team/attendance', tone: attendance.late ? 'text-warning' : '' },
     { label: 'Bugungi post', value: String(publications.scheduled + publications.published), detail: publications.published ? `${publications.published} joylandi` : null, href: '/work/calendar' },
   ];

@@ -59,7 +59,7 @@ export default async function AgencyStatsPage({ searchParams }: { searchParams: 
       <section>
         <SectionTitle>Ish sifati</SectionTitle>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <Stat label="Tasdiqlangan kontent" value={String(approved.count ?? 0)} />
+          <Stat label="Tayyor kontent" value={String(approved.count ?? 0)} />
           <Stat label="So‘ralgan o‘zgartirishlar" value={String(reworks.count ?? 0)} tone={reworks.count ? 'warning' : 'default'} />
           <Stat label="Bajarilgan vazifa" value={String(tasksDone.count ?? 0)} tone="success" />
           <Stat label="Kechikkan vazifa" value={String(tasksLate.count ?? 0)} tone={tasksLate.count ? 'danger' : 'default'} />

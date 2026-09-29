@@ -247,3 +247,69 @@ export async function updateStaffProfile(_: ActionState, formData: FormData): Pr
   revalidatePath('/team');
   return { status: 'success', message: 'Saqlandi.' };
 }
+
+// ---------------------------------------------------------------------------
+// Access requests: logins nobody set up (e.g. a first Google sign-in) wait until an admin decides.
+// ---------------------------------------------------------------------------
+const grantSchema = z.object({
+  user_id: z.uuid(),
+  kind: z.enum(['staff', 'client']),
+  first_name: name('Ism'),
+  last_name: name('Familiya'),
+  role_key: z.string().min(1, 'Rolni tanlang'),
+  client_id: z.string().optional(),
+  job_title: z.string().trim().max(80).transform((v) => v || null),
+});
+
+/** Kirish so‘rovi → "Xodim qilish" / "Mijoz akkaunti qilish": the database checks rank, scope and that the login is unprovisioned. */
+export async function grantAccessRequest(_: ActionState, formData: FormData): Promise<ActionState> {
+  await requireStaff();
+  const parsed = grantSchema.safeParse({
+    user_id: formData.get('user_id'),
+    kind: formData.get('kind'),
+    first_name: formData.get('first_name'),
+    last_name: formData.get('last_name'),
+    role_key: formData.get('role_key'),
+    client_id: formData.get('client_id') || undefined,
+    job_title: formData.get('job_title') ?? '',
+  });
+  if (!parsed.success) return { status: 'error', message: 'Formadagi xatolarni tuzating.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
+  const v = parsed.data;
+  const supabase = await createClient();
+  if (v.kind === 'staff') {
+    await requirePermission('employees.manage');
+    const { error } = await supabase.rpc('provision_staff_member', {
+      p_user_id: v.user_id,
+      p_first_name: v.first_name,
+      p_last_name: v.last_name,
+      p_role_key: v.role_key,
+      p_job_title: v.job_title ?? undefined,
+    });
+    if (error) return { status: 'error', message: toUserMessage(error) };
+  } else {
+    if (!v.client_id || !z.uuid().safeParse(v.client_id).success) return { status: 'error', message: 'Mijozni tanlang.', fieldErrors: { client_id: 'Mijozni tanlang' } };
+    const { error } = await supabase.rpc('provision_client_user', {
+      p_user_id: v.user_id,
+      p_client_id: v.client_id,
+      p_role_key: v.role_key,
+      p_first_name: v.first_name,
+      p_last_name: v.last_name,
+      p_permissions: [],
+    });
+    if (error) return { status: 'error', message: toUserMessage(error) };
+  }
+  // The dialog shows the result first; it refreshes the list when closed.
+  return { status: 'success', message: 'Kirish berildi. Foydalanuvchi ilovada “Qayta tekshirish”ni bossa, ish joyi ochiladi.' };
+}
+
+/** Rad etish: the login opens nothing and is also blocked in Auth. */
+export async function declineAccessRequest(userId: string): Promise<ActionState> {
+  await requirePermission('employees.manage');
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('decline_access_request', { p_user_id: userId });
+  if (error) return { status: 'error', message: toUserMessage(error) };
+  await setLoginBlocked(userId, true).catch(() => undefined);
+  revalidatePath('/team/accounts');
+  revalidatePath('/system/accounts');
+  return { status: 'success', message: 'So‘rov rad etildi.' };
+}

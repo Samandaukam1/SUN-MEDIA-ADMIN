@@ -8,7 +8,7 @@ export type NavPage = { href: string; label: string } & Gate;
 export type NavSection = { key: string; label: string; icon: IconName; pages: NavPage[] } & Gate;
 
 /**
- * Six sections for admins, a seventh ("Tizim boshqaruvi") only for the Tizim egasi. Everything else is a tab
+ * Seven sections for admins, an eighth ("Tizim boshqaruvi") only for the Tizim egasi. Everything else is a tab
  * inside its section, so the sidebar never grows. Each page is gated by the same rule its page enforces.
  * Daily work (attendance, shootings, tasks, client chat) happens in the mobile app; the web is for large jobs.
  */
@@ -36,6 +36,7 @@ const SECTIONS: NavSection[] = [
       { href: '/plans', label: 'Tariflar', anyOf: ['plans.manage', 'subscriptions.read', 'subscriptions.manage'] },
       { href: '/clients/contracts', label: 'Shartnomalar', permission: 'contracts.manage' },
       { href: '/clients/accounts', label: 'Mijoz akkauntlari', permission: 'clients.manage' },
+      { href: '/clients/integrations', label: 'Integratsiyalar', permission: 'integrations.manage' },
     ],
   },
   {
@@ -50,6 +51,15 @@ const SECTIONS: NavSection[] = [
       { href: '/team/performance', label: 'Ish samaradorligi', permission: 'performance.read' },
       { href: '/roles', label: 'Rollar va ruxsatlar', anyOf: ['roles.manage', 'employees.manage'] },
       { href: '/workspace', label: 'E’lonlar', permission: 'workspace.manage' },
+    ],
+  },
+  {
+    key: 'crm',
+    label: 'CRM',
+    icon: 'target',
+    pages: [
+      { href: '/crm', label: 'Lidlar', permission: 'crm.read' },
+      { href: '/crm/reports', label: 'CRM hisobotlari', permission: 'crm.read' },
     ],
   },
   {

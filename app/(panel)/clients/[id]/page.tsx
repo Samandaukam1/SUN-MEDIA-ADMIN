@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import { AccountActions } from '@/components/accounts/AccountActions';
 import { AddClientUserDialog } from '@/components/clients/AddClientUserDialog';
 import { ClientProfileForm } from '@/components/clients/ClientProfileForm';
+import { IntegrationsTab } from '@/components/integrations/IntegrationsTab';
 import { RemoveTeamMember, TeamAssignForm } from '@/components/clients/TeamAssign';
 import { PageHeader } from '@/components/panel/PageHeader';
 import { ClientPlanTab } from '@/components/plans/ClientPlanTab';
@@ -29,14 +30,15 @@ const TABS = [
   { key: 'plan', label: 'Tarif' },
   { key: 'stats', label: 'Statistika' },
   { key: 'reports', label: 'Hisobotlar' },
+  { key: 'integrations', label: 'Integratsiyalar' },
 ] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
-export default async function ClientPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; month?: string }> }) {
+export default async function ClientPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; month?: string; meta?: string; connection?: string; message?: string; missing?: string }> }) {
   const context = await requireStaff();
   if (!can(context, 'clients.read_all') && !can(context, 'clients.manage')) redirect('/no-access?reason=permission');
   const { id } = await params;
-  const { tab, month } = await searchParams;
+  const { tab, month, ...metaParams } = await searchParams;
   const active: TabKey = TABS.some((t) => t.key === tab) ? (tab as TabKey) : 'overview';
   const supabase = await createClient();
 
@@ -75,6 +77,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
     plan: can(context, 'subscriptions.read') || can(context, 'subscriptions.manage'),
     stats: ['analytics.manage', 'reports.read', 'reports.manage', 'clients.manage'].some((p) => can(context, p)),
     reports: can(context, 'reports.read') || can(context, 'reports.manage'),
+    integrations: can(context, 'integrations.manage'),
   };
   const tabs = TABS.filter((t) => visible[t.key]).map((t) => ({
     key: t.key,
@@ -160,6 +163,9 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         <ClientStatsTab clientId={client.id} month={month} canEnter={can(context, 'analytics.manage')} canAddAccounts={manage} />
       ) : null}
       {active === 'reports' && visible.reports ? <ClientReportsTab clientId={client.id} manage={can(context, 'reports.manage')} /> : null}
+      {active === 'integrations' && visible.integrations ? (
+        <IntegrationsTab clientId={client.id} clientName={client.name} meta={{ status: metaParams.meta, connection: metaParams.connection, message: metaParams.message, missing: metaParams.missing }} />
+      ) : null}
 
       {active === 'team' ? (
         <div className="grid gap-6 xl:grid-cols-[1fr_1.1fr]">

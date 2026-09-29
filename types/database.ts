@@ -2225,10 +2225,12 @@ export type Database = {
           deleted_at: string | null
           edited_at: string | null
           id: string
+          is_directive: boolean
           is_system: boolean
           reply_to_id: string | null
           room_id: string
           sender_id: string | null
+          sender_label: string | null
         }
         Insert: {
           body?: string
@@ -2236,10 +2238,12 @@ export type Database = {
           deleted_at?: string | null
           edited_at?: string | null
           id?: string
+          is_directive?: boolean
           is_system?: boolean
           reply_to_id?: string | null
           room_id: string
           sender_id?: string | null
+          sender_label?: string | null
         }
         Update: {
           body?: string
@@ -2247,10 +2251,12 @@ export type Database = {
           deleted_at?: string | null
           edited_at?: string | null
           id?: string
+          is_directive?: boolean
           is_system?: boolean
           reply_to_id?: string | null
           room_id?: string
           sender_id?: string | null
+          sender_label?: string | null
         }
         Relationships: [
           {
@@ -5190,6 +5196,7 @@ export type Database = {
       send_message: {
         Args: {
           p_body: string
+          p_directive?: boolean
           p_file_ids?: string[]
           p_reply_to?: string
           p_room_id: string
@@ -5200,10 +5207,12 @@ export type Database = {
           deleted_at: string | null
           edited_at: string | null
           id: string
+          is_directive: boolean
           is_system: boolean
           reply_to_id: string | null
           room_id: string
           sender_id: string | null
+          sender_label: string | null
         }
         SetofOptions: {
           from: "*"

@@ -94,8 +94,8 @@ values (pg_temp.id('wd'), 'WeDrink Reel', 'reel', 'editing');
 select is((select count(*)::int from public.folders where client_id = pg_temp.id('safi') and is_system), 9,
   'every client gets 9 system folders');
 select is((select count(*)::int from public.chat_members cm join public.chat_rooms r on r.id = cm.room_id
-           where r.client_id = pg_temp.id('safi') and r.is_default), 4 + cardinality(private.admin_user_ids()),
-  'SAFI project chat has 2 client users + PM + SMM + every admin');
+           where r.client_id = pg_temp.id('safi') and r.is_default), 4 + cardinality(private.client_room_staff_ids()),
+  'SAFI project chat has 2 client users + PM + SMM + every admin and Rahbar');
 select ok(exists (select 1 from public.chat_members cm join public.chat_rooms r on r.id = cm.room_id
                   where r.kind = 'internal' and r.is_default and cm.user_id = pg_temp.id('editor')),
   'staff auto-join the internal chat');

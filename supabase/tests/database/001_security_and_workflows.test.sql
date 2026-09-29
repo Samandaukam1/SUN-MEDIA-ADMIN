@@ -223,7 +223,7 @@ select is((select status::text from public.shooting_attendance where shooting_id
 -- ---------------------------------------------------------------------------
 select pg_temp.login('admin');
 select lives_ok(
-  $$insert into public.attendance (user_id, work_date, status, arrived_at) values (pg_temp.id('operator'), current_date, 'late', '09:40')$$,
+  $$insert into public.attendance (user_id, work_date, status, arrived_at) values (pg_temp.id('operator'), private.agency_today(), 'late', '09:40')$$,
   'admin marks attendance');
 select lives_ok(
   $$update public.shooting_attendance set status = 'arrived' where shooting_id = pg_temp.id('shoot') and user_id = pg_temp.id('operator')$$,

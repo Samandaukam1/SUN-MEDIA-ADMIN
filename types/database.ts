@@ -2027,6 +2027,7 @@ export type Database = {
           submitted_at: string | null
           tap_ms: number | null
           valid: boolean | null
+          zone: number | null
         }
         Insert: {
           error_ratio?: number | null
@@ -2038,6 +2039,7 @@ export type Database = {
           submitted_at?: string | null
           tap_ms?: number | null
           valid?: boolean | null
+          zone?: number | null
         }
         Update: {
           error_ratio?: number | null
@@ -2049,6 +2051,7 @@ export type Database = {
           submitted_at?: string | null
           tap_ms?: number | null
           valid?: boolean | null
+          zone?: number | null
         }
         Relationships: [
           {
@@ -5397,6 +5400,10 @@ export type Database = {
       game_next_attempt: { Args: { p_session: string }; Returns: Json }
       game_open_box: {
         Args: { p_box: number; p_session: string }
+        Returns: Json
+      }
+      game_shoot: {
+        Args: { p_n: number; p_session: string; p_zone: number }
         Returns: Json
       }
       game_start: { Args: { p_campaign: string }; Returns: Json }

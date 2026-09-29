@@ -41,7 +41,7 @@ select is(public.get_instagram_summary(pg_temp.i('client_a'), 30) ->> 'followers
 select is(public.get_client_results(pg_temp.i('client_a')) -> 'instagram', 'null'::jsonb, 'no Instagram block without data');
 select is(public.get_client_results(pg_temp.i('client_a')) -> 'leads', 'null'::jsonb, 'no lead block without CRM');
 select is(public.get_client_forecast(pg_temp.i('client_a')) ->> 'reason', 'no_plan', 'no forecast without a tariff');
-select throws_ok($$select public.ig_save_snapshot(pg_temp.i('account_a'), current_date, '{}')$$, '42501', null, 'clients cannot write analytics');
+select throws_ok($$select public.ig_save_snapshot(pg_temp.i('account_a'), private.agency_today(), '{}')$$, '42501', null, 'clients cannot write analytics');
 reset role;
 
 -- Tariffs: current (4 Reels) and a bigger public one (12 Reels).
@@ -51,7 +51,7 @@ values (pg_temp.i('plan_small'), 'IG Test Start', 'ig-test-start', 1000, 'USD', 
 insert into public.plan_features (plan_id, service_key, quantity, is_included)
 values (pg_temp.i('plan_small'), 'reels', 4, true), (pg_temp.i('plan_big'), 'reels', 12, true);
 insert into public.client_subscriptions (id, client_id, plan_id, status, starts_on, ends_on, price, currency)
-values (pg_temp.i('sub_a'), pg_temp.i('client_a'), pg_temp.i('plan_small'), 'active', current_date - 10, current_date + 20, 1000, 'USD');
+values (pg_temp.i('sub_a'), pg_temp.i('client_a'), pg_temp.i('plan_small'), 'active', private.agency_today() - 10, private.agency_today() + 20, 1000, 'USD');
 insert into public.subscription_quotas (subscription_id, service_key, quantity, is_included)
 select pg_temp.i('sub_a'), 'reels', 4, true
 where not exists (select 1 from public.subscription_quotas where subscription_id = pg_temp.i('sub_a') and service_key = 'reels');
@@ -59,13 +59,13 @@ where not exists (select 1 from public.subscription_quotas where subscription_id
 -- 40 days of history from the sync.
 select pg_temp.i_service();
 select lives_ok($$
-  select public.ig_save_snapshot(pg_temp.i('account_a'), (current_date - g)::date,
+  select public.ig_save_snapshot(pg_temp.i('account_a'), (private.agency_today() - g)::date,
     jsonb_build_object('followers', 10000 - g * 10, 'views', 5000, 'reach', 3000, 'interactions', 400, 'reach_7d', 15000, 'reach_30d', 50000))
   from generate_series(0, 39) g
 $$, 'the sync stores daily snapshots');
-select lives_ok($$select public.ig_save_snapshot(pg_temp.i('account_a'), current_date, '{"views": null, "likes": 12}')$$,
+select lives_ok($$select public.ig_save_snapshot(pg_temp.i('account_a'), private.agency_today(), '{"views": null, "likes": 12}')$$,
   'a later partial sync keeps the known values');
-select is((select views from public.social_daily_snapshots where social_account_id = pg_temp.i('account_a') and snapshot_date = current_date), 5000::bigint,
+select is((select views from public.social_daily_snapshots where social_account_id = pg_temp.i('account_a') and snapshot_date = private.agency_today()), 5000::bigint,
   'NULL from Meta never erases a stored number');
 select is(public.ig_save_media(pg_temp.i('account_a'), (
   select jsonb_agg(jsonb_build_object('id', (9000 + g)::text, 'media_type', 'VIDEO', 'media_product_type', 'REELS',

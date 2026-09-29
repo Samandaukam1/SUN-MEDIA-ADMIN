@@ -163,9 +163,9 @@ reset role;
 -- CRM report and admin alerts
 -- ---------------------------------------------------------------------------
 select pg_temp.c_login('admin');
-select is((public.preview_crm_report(pg_temp.c('client_a'), current_date - 30, current_date) ->> 'total')::int, 2, 'the report counts the period''s leads');
-select ok(public.send_crm_report(pg_temp.c('client_a'), 'monthly', current_date - 29, current_date) is not null, 'the admin sends a CRM report');
-select throws_ok($$select public.send_crm_report(pg_temp.c('client_a'), 'custom', current_date, current_date + 3)$$, '22023', null, 'future periods are refused');
+select is((public.preview_crm_report(pg_temp.c('client_a'), private.agency_today() - 30, private.agency_today()) ->> 'total')::int, 2, 'the report counts the period''s leads');
+select ok(public.send_crm_report(pg_temp.c('client_a'), 'monthly', private.agency_today() - 29, private.agency_today()) is not null, 'the admin sends a CRM report');
+select throws_ok($$select public.send_crm_report(pg_temp.c('client_a'), 'custom', private.agency_today(), private.agency_today() + 3)$$, '22023', null, 'future periods are refused');
 reset role;
 
 select pg_temp.c_login('client_a_user');

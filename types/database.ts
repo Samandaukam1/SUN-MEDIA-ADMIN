@@ -524,6 +524,51 @@ export type Database = {
           },
         ]
       }
+      client_crm_settings: {
+        Row: {
+          auto_deliver: boolean
+          client_id: string
+          created_at: string
+          field_map: Json
+          template: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          auto_deliver?: boolean
+          client_id: string
+          created_at?: string
+          field_map?: Json
+          template?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          auto_deliver?: boolean
+          client_id?: string
+          created_at?: string
+          field_map?: Json
+          template?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_crm_settings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_crm_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_member_permissions: {
         Row: {
           client_id: string
@@ -1573,6 +1618,57 @@ export type Database = {
           },
         ]
       }
+      crm_reports: {
+        Row: {
+          client_id: string
+          data: Json
+          id: string
+          kind: string
+          note: string | null
+          period_end: string
+          period_start: string
+          sent_at: string
+          sent_by: string | null
+        }
+        Insert: {
+          client_id: string
+          data: Json
+          id?: string
+          kind: string
+          note?: string | null
+          period_end: string
+          period_start: string
+          sent_at?: string
+          sent_by?: string | null
+        }
+        Update: {
+          client_id?: string
+          data?: Json
+          id?: string
+          kind?: string
+          note?: string | null
+          period_end?: string
+          period_start?: string
+          sent_at?: string
+          sent_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_reports_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_reports_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deadline_alert_log: {
         Row: {
           due_at: string
@@ -1917,6 +2013,181 @@ export type Database = {
           },
         ]
       }
+      lead_deliveries: {
+        Row: {
+          automatic: boolean
+          client_id: string
+          created_at: string
+          delivered_by: string | null
+          id: string
+          lead_count: number
+        }
+        Insert: {
+          automatic?: boolean
+          client_id: string
+          created_at?: string
+          delivered_by?: string | null
+          id?: string
+          lead_count: number
+        }
+        Update: {
+          automatic?: boolean
+          client_id?: string
+          created_at?: string
+          delivered_by?: string | null
+          id?: string
+          lead_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_deliveries_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_deliveries_delivered_by_fkey"
+            columns: ["delivered_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          ad_account_id: string | null
+          ad_id: string | null
+          ad_name: string | null
+          admin_notified_at: string | null
+          adset_id: string | null
+          adset_name: string | null
+          campaign_id: string | null
+          campaign_name: string | null
+          client_id: string
+          created_at: string
+          delivered_at: string | null
+          delivered_by: string | null
+          delivery_id: string | null
+          delivery_status: Database["public"]["Enums"]["lead_delivery_status"]
+          discarded_reason: string | null
+          email: string | null
+          fetch_attempts: number
+          fetch_error: string | null
+          fetch_status: Database["public"]["Enums"]["lead_fetch_status"]
+          fields: Json
+          form_id: string | null
+          form_name: string | null
+          full_name: string | null
+          id: string
+          lead_at: string | null
+          meta_created_at: string | null
+          meta_lead_id: string
+          page_id: string | null
+          page_name: string | null
+          phone: string | null
+          platform: string | null
+          received_at: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          ad_account_id?: string | null
+          ad_id?: string | null
+          ad_name?: string | null
+          admin_notified_at?: string | null
+          adset_id?: string | null
+          adset_name?: string | null
+          campaign_id?: string | null
+          campaign_name?: string | null
+          client_id: string
+          created_at?: string
+          delivered_at?: string | null
+          delivered_by?: string | null
+          delivery_id?: string | null
+          delivery_status?: Database["public"]["Enums"]["lead_delivery_status"]
+          discarded_reason?: string | null
+          email?: string | null
+          fetch_attempts?: number
+          fetch_error?: string | null
+          fetch_status?: Database["public"]["Enums"]["lead_fetch_status"]
+          fields?: Json
+          form_id?: string | null
+          form_name?: string | null
+          full_name?: string | null
+          id?: string
+          lead_at?: string | null
+          meta_created_at?: string | null
+          meta_lead_id: string
+          page_id?: string | null
+          page_name?: string | null
+          phone?: string | null
+          platform?: string | null
+          received_at?: string
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          ad_account_id?: string | null
+          ad_id?: string | null
+          ad_name?: string | null
+          admin_notified_at?: string | null
+          adset_id?: string | null
+          adset_name?: string | null
+          campaign_id?: string | null
+          campaign_name?: string | null
+          client_id?: string
+          created_at?: string
+          delivered_at?: string | null
+          delivered_by?: string | null
+          delivery_id?: string | null
+          delivery_status?: Database["public"]["Enums"]["lead_delivery_status"]
+          discarded_reason?: string | null
+          email?: string | null
+          fetch_attempts?: number
+          fetch_error?: string | null
+          fetch_status?: Database["public"]["Enums"]["lead_fetch_status"]
+          fields?: Json
+          form_id?: string | null
+          form_name?: string | null
+          full_name?: string | null
+          id?: string
+          lead_at?: string | null
+          meta_created_at?: string | null
+          meta_lead_id?: string
+          page_id?: string | null
+          page_name?: string | null
+          phone?: string | null
+          platform?: string | null
+          received_at?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_delivered_by_fkey"
+            columns: ["delivered_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "lead_deliveries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_attachments: {
         Row: {
           file_id: string
@@ -1999,6 +2270,139 @@ export type Database = {
           {
             foreignKeyName: "messages_sender_id_fkey"
             columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_assets: {
+        Row: {
+          asset_type: Database["public"]["Enums"]["meta_asset_type"]
+          client_id: string
+          connection_id: string | null
+          created_at: string
+          created_by: string | null
+          details: Json
+          external_id: string
+          id: string
+          last_synced_at: string | null
+          name: string
+          parent_external_id: string | null
+          social_account_id: string | null
+          status: Database["public"]["Enums"]["integration_status"]
+          sync_error: string | null
+          updated_at: string
+          webhook_subscribed_at: string | null
+        }
+        Insert: {
+          asset_type: Database["public"]["Enums"]["meta_asset_type"]
+          client_id: string
+          connection_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          details?: Json
+          external_id: string
+          id?: string
+          last_synced_at?: string | null
+          name?: string
+          parent_external_id?: string | null
+          social_account_id?: string | null
+          status?: Database["public"]["Enums"]["integration_status"]
+          sync_error?: string | null
+          updated_at?: string
+          webhook_subscribed_at?: string | null
+        }
+        Update: {
+          asset_type?: Database["public"]["Enums"]["meta_asset_type"]
+          client_id?: string
+          connection_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          details?: Json
+          external_id?: string
+          id?: string
+          last_synced_at?: string | null
+          name?: string
+          parent_external_id?: string | null
+          social_account_id?: string | null
+          status?: Database["public"]["Enums"]["integration_status"]
+          sync_error?: string | null
+          updated_at?: string
+          webhook_subscribed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_assets_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_assets_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "meta_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_assets_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_assets_social_account_id_fkey"
+            columns: ["social_account_id"]
+            isOneToOne: false
+            referencedRelation: "social_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_connections: {
+        Row: {
+          connected_by: string | null
+          created_at: string
+          id: string
+          last_error: string | null
+          meta_user_id: string
+          name: string
+          scopes: string[]
+          status: Database["public"]["Enums"]["integration_status"]
+          token_expires_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          connected_by?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          meta_user_id: string
+          name?: string
+          scopes?: string[]
+          status?: Database["public"]["Enums"]["integration_status"]
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          connected_by?: string | null
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          meta_user_id?: string
+          name?: string
+          scopes?: string[]
+          status?: Database["public"]["Enums"]["integration_status"]
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_connections_connected_by_fkey"
+            columns: ["connected_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -2572,6 +2976,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          access_requested_at: string | null
           avatar_url: string | null
           created_at: string
           deleted_at: string | null
@@ -2582,6 +2987,7 @@ export type Database = {
           last_name: string | null
           last_seen_at: string | null
           locale: string
+          password_changed_at: string | null
           password_reset_at: string | null
           phone: string | null
           provisioned_by: string | null
@@ -2592,6 +2998,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          access_requested_at?: string | null
           avatar_url?: string | null
           created_at?: string
           deleted_at?: string | null
@@ -2602,6 +3009,7 @@ export type Database = {
           last_name?: string | null
           last_seen_at?: string | null
           locale?: string
+          password_changed_at?: string | null
           password_reset_at?: string | null
           phone?: string | null
           provisioned_by?: string | null
@@ -2612,6 +3020,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          access_requested_at?: string | null
           avatar_url?: string | null
           created_at?: string
           deleted_at?: string | null
@@ -2622,6 +3031,7 @@ export type Database = {
           last_name?: string | null
           last_seen_at?: string | null
           locale?: string
+          password_changed_at?: string | null
           password_reset_at?: string | null
           phone?: string | null
           provisioned_by?: string | null
@@ -3374,6 +3784,164 @@ export type Database = {
           },
         ]
       }
+      social_daily_snapshots: {
+        Row: {
+          accounts_engaged: number | null
+          client_id: string
+          comments: number | null
+          followers: number | null
+          interactions: number | null
+          likes: number | null
+          media_count: number | null
+          profile_links_taps: number | null
+          reach: number | null
+          reach_30d: number | null
+          reach_7d: number | null
+          saves: number | null
+          shares: number | null
+          snapshot_date: string
+          social_account_id: string
+          source: Database["public"]["Enums"]["metric_source"]
+          synced_at: string
+          views: number | null
+        }
+        Insert: {
+          accounts_engaged?: number | null
+          client_id: string
+          comments?: number | null
+          followers?: number | null
+          interactions?: number | null
+          likes?: number | null
+          media_count?: number | null
+          profile_links_taps?: number | null
+          reach?: number | null
+          reach_30d?: number | null
+          reach_7d?: number | null
+          saves?: number | null
+          shares?: number | null
+          snapshot_date: string
+          social_account_id: string
+          source?: Database["public"]["Enums"]["metric_source"]
+          synced_at?: string
+          views?: number | null
+        }
+        Update: {
+          accounts_engaged?: number | null
+          client_id?: string
+          comments?: number | null
+          followers?: number | null
+          interactions?: number | null
+          likes?: number | null
+          media_count?: number | null
+          profile_links_taps?: number | null
+          reach?: number | null
+          reach_30d?: number | null
+          reach_7d?: number | null
+          saves?: number | null
+          shares?: number | null
+          snapshot_date?: string
+          social_account_id?: string
+          source?: Database["public"]["Enums"]["metric_source"]
+          synced_at?: string
+          views?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_daily_snapshots_social_account_id_client_id_fkey"
+            columns: ["social_account_id", "client_id"]
+            isOneToOne: false
+            referencedRelation: "social_accounts"
+            referencedColumns: ["id", "client_id"]
+          },
+        ]
+      }
+      social_media_items: {
+        Row: {
+          caption: string | null
+          client_id: string
+          comments: number | null
+          content_id: string | null
+          created_at: string
+          external_id: string
+          id: string
+          interactions: number | null
+          likes: number | null
+          media_type: string | null
+          metrics_synced_at: string | null
+          permalink: string | null
+          posted_at: string | null
+          product_type: string | null
+          reach: number | null
+          saves: number | null
+          shares: number | null
+          social_account_id: string
+          thumbnail_url: string | null
+          updated_at: string
+          views: number | null
+        }
+        Insert: {
+          caption?: string | null
+          client_id: string
+          comments?: number | null
+          content_id?: string | null
+          created_at?: string
+          external_id: string
+          id?: string
+          interactions?: number | null
+          likes?: number | null
+          media_type?: string | null
+          metrics_synced_at?: string | null
+          permalink?: string | null
+          posted_at?: string | null
+          product_type?: string | null
+          reach?: number | null
+          saves?: number | null
+          shares?: number | null
+          social_account_id: string
+          thumbnail_url?: string | null
+          updated_at?: string
+          views?: number | null
+        }
+        Update: {
+          caption?: string | null
+          client_id?: string
+          comments?: number | null
+          content_id?: string | null
+          created_at?: string
+          external_id?: string
+          id?: string
+          interactions?: number | null
+          likes?: number | null
+          media_type?: string | null
+          metrics_synced_at?: string | null
+          permalink?: string | null
+          posted_at?: string | null
+          product_type?: string | null
+          reach?: number | null
+          saves?: number | null
+          shares?: number | null
+          social_account_id?: string
+          thumbnail_url?: string | null
+          updated_at?: string
+          views?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "social_media_items_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_media_items_social_account_id_client_id_fkey"
+            columns: ["social_account_id", "client_id"]
+            isOneToOne: false
+            referencedRelation: "social_accounts"
+            referencedColumns: ["id", "client_id"]
+          },
+        ]
+      }
       social_metrics: {
         Row: {
           client_id: string
@@ -3992,6 +4560,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      complete_meta_lead: {
+        Args: { p_details: Json; p_lead_id: string }
+        Returns: Json
+      }
       complete_push_deliveries: {
         Args: { p_results: Json }
         Returns: undefined
@@ -4043,6 +4615,26 @@ export type Database = {
         Args: { p_member_ids: string[]; p_name: string }
         Returns: string
       }
+      decline_access_request: {
+        Args: { p_reason?: string; p_user_id: string }
+        Returns: undefined
+      }
+      deliver_leads: {
+        Args: { p_client: string; p_lead_ids?: string[] }
+        Returns: Json
+      }
+      discard_leads: {
+        Args: { p_lead_ids: string[]; p_reason?: string }
+        Returns: number
+      }
+      disconnect_meta_asset: {
+        Args: { p_asset_id: string }
+        Returns: undefined
+      }
+      fail_meta_lead: {
+        Args: { p_error: string; p_lead_id: string }
+        Returns: undefined
+      }
       generate_monthly_report: {
         Args: { p_client_id: string; p_month: string }
         Returns: {
@@ -4067,6 +4659,20 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      get_access_requests: {
+        Args: never
+        Returns: {
+          avatar_url: string
+          created_at: string
+          email: string
+          full_name: string
+          last_sign_in_at: string
+          providers: string[]
+          requested_at: string
+          status: Database["public"]["Enums"]["account_status"]
+          user_id: string
+        }[]
       }
       get_activity_feed: {
         Args: { p_before?: number; p_client_id?: string; p_limit?: number }
@@ -4157,7 +4763,17 @@ export type Database = {
           visibility: Database["public"]["Enums"]["visibility_level"]
         }[]
       }
+      get_client_forecast: { Args: { p_client: string }; Returns: Json }
       get_client_home: { Args: { p_client_id: string }; Returns: Json }
+      get_client_leads: {
+        Args: {
+          p_before?: string
+          p_client: string
+          p_limit?: number
+          p_period?: string
+        }
+        Returns: Json
+      }
       get_client_overview: { Args: { p_client_id: string }; Returns: Json }
       get_client_plan: { Args: { p_client_id: string }; Returns: Json }
       get_client_resource_report: {
@@ -4168,11 +4784,16 @@ export type Database = {
           metrics: Json
         }[]
       }
+      get_client_results: {
+        Args: { p_client: string; p_month?: string }
+        Returns: Json
+      }
       get_command_center: { Args: { p_date?: string }; Returns: Json }
       get_content_transitions: {
         Args: { p_content_id: string }
         Returns: Database["public"]["Enums"]["content_status"][]
       }
+      get_crm_summary: { Args: never; Returns: Json }
       get_employee_home: { Args: never; Returns: Json }
       get_employee_scorecards: {
         Args: { p_from: string; p_to: string; p_user_id?: string }
@@ -4196,6 +4817,37 @@ export type Database = {
         }[]
       }
       get_inbox_counts: { Args: never; Returns: Json }
+      get_instagram_summary: {
+        Args: { p_client: string; p_days?: number }
+        Returns: Json
+      }
+      get_lead: { Args: { p_lead_id: string }; Returns: Json }
+      get_leads: {
+        Args: {
+          p_before?: string
+          p_client?: string
+          p_limit?: number
+          p_state: string
+        }
+        Returns: {
+          ad_name: string
+          campaign_name: string
+          client_code: string
+          client_id: string
+          client_name: string
+          delivered_at: string
+          delivery_status: Database["public"]["Enums"]["lead_delivery_status"]
+          email: string
+          fetch_status: Database["public"]["Enums"]["lead_fetch_status"]
+          form_name: string
+          full_name: string
+          id: string
+          lead_at: string
+          phone: string
+          platform: string
+          received_at: string
+        }[]
+      }
       get_my_chats: {
         Args: never
         Returns: {
@@ -4248,6 +4900,15 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_top_media: {
+        Args: {
+          p_client: string
+          p_days?: number
+          p_limit?: number
+          p_sort?: string
+        }
+        Returns: Json
+      }
       global_search: {
         Args: { p_limit?: number; p_query: string }
         Returns: Json
@@ -4261,9 +4922,97 @@ export type Database = {
         }
         Returns: string
       }
+      ig_accounts_to_sync: {
+        Args: { p_client?: string }
+        Returns: {
+          asset_id: string
+          client_id: string
+          connection_id: string
+          ig_user_id: string
+          last_snapshot: string
+          social_account_id: string
+          token_asset_id: string
+        }[]
+      }
+      ig_mark_synced: {
+        Args: { p_asset_id: string; p_error?: string }
+        Returns: undefined
+      }
+      ig_save_media: {
+        Args: { p_items: Json; p_social_account: string }
+        Returns: number
+      }
+      ig_save_period: {
+        Args: {
+          p_end: string
+          p_metrics: Json
+          p_social_account: string
+          p_start: string
+        }
+        Returns: undefined
+      }
+      ig_save_snapshot: {
+        Args: { p_date: string; p_metrics: Json; p_social_account: string }
+        Returns: undefined
+      }
+      ingest_meta_lead: {
+        Args: {
+          p_ad_id?: string
+          p_adset_id?: string
+          p_created_time?: string
+          p_form_id?: string
+          p_meta_lead_id: string
+          p_page_id: string
+        }
+        Returns: Json
+      }
+      link_media_to_content: {
+        Args: { p_content_id: string; p_media_id: string }
+        Returns: undefined
+      }
       mark_chat_read: { Args: { p_room_id: string }; Returns: undefined }
       mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number }
+      mark_password_changed: { Args: never; Returns: undefined }
+      meta_drop_token: {
+        Args: { p_owner_id: string; p_owner_kind: string }
+        Returns: undefined
+      }
+      meta_leads_to_fetch: {
+        Args: { p_limit?: number }
+        Returns: {
+          lead_id: string
+          meta_lead_id: string
+          page_asset_id: string
+        }[]
+      }
+      meta_mark_asset: {
+        Args: { p_asset_id: string; p_error?: string; p_webhook_ok: boolean }
+        Returns: undefined
+      }
+      meta_read_token: {
+        Args: { p_owner_id: string; p_owner_kind: string }
+        Returns: string
+      }
+      meta_save_connection: {
+        Args: {
+          p_connected_by: string
+          p_expires_at: string
+          p_meta_user_id: string
+          p_name: string
+          p_scopes: string[]
+          p_token: string
+        }
+        Returns: string
+      }
+      meta_save_token: {
+        Args: { p_owner_id: string; p_owner_kind: string; p_token: string }
+        Returns: undefined
+      }
       open_direct_chat: { Args: { p_user_id: string }; Returns: string }
+      preview_crm_report: {
+        Args: { p_client: string; p_from: string; p_to: string }
+        Returns: Json
+      }
       provision_client_user: {
         Args: {
           p_client_id: string
@@ -4368,6 +5117,8 @@ export type Database = {
         Returns: undefined
       }
       remove_file: { Args: { p_file_id: string }; Returns: undefined }
+      request_access: { Args: never; Returns: Json }
+      restore_lead: { Args: { p_lead_id: string }; Returns: undefined }
       review_content_version: {
         Args: {
           p_comments?: Json
@@ -4381,12 +5132,59 @@ export type Database = {
         Args: { p_content_id: string; p_payload: Json }
         Returns: string
       }
+      save_crm_settings: {
+        Args: {
+          p_auto_deliver: boolean
+          p_client: string
+          p_field_map?: Json
+          p_template: string
+        }
+        Returns: {
+          auto_deliver: boolean
+          client_id: string
+          created_at: string
+          field_map: Json
+          template: string
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "client_crm_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      save_meta_assets: {
+        Args: {
+          p_assets: Json
+          p_auto_deliver?: boolean
+          p_client: string
+          p_connection: string
+          p_template?: string
+        }
+        Returns: {
+          asset_id: string
+          asset_type: Database["public"]["Enums"]["meta_asset_type"]
+          external_id: string
+        }[]
+      }
       save_shooting: {
         Args: { p_payload: Json; p_shooting_id: string }
         Returns: string
       }
       save_task: {
         Args: { p_payload: Json; p_task_id: string }
+        Returns: string
+      }
+      send_crm_report: {
+        Args: {
+          p_client: string
+          p_from: string
+          p_kind: string
+          p_note?: string
+          p_to: string
+        }
         Returns: string
       }
       send_message: {
@@ -4608,6 +5406,15 @@ export type Database = {
         | "documents"
         | "contracts"
         | "custom"
+      integration_status: "active" | "error" | "disconnected"
+      lead_delivery_status: "pending" | "delivered" | "discarded"
+      lead_fetch_status: "pending" | "complete" | "failed"
+      meta_asset_type:
+        | "business"
+        | "page"
+        | "instagram"
+        | "ad_account"
+        | "lead_form"
       metric_source: "manual" | "api"
       notification_priority: "low" | "normal" | "high"
       priority_level: "low" | "normal" | "high" | "urgent"
@@ -4877,6 +5684,16 @@ export const Constants = {
         "documents",
         "contracts",
         "custom",
+      ],
+      integration_status: ["active", "error", "disconnected"],
+      lead_delivery_status: ["pending", "delivered", "discarded"],
+      lead_fetch_status: ["pending", "complete", "failed"],
+      meta_asset_type: [
+        "business",
+        "page",
+        "instagram",
+        "ad_account",
+        "lead_form",
       ],
       metric_source: ["manual", "api"],
       notification_priority: ["low", "normal", "high"],

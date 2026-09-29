@@ -42,10 +42,9 @@ export default async function PlansPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Boshqaruv"
         title="Tariflar"
-        description="Tarif katalogi, mijozlar obunasi va tarifni o‘zgartirish so‘rovlari."
-        actions={manage ? <ButtonLink href="/plans/new" variant="primary">Yangi tarif</ButtonLink> : null}
+        description="Qaysi tarifda nima bor, kim qaysi tarifda va tarifni o‘zgartirish so‘rovlari."
+        actions={manage ? <ButtonLink href="/plans/new" variant="primary">+ Tarif</ButtonLink> : null}
       />
 
       {requestsRes.data.length ? (

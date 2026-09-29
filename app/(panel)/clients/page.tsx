@@ -15,7 +15,7 @@ import { createClient } from '@/lib/supabase/server';
 
 export const metadata: Metadata = { title: 'Mijozlar' };
 
-export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string }> }) {
+export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; new?: string }> }) {
   const context = await requireStaff();
   if (!can(context, 'clients.read_all') && !can(context, 'clients.manage')) redirect('/no-access?reason=permission');
   const params = await searchParams;
@@ -42,10 +42,9 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   return (
     <div>
       <PageHeader
-        eyebrow="Odamlar"
-        title="Mijozlar"
+        title="Barcha mijozlar"
         description="Kompaniyalar, ularning loginlari, SUN MEDIA jamoasi va tariflari."
-        actions={can(context, 'clients.manage') ? <AddClientDialog /> : null}
+        actions={can(context, 'clients.manage') ? <AddClientDialog defaultOpen={params.new === '1'} /> : null}
       />
 
       <form className="mb-6 flex flex-wrap gap-3" role="search">

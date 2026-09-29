@@ -3,7 +3,7 @@ type ErrorLike = { code?: string; message?: string; name?: string };
 const AUTH: Record<string, string> = {
   invalid_credentials: 'Email yoki parol noto‘g‘ri.',
   email_not_confirmed: 'Email hali tasdiqlanmagan.',
-  user_banned: 'Hisob bloklangan. Owner yoki admin bilan bog‘laning.',
+  user_banned: 'Hisob bloklangan. Rahbar yoki administrator bilan bog‘laning.',
   over_request_rate_limit: 'Juda ko‘p urinish. Birozdan so‘ng qayta urinib ko‘ring.',
 };
 
@@ -28,7 +28,7 @@ const KNOWN: Record<string, string> = {
   'Choose a client role': 'Mijoz rolini tanlang.',
   'Invalid phone number': 'Telefon raqami noto‘g‘ri. Masalan: +998 90 123 45 67',
   'Give a reason for blocking the account': 'Bloklash sababini yozing.',
-  'The last active owner cannot be blocked': 'Oxirgi faol Owner’ni bloklab bo‘lmaydi.',
+  'The last active owner cannot be blocked': 'Oxirgi faol rahbarni bloklab bo‘lmaydi.',
   'Not allowed to assign this client': 'Bu mijozga xodim biriktirishga ruxsatingiz yo‘q.',
   'Only client permissions can be granted to client users': 'Mijozga faqat mijoz ruxsatlarini berish mumkin.',
   'Unknown client permission': 'Noma’lum ruxsat.',

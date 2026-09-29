@@ -44,9 +44,8 @@ export default async function WorkspacePage() {
   return (
     <div className="space-y-10">
       <PageHeader
-        eyebrow="Tizim"
-        title="Ish joyi"
-        description="Barcha xodimlar ko‘radigan e’lonlar, kompaniya tadbirlari va hujjatlar. Mijozlar bu bo‘limni ko‘rmaydi."
+        title="E’lonlar va hujjatlar"
+        description="Barcha xodimlar ko‘radigan e’lonlar, kompaniya tadbirlari va hujjatlar. Mijozlar buni ko‘rmaydi."
       />
 
       <section>

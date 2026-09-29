@@ -31,9 +31,8 @@ export default async function RolesPage() {
   return (
     <div className="space-y-10">
       <PageHeader
-        eyebrow="Tizim"
         title="Rollar va ruxsatlar"
-        description="Har bir rol nimani ko‘ra va qila olishi. Ruxsatlar bazada (RLS) majburiy — interfeysni yashirish emas."
+        description="Har bir rol nimani ko‘ra va qila olishi. Belgini qo‘ysangiz — shu roldagi hamma xodimga darhol ta’sir qiladi."
       />
       {!editable ? <Notice tone="info" title="Faqat ko‘rish rejimi">Rollarni o‘zgartirish uchun “Rollarni boshqarish” ruxsati kerak.</Notice> : null}
       <section>

@@ -89,7 +89,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
   return (
     <div>
       <PageHeader
-        back={{ href: '/clients', label: 'Mijozlar' }}
+        crumbs={[{ label: 'Mijozlar', href: '/clients' }, { label: client.name }]}
         title={client.name}
         description={[client.code, client.industry, client.legal_name].filter(Boolean).join(' · ')}
         actions={

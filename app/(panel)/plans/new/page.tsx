@@ -19,7 +19,7 @@ export default async function NewPlanPage() {
   if (clients.error) throw clients.error;
   return (
     <div>
-      <PageHeader back={{ href: '/plans', label: 'Tariflar' }} title="Yangi tarif" description="Narx, muddat va tarifga kiradigan xizmatlar miqdori." />
+      <PageHeader crumbs={[{ label: 'Mijozlar', href: '/clients' }, { label: 'Tariflar', href: '/plans' }, { label: 'Yangi tarif' }]} title="Yangi tarif" description="Narx, muddat va tarifga kiradigan xizmatlar miqdori." />
       <Card className="max-w-3xl">
         <PlanForm services={services.data} clients={clients.data} editable />
       </Card>

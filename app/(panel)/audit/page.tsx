@@ -10,16 +10,16 @@ import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { formatShortDateTime } from '@/lib/time';
 
-export const metadata: Metadata = { title: 'Audit log' };
+export const metadata: Metadata = { title: 'Faoliyat tarixi' };
 
 const PAGE = 50;
 
 const ENTITY: Record<string, string> = {
   content_items: 'Kontent',
   content_versions: 'Versiya',
-  content_publications: 'Nashr',
+  content_publications: 'Post',
   content_assignments: 'Kontent jamoasi',
-  revisions: 'Revision',
+  revisions: 'O‘zgartirish',
   tasks: 'Vazifa',
   task_assignments: 'Vazifa mas’uli',
   shootings: 'Syomka',
@@ -122,7 +122,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
 
   return (
     <div>
-      <PageHeader eyebrow="Tizim" title="Audit log" description="Kim, qachon, nimani o‘zgartirgani. Yozuvlarni o‘zgartirib yoki o‘chirib bo‘lmaydi." />
+      <PageHeader title="Faoliyat tarixi" description="Kim, qachon, nimani o‘zgartirgani. Bu yozuvlarni o‘zgartirib yoki o‘chirib bo‘lmaydi." />
       <Card className="mb-6">
         <form className="grid gap-3 md:grid-cols-[1fr_1fr_150px_150px_1fr_auto]" method="get">
           <select name="entity" defaultValue={params.entity ?? ''} className="h-10 rounded-xl border border-line bg-surface px-3 text-sm" aria-label="Bo‘lim">

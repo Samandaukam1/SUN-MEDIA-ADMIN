@@ -11,13 +11,14 @@ import { createClientRecord } from '@/lib/actions/clients';
 import { idle, type ActionState } from '@/lib/actions/state';
 import { ClientFields } from './ClientFields';
 
-export function AddClientDialog() {
-  const [open, setOpen] = useState(false);
+/** Mijozlar → + Mijoz (also opened from "+ Yaratish → Yangi mijoz"). */
+export function AddClientDialog({ defaultOpen = false }: { defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [state, action] = useActionState<ActionState, FormData>(createClientRecord, idle);
   return (
     <>
       <Button icon={<Icon name="plus" size={16} />} onClick={() => setOpen(true)}>
-        Mijoz qo‘shish
+        Mijoz
       </Button>
       <Dialog open={open} onClose={() => setOpen(false)} title="Yangi mijoz" description="Keyin mijoz uchun login, jamoa va tarif biriktirasiz." size="lg">
         <form action={action} className="space-y-6">

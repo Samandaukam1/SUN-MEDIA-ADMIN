@@ -1,13 +1,27 @@
+import { Suspense } from 'react';
+
+import type { CreateItem } from '@/components/panel/CreateMenu';
 import { Sidebar } from '@/components/panel/Sidebar';
-import { requireStaff } from '@/lib/auth';
+import { TopBar } from '@/components/panel/TopBar';
+import { can, requireStaff } from '@/lib/auth';
 import { navigationFor } from '@/lib/navigation';
 
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
   const context = await requireStaff();
+  const sections = navigationFor(context);
+  const create: CreateItem[] = [
+    can(context, 'content.manage') ? { href: '/work/content/new', label: 'Yangi kontent', icon: 'film' as const, hint: 'Reels, post, stories…' } : null,
+    can(context, 'shootings.manage') ? { href: '/work/shootings/new', label: 'Yangi syomka', icon: 'video' as const, hint: 'Vaqt, joy va jamoa' } : null,
+    can(context, 'tasks.manage') ? { href: '/work/tasks/new', label: 'Yangi vazifa', icon: 'checkSquare' as const, hint: 'Kimga va qachongacha' } : null,
+    can(context, 'clients.manage') ? { href: '/clients?new=1', label: 'Yangi mijoz', icon: 'briefcase' as const, hint: 'Kompaniya va login' } : null,
+    can(context, 'employees.manage') ? { href: '/team?new=1', label: 'Yangi xodim', icon: 'users' as const, hint: 'Lavozim, login va parol' } : null,
+  ].filter((i) => i !== null);
+
   return (
     <div className="flex h-dvh overflow-hidden">
       <Sidebar
-        groups={navigationFor(context)}
+        sections={sections}
+        create={create}
         user={{
           name: context.profile?.full_name || context.profile?.email || '—',
           role: context.roles.map((r) => r.name).join(', '),
@@ -15,7 +29,10 @@ export default async function PanelLayout({ children }: { children: React.ReactN
         }}
       />
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-7xl px-8 py-9">{children}</div>
+        <Suspense>
+          <TopBar sections={sections} />
+        </Suspense>
+        <div className="mx-auto max-w-7xl px-8 py-8">{children}</div>
       </main>
     </div>
   );

@@ -117,6 +117,105 @@ const PATHS = {
       <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
     </>
   ),
+  home: (
+    <>
+      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="M9 22V12h6v10" />
+    </>
+  ),
+  layers: (
+    <>
+      <path d="M12 2 2 7l10 5 10-5-10-5z" />
+      <path d="m2 17 10 5 10-5" />
+      <path d="m2 12 10 5 10-5" />
+    </>
+  ),
+  barChart: <path d="M18 20V10M12 20V4M6 20v-6" />,
+  video: (
+    <>
+      <path d="m23 7-7 5 7 5V7z" />
+      <rect x="1" y="5" width="15" height="14" rx="2" />
+    </>
+  ),
+  checkSquare: (
+    <>
+      <path d="m9 11 3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </>
+  ),
+  checkCircle: (
+    <>
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <path d="M22 4 12 14.01l-3-3" />
+    </>
+  ),
+  folder: <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />,
+  film: (
+    <>
+      <rect x="2" y="2" width="20" height="20" rx="2.18" />
+      <path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5" />
+    </>
+  ),
+  trendingUp: (
+    <>
+      <path d="m23 6-9.5 9.5-5-5L1 18" />
+      <path d="M17 6h6v6" />
+    </>
+  ),
+  chevronDown: <path d="m6 9 6 6 6-6" />,
+  chevronLeft: <path d="m15 18-6-6 6-6" />,
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M12 15V3" />
+    </>
+  ),
+  externalLink: (
+    <>
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+    </>
+  ),
+  mapPin: (
+    <>
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+      <circle cx="12" cy="10" r="3" />
+    </>
+  ),
+  arrowRight: <path d="M5 12h14M12 5l7 7-7 7" />,
+  image: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="m21 15-5-5L5 21" />
+    </>
+  ),
+  rotateCcw: (
+    <>
+      <path d="M1 4v6h6" />
+      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+    </>
+  ),
+  file: (
+    <>
+      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+      <path d="M13 2v7h7" />
+    </>
+  ),
+  award: (
+    <>
+      <circle cx="12" cy="8" r="7" />
+      <path d="M8.21 13.89 7 23l5-3 5 3-1.21-9.12" />
+    </>
+  ),
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -47,7 +47,7 @@ export async function ClientReportsTab({ clientId, manage }: { clientId: string;
                   <p className="text-[13px] text-muted">
                     {[
                       r.generated_at ? `Hisoblandi ${formatShortDateTime(r.generated_at)}` : null,
-                      r.published_at ? `nashr ${formatShortDateTime(r.published_at)}` : null,
+                      r.published_at ? `yuborildi ${formatShortDateTime(r.published_at)}` : null,
                       r.pdf_generated_at ? `PDF ${formatShortDateTime(r.pdf_generated_at)}` : 'PDF hali yo‘q (mobil ilovadan yaratiladi)',
                     ]
                       .filter(Boolean)
@@ -55,7 +55,7 @@ export async function ClientReportsTab({ clientId, manage }: { clientId: string;
                   </p>
                 </div>
                 <Badge tone={r.status === 'published' ? 'success' : 'warning'} dot>
-                  {r.status === 'published' ? 'Nashr qilingan' : 'Qoralama'}
+                  {r.status === 'published' ? 'Mijozga yuborilgan' : 'Qoralama'}
                 </Badge>
               </div>
               <div className="mb-4 grid gap-3 sm:grid-cols-3">

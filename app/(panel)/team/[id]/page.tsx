@@ -62,7 +62,7 @@ export default async function EmployeePage({ params, searchParams }: { params: P
   return (
     <div>
       <PageHeader
-        back={{ href: '/team', label: 'Jamoa' }}
+        crumbs={[{ label: 'Jamoa', href: '/team' }, { label: 'Xodimlar', href: '/team' }, { label: person.full_name }]}
         title={person.full_name}
         description={[person.employee?.job_title, person.email].filter(Boolean).join(' · ')}
         actions={canManage ? <AccountActions userId={person.id} status={person.status} revalidate={`/team/${id}`} /> : null}

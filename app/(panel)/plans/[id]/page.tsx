@@ -33,7 +33,7 @@ export default async function PlanPage({ params, searchParams }: { params: Promi
   const features = Object.fromEntries(p.features.filter((f) => f.is_included).map((f) => [f.service_key, f.quantity]));
   return (
     <div>
-      <PageHeader back={{ href: '/plans', label: 'Tariflar' }} title={p.name} description="O‘zgarishlar faqat yangi obunalarga ta’sir qiladi: mavjud mijozlar sotib olgan tarkibi saqlanadi." />
+      <PageHeader crumbs={[{ label: 'Mijozlar', href: '/clients' }, { label: 'Tariflar', href: '/plans' }, { label: p.name }]} title={p.name} description="O‘zgarishlar faqat yangi obunalarga ta’sir qiladi: mavjud mijozlar sotib olgan tarkibi saqlanadi." />
       {saved ? (
         <div className="mb-6 max-w-3xl">
           <Notice tone="success" title="Tarif yaratildi" />

@@ -131,7 +131,7 @@ export function ReportActions({ reportId, clientId, published, pdfPath }: { repo
           })
         }
       >
-        {published ? 'Qoralamaga qaytarish' : 'Nashr qilish'}
+        {published ? 'Qoralamaga qaytarish' : 'Mijozga yuborish'}
       </Button>
       {error ? <span className="text-[13px] text-danger">{error}</span> : null}
     </div>

@@ -29,7 +29,7 @@ export default async function SettingsPage() {
 
   return (
     <div>
-      <PageHeader eyebrow="Tizim" title="Sozlamalar" description="Ish haftasi, ish boshlanish vaqti, akkaunt standartlari va tasdiq muddati." />
+      <PageHeader title="Sozlamalar" description="Ish haftasi, ish boshlanish vaqti, akkaunt standartlari va tasdiq muddati." />
       <Card className="max-w-3xl">
         <SettingsForm
           workDays={Array.isArray(days) ? days.map(Number) : [1, 2, 3, 4, 5, 6]}

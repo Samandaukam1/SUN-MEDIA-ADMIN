@@ -81,7 +81,6 @@ function ModuleRows({ module, permissions, roles, granted, editable, onToggle }:
         <tr key={p.key} className="border-b border-line last:border-0">
           <td className="sticky left-0 z-10 bg-surface px-4 py-2.5">
             <span className="block font-medium">{PERMISSION_LABEL[p.key] ?? p.name}</span>
-            <span className="block font-mono text-[11px] text-subtle">{p.key}</span>
           </td>
           {roles.map((r) => {
             const on = r.key === 'owner' || granted.has(`${r.id}:${p.key}`);

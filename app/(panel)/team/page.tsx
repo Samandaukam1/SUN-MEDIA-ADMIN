@@ -17,7 +17,7 @@ import { formatShortDateTime } from '@/lib/time';
 
 export const metadata: Metadata = { title: 'Jamoa' };
 
-type Search = { q?: string; role?: string; status?: string };
+type Search = { q?: string; role?: string; status?: string; new?: string };
 
 export default async function TeamPage({ searchParams }: { searchParams: Promise<Search> }) {
   const context = await requireStaff();
@@ -57,9 +57,8 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
   return (
     <div>
       <PageHeader
-        eyebrow="Odamlar"
-        title="Jamoa"
-        description="SUN MEDIA xodimlari, ularning rollari va akkauntlari."
+        title="Xodimlar"
+        description="SUN MEDIA xodimlari, lavozimi, roli va akkaunt holati."
         actions={
           canManage ? (
             <AddEmployeeDialog
@@ -67,6 +66,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
               clients={(clientsRes.data ?? []).map((c) => ({ value: c.id, label: c.name, description: c.industry ?? c.code }))}
               permissions={context.permissions}
               loginDomain={typeof domainRes.data?.value === 'string' ? domainRes.data.value : 'sunmedia.uz'}
+              defaultOpen={params.new === '1'}
             />
           ) : null
         }

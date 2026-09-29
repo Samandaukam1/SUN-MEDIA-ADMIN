@@ -36,6 +36,21 @@ export const commandCenterSchema = z.object({
     items: z.array(z.object({ content_id: z.string(), label: z.string(), status: z.string(), client_name: z.string(), since: z.string(), due_at: nullableString })),
   }),
   overdue: z.array(z.object({ task_id: z.string(), title: z.string(), due_at: z.string(), client_name: nullableString, assignees: z.array(z.string()) })),
+  deadlines: z.object({
+    overdue: z.number(),
+    critical: z.number(),
+    items: z.array(
+      z.object({
+        task_id: z.string(),
+        title: z.string(),
+        task_type: z.string(),
+        due_at: z.string(),
+        client_name: nullableString,
+        state: z.enum(['overdue', 'critical', 'upcoming']),
+        assignees: z.array(z.object({ user_id: z.string(), full_name: z.string() })),
+      }),
+    ),
+  }),
   publications: z.object({
     scheduled: z.number(),
     published: z.number(),

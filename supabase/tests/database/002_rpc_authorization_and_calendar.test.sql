@@ -162,7 +162,7 @@ select is((select count(*)::int from public.get_calendar_events(now(), now() + i
 select is((select count(*)::int from public.get_calendar_events(now(), now() + interval '1 day', pg_temp.rpc_test_id('client_a'))
            where content_id = pg_temp.rpc_test_id('cancelled_content')), 0, 'cancelled content creates no calendar events for managers');
 select is((select count(*)::int from public.get_calendar_events(now(), now() + interval '1 day', pg_temp.rpc_test_id('client_a'))
-           where content_id = pg_temp.rpc_test_id('content_a')), 3, 'active content retains publication, approval and content-deadline events');
+           where content_id = pg_temp.rpc_test_id('content_a')), 2, 'active content retains publication and content-deadline events (client approval deadlines are retired)');
 select lives_ok($$select public.get_command_center()$$, 'owner Command Center remains available');
 select lives_ok($$select public.get_my_context()$$, 'session context remains available without auth changes');
 reset role;

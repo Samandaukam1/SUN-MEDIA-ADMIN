@@ -80,7 +80,7 @@ reset role;
 
 -- Transitions
 select pg_temp.st_login('pm');
-select is(array_length(public.get_content_transitions(pg_temp.st('content')), 1), 12, 'managers may move to any other status');
+select is(array_length(public.get_content_transitions(pg_temp.st('content')), 1), 11, 'managers may move to any other status except the retired client review');
 reset role;
 update public.content_items set status = 'shooting' where id = pg_temp.st('content');
 select pg_temp.st_login('operator');

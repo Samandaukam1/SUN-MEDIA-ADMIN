@@ -417,3 +417,43 @@ enabled = true
 # Called by the database (pg_net) with x-dispatch-secret, not with a user JWT.
 [functions.push-dispatch]
 verify_jwt = false
+
+# Meta calls these directly (webhook signature / OAuth redirect); user calls are checked inside with the session.
+[functions.meta-webhook]
+verify_jwt = false
+
+[functions.meta-connect]
+verify_jwt = false
+
+# pg_cron (x-sync-secret) or an admin's own session for one client.
+[functions.meta-sync]
+verify_jwt = false
+
+# ---------------------------------------------------------------------------
+# Cloud project "Sun Media". `supabase config push` applies the base config above
+# plus these overrides, so the hosted project never inherits local-dev settings.
+# Provider secrets (Google client secret, SMTP) stay in the Dashboard, never here.
+# ---------------------------------------------------------------------------
+[remotes.production]
+project_id = "vpxqviyacraeymgegvll"
+
+[remotes.production.auth]
+site_url = "https://samandaukam1.github.io/SUN-MEDIA-USER/"
+# Web preview (GitHub Pages) and the native app scheme. Add the admin panel / custom domain here when deployed.
+additional_redirect_urls = ["https://samandaukam1.github.io/SUN-MEDIA-USER/**", "sunmedia://**"]
+
+[remotes.production.auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"
+otp_length = 8
+
+[remotes.production.auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[remotes.production.storage]
+file_size_limit = "50MiB"
+
+[remotes.production.storage.analytics]
+enabled = true
+max_namespaces = 10

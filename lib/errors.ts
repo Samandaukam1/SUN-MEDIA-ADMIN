@@ -20,6 +20,9 @@ const SQLSTATE: Record<string, string> = {
 // Known messages raised by our RPCs / Supabase Auth, translated. Anything else stays generic so raw
 // database text (constraint names, values, SQL) never reaches the screen.
 const KNOWN: Record<string, string> = {
+  COIN_INVALID_CONFIG: 'SUN Coin kampaniyasi sozlamalarini tekshiring.',
+  COIN_CAMPAIGN_ALREADY_ACTIVE: 'Bu o‘yin uchun faol kampaniya bor. Avval uni pauzaga qo‘ying yoki tugating.',
+  COIN_INVALID_TRANSITION: 'Kampaniyani bu holatga o‘tkazib bo‘lmaydi. Sahifani yangilang.',
   'Cannot assign a role above your own': 'O‘zingizdan yuqori rolni bera olmaysiz.',
   'Cannot grant a permission you do not have': 'O‘zingizda yo‘q ruxsatni bera olmaysiz.',
   'Account is already provisioned': 'Bu akkaunt allaqachon sozlangan.',

@@ -15,6 +15,7 @@
     "db:test": "supabase test db",
     "db:lint": "supabase db lint --level warning",
     "db:types": "supabase gen types typescript --local --schema public > types/database.ts && cp types/database.ts '../SUNMEDIA USER/types/database.ts'",
+    "test": "node --test 'tests/*.test.mjs'",
     "test:unit": "node --test 'supabase/functions/**/*.test.ts'"
   },
   "dependencies": {

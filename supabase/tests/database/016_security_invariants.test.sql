@@ -44,7 +44,7 @@ select is(
 select is(
   (select coalesce(array_agg(p.proname::text order by 1), '{}') from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where p.prosecdef and n.nspname = 'public' and has_function_privilege('authenticated', p.oid, 'EXECUTE')
-     and p.prosrc !~* '(auth\.uid\(\)|has_permission|can_manage|is_staff|is_active_user|has_client_permission|my_chat_room_ids|can_manage_task|can_view_subscription_of|accessible_client_ids|can_crm|can_see_results|can_see_client_leads)'),
+     and p.prosrc !~* '(auth\.uid\(\)|has_permission|can_manage|is_staff|is_active_user|has_client_permission|my_chat_room_ids|can_manage_task|can_view_subscription_of|accessible_client_ids|can_crm|can_see_results|can_see_client_leads|require_coin_manager|require_game_client)'),
   '{}'::text[], 'every SECURITY DEFINER function available to users checks the caller');
 
 select ok(not has_function_privilege('authenticated', 'public.claim_push_deliveries(integer)', 'EXECUTE')

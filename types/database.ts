@@ -2267,7 +2267,10 @@ export type Database = {
           box_index: number | null
           campaign_id: string | null
           client_id: string
+          coin_campaign_id: string | null
+          coin_reward_eligible: boolean
           eligible: boolean
+          entry_mode: string
           expires_at: string
           finish_response: Json | null
           finished_at: string | null
@@ -2276,6 +2279,7 @@ export type Database = {
           guaranteed: boolean
           id: string
           invalid_taps: number
+          pro_reward_eligible: boolean | null
           reward_eligible: boolean
           reward_reason: string | null
           score: number
@@ -2293,7 +2297,10 @@ export type Database = {
           box_index?: number | null
           campaign_id?: string | null
           client_id: string
+          coin_campaign_id?: string | null
+          coin_reward_eligible?: boolean
           eligible: boolean
+          entry_mode?: string
           expires_at?: string
           finish_response?: Json | null
           finished_at?: string | null
@@ -2302,6 +2309,7 @@ export type Database = {
           guaranteed?: boolean
           id?: string
           invalid_taps?: number
+          pro_reward_eligible?: boolean | null
           reward_eligible?: boolean
           reward_reason?: string | null
           score?: number
@@ -2319,7 +2327,10 @@ export type Database = {
           box_index?: number | null
           campaign_id?: string | null
           client_id?: string
+          coin_campaign_id?: string | null
+          coin_reward_eligible?: boolean
           eligible?: boolean
+          entry_mode?: string
           expires_at?: string
           finish_response?: Json | null
           finished_at?: string | null
@@ -2328,6 +2339,7 @@ export type Database = {
           guaranteed?: boolean
           id?: string
           invalid_taps?: number
+          pro_reward_eligible?: boolean | null
           reward_eligible?: boolean
           reward_reason?: string | null
           score?: number
@@ -2352,6 +2364,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_sessions_coin_campaign_id_fkey"
+            columns: ["coin_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "sun_coin_campaigns"
             referencedColumns: ["id"]
           },
           {
@@ -4729,6 +4748,170 @@ export type Database = {
           },
         ]
       }
+      sun_coin_campaigns: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          distributed: number
+          ends_at: string | null
+          game_key: string
+          id: string
+          minimum_score: number
+          starts_at: string
+          status: string
+          strategy: string
+          title: string
+          total_pool: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          distributed?: number
+          ends_at?: string | null
+          game_key: string
+          id?: string
+          minimum_score?: number
+          starts_at?: string
+          status?: string
+          strategy?: string
+          title: string
+          total_pool: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          distributed?: number
+          ends_at?: string | null
+          game_key?: string
+          id?: string
+          minimum_score?: number
+          starts_at?: string
+          status?: string
+          strategy?: string
+          title?: string
+          total_pool?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sun_coin_campaigns_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sun_coin_ledger: {
+        Row: {
+          amount: number
+          campaign_id: string | null
+          created_at: string
+          game_session_id: string | null
+          id: string
+          metadata: Json
+          reference_id: string
+          reward_id: string | null
+          source: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          campaign_id?: string | null
+          created_at?: string
+          game_session_id?: string | null
+          id?: string
+          metadata?: Json
+          reference_id: string
+          reward_id?: string | null
+          source: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          campaign_id?: string | null
+          created_at?: string
+          game_session_id?: string | null
+          id?: string
+          metadata?: Json
+          reference_id?: string
+          reward_id?: string | null
+          source?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sun_coin_ledger_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "sun_coin_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sun_coin_ledger_reward_id_fkey"
+            columns: ["reward_id"]
+            isOneToOne: false
+            referencedRelation: "sun_coin_reward_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sun_coin_ledger_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sun_coin_reward_options: {
+        Row: {
+          amount: number
+          awarded: number
+          campaign_id: string
+          id: string
+          max_score: number
+          min_score: number
+          quantity: number | null
+          sort_order: number
+          weight: number
+        }
+        Insert: {
+          amount: number
+          awarded?: number
+          campaign_id: string
+          id?: string
+          max_score?: number
+          min_score?: number
+          quantity?: number | null
+          sort_order: number
+          weight?: number
+        }
+        Update: {
+          amount?: number
+          awarded?: number
+          campaign_id?: string
+          id?: string
+          max_score?: number
+          min_score?: number
+          quantity?: number | null
+          sort_order?: number
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sun_coin_reward_options_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "sun_coin_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_assignments: {
         Row: {
           assigned_by: string | null
@@ -5404,6 +5587,7 @@ export type Database = {
         Args: { p_member_ids: string[]; p_name: string }
         Returns: string
       }
+      create_sun_coin_campaign: { Args: { p_config: Json }; Returns: Json }
       decline_access_request: {
         Args: { p_reason?: string; p_user_id: string }
         Returns: undefined
@@ -5444,6 +5628,10 @@ export type Database = {
       }
       game_center_start: {
         Args: { p_game_key: string; p_request: string }
+        Returns: Json
+      }
+      game_center_start_mode: {
+        Args: { p_game_key: string; p_mode: string; p_request: string }
         Returns: Json
       }
       game_finish: { Args: { p_session: string }; Returns: Json }
@@ -5708,6 +5896,8 @@ export type Database = {
       get_my_entitlements: { Args: { p_client?: string }; Returns: Json }
       get_my_games: { Args: never; Returns: Json }
       get_report: { Args: { p_report_id: string }; Returns: Json }
+      get_sun_coin_admin_dashboard: { Args: never; Returns: Json }
+      get_sun_coin_wallet: { Args: { p_limit?: number }; Returns: Json }
       get_team_directory: {
         Args: never
         Returns: {
@@ -6122,6 +6312,10 @@ export type Database = {
       set_staff_permissions: {
         Args: { p_permissions: string[]; p_user_id: string }
         Returns: undefined
+      }
+      set_sun_coin_campaign_status: {
+        Args: { p_campaign: string; p_status: string }
+        Returns: Json
       }
       submit_content_version: {
         Args: {

@@ -97,8 +97,9 @@ select is(public.ingest_meta_lead('4001', '502') ->> 'status', 'created', 'clien
 select is((select count(*)::int from public.leads where meta_lead_id = '3001'), 1, 'exactly one row per Meta lead');
 select is((select client_id from public.leads where meta_lead_id = '3001'), pg_temp.c('client_a'), 'the lead belongs to client A');
 
-select lives_ok($$select public.complete_meta_lead((select id from public.leads where meta_lead_id = '3001'), '{
-  "created_time": "2026-09-29T09:15:00+0000",
+-- Meta's own time format, one hour ago: the lead stays "new" (last 24 hours) whenever the suite runs.
+select lives_ok($$select public.complete_meta_lead((select id from public.leads where meta_lead_id = '3001'), jsonb_build_object('created_time',
+  to_char((now() - interval '1 hour') at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"+0000"')) || '{
   "campaign_name": "Kuzgi aksiya", "ad_name": "Reel 1", "adset_name": "Toshkent", "platform": "ig",
   "field_data": [
     {"name": "full_name", "values": ["Ali Valiyev"]},
@@ -108,7 +109,7 @@ select lives_ok($$select public.complete_meta_lead((select id from public.leads 
 select is((select full_name || '|' || phone || '|' || campaign_name from public.leads where meta_lead_id = '3001'),
   'Ali Valiyev|+998901234567|Kuzgi aksiya', 'name, phone and campaign are taken from the answers');
 select is((select fields ->> 'qaysi_filial' from public.leads where meta_lead_id = '3001'), 'Chilonzor', 'custom answers are kept');
-select is((select meta_created_at from public.leads where meta_lead_id = '3001'), '2026-09-29 09:15:00+00'::timestamptz, 'Meta time format is parsed');
+select is((select meta_created_at from public.leads where meta_lead_id = '3001'), date_trunc('second', now() - interval '1 hour'), 'Meta time format is parsed');
 select lives_ok($$select public.complete_meta_lead((select id from public.leads where meta_lead_id = '4001'),
   '{"field_data": [{"name": "first_name", "values": ["Olim"]}, {"name": "last_name", "values": ["Karimov"]}, {"name": "phone", "values": ["+998911112233"]}]}')$$,
   'client B lead completes');

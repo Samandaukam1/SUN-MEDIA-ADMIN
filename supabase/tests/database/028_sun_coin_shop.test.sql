@@ -78,9 +78,9 @@ select throws_ok($$insert into public.sun_coin_ledger(user_id,amount,type,source
  'P0403','COIN_INSUFFICIENT_BALANCE','an adjustment cannot push the wallet below zero');
 
 -- Free Reward Mode countdown is server time: last free start + 24 hours
-update public.sun_coin_campaigns set status='ended' where status='active';
-insert into public.sun_coin_campaigns(game_key,title,status,total_pool) values('safi-penalty','Shop test','active',10);
-insert into public.sun_coin_reward_options(campaign_id,amount,sort_order) select id,1,0 from public.sun_coin_campaigns where title='Shop test' and status='active';
+update public.game_reward_campaigns set status='ended' where status='active';
+insert into public.game_reward_campaigns(game_key,title,status) values('safi-penalty','Shop test','active');
+insert into public.game_reward_rules(campaign_id,score,reward_type,amount) select id,5,'SUN_COIN',1 from public.game_reward_campaigns where title='Shop test' and status='active';
 select pg_temp.login('player');
 select pg_temp.keep('free',public.game_center_start_mode('safi-penalty',gen_random_uuid(),'free'));
 select is((public.get_sun_coin_wallet()->'attempt'->>'freeAvailable')::boolean,false,'free attempt used');

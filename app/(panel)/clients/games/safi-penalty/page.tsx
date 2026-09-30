@@ -11,12 +11,19 @@ export const metadata: Metadata = { title: 'SAFI Penalty · Rewards' };
 export default async function SafiRewardsPage() {
   await requirePermission('promo.manage');
   return <div>
-    <PageHeader title="SAFI Penalty" description="10 ta zarba. Mukofotlar mahorat orqali olingan natijaga qarab beriladi." crumbs={[{ label: 'Game Center', href: '/clients/games' }, { label: 'SAFI Penalty' }]} />
+    <PageHeader title="SAFI Penalty" description="10 ta zarba. Natijani server hal qiladi; mukofotni SUN MEDIA qoidalari belgilaydi." crumbs={[{ label: 'Game Center', href: '/clients/games' }, { label: 'SAFI Penalty' }]} />
     <SectionTitle>Rewards</SectionTitle>
-    <Card className="max-w-2xl space-y-4">
-      <h2 className="flex items-center gap-3 text-xl font-semibold"><SunCoinIcon size={40} />SUN Coin Campaign</h2>
-      <p className="text-muted">Reward pool, mukofot variantlari, g‘oliblar soni va score shartlarini boshqaring. PRO mukofotlari mustaqil ishlaydi.</p>
-      <ButtonLink href="/clients/games/safi-penalty/rewards/sun-coin" variant="primary">SUN Coin kampaniyalari</ButtonLink>
-    </Card>
+    <div className="grid max-w-4xl gap-6 lg:grid-cols-2">
+      <Card className="space-y-4">
+        <h2 className="text-xl font-semibold">Reward Rules</h2>
+        <p className="text-muted">Qiyinlik darajasi va maqsadli balans, gol soni bo‘yicha mukofotlar (SUN Coin yoki Pro kunlari), ON/OFF, soni, kampaniya sanalari va zaxira. O‘yinchiga ko‘rinmaydi.</p>
+        <ButtonLink href="/clients/games/safi-penalty/rewards/rules" variant="primary">Reward Rules</ButtonLink>
+      </Card>
+      <Card className="space-y-4">
+        <h2 className="flex items-center gap-3 text-xl font-semibold"><SunCoinIcon size={40} />SUN Coin</h2>
+        <p className="text-muted">Wallet analitikasi, sovg‘a qilish, Coin Shop paketlari va xarid so‘rovlari, eski SUN Coin kampaniyalari arxivi.</p>
+        <ButtonLink href="/clients/games/safi-penalty/rewards/sun-coin">SUN Coin va Coin Shop</ButtonLink>
+      </Card>
+    </div>
   </div>;
 }

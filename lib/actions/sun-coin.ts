@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { requirePermission } from '@/lib/auth';
 import { toUserMessage } from '@/lib/errors';
-import { coinCampaignSchema, coinGiftSchema, coinPackFormSchema, type GameLevel } from '@/lib/schemas/sun-coin';
+import { coinGiftSchema, coinPackFormSchema } from '@/lib/schemas/sun-coin';
 import { createClient } from '@/lib/supabase/server';
 import { fieldErrorsFrom, type ActionState } from './state';
 
@@ -16,25 +16,6 @@ function refreshCampaigns() {
   revalidatePath('/clients/games/safi-penalty');
 }
 
-export async function createSunCoinCampaign(_: ActionState, formData: FormData): Promise<ActionState> {
-  await requirePermission('promo.manage');
-  let config: unknown;
-  try {
-    const raw = formData.get('config');
-    if (typeof raw !== 'string' || raw.length > 30_000) throw new Error('INVALID_CONFIG');
-    config = JSON.parse(raw);
-  } catch {
-    return { status: 'error', message: 'Kampaniya sozlamalarini tekshiring.' };
-  }
-  const parsed = coinCampaignSchema.safeParse(config);
-  if (!parsed.success) return { status: 'error', message: parsed.error.issues[0]?.message ?? 'Formani tekshiring.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
-  const supabase = await createClient();
-  const { error } = await supabase.rpc('create_sun_coin_campaign', { p_config: parsed.data });
-  if (error) return { status: 'error', message: toUserMessage(error) };
-  refreshCampaigns();
-  return { status: 'success', message: parsed.data.status === 'active' ? 'SUN Coin kampaniyasi ishga tushirildi.' : 'Kampaniya qoralamasi saqlandi. SUN Coin reward OFF.' };
-}
-
 export async function setSunCoinCampaignStatus(id: string, status: 'active' | 'paused' | 'ended'): Promise<ActionState> {
   await requirePermission('promo.manage');
   const parsed = z.object({ id: z.uuid(), status: z.enum(['active', 'paused', 'ended']) }).safeParse({ id, status });
@@ -43,7 +24,7 @@ export async function setSunCoinCampaignStatus(id: string, status: 'active' | 'p
   const { error } = await supabase.rpc('set_sun_coin_campaign_status', { p_campaign: parsed.data.id, p_status: parsed.data.status });
   if (error) return { status: 'error', message: toUserMessage(error) };
   refreshCampaigns();
-  return { status: 'success', message: status === 'active' ? 'SUN Coin reward ON.' : status === 'paused' ? 'Kampaniya pauzada. SUN Coin reward OFF.' : 'Kampaniya tugatildi. Tarixi saqlandi.' };
+  return { status: 'success', message: status === 'ended' ? 'Kampaniya tugatildi. Tarixi saqlandi.' : 'Holat yangilandi.' };
 }
 
 export async function createSunCoinPack(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -117,14 +98,4 @@ export async function giftSunCoin(_: ActionState, formData: FormData): Promise<A
   refreshCampaigns();
   const balance = (data as { balance?: number } | null)?.balance;
   return { status: 'success', message: `${recipient.name}: +${parsed.data.amount} SC${balance == null ? '' : ` (balans ${balance} SC)`}.` };
-}
-
-export async function setSafiLevel(level: GameLevel): Promise<ActionState> {
-  await requirePermission('promo.manage');
-  if (!['easy', 'normal', 'hard', 'extreme'].includes(level)) return { status: 'error', message: 'Bunday daraja yo‘q.' };
-  const supabase = await createClient();
-  const { error } = await supabase.rpc('set_game_center_difficulty', { p_game_key: 'safi-penalty', p_difficulty: level });
-  if (error) return { status: 'error', message: toUserMessage(error) };
-  refreshCampaigns();
-  return { status: 'success', message: 'Daraja yangilandi. Yangi raundlarga qo‘llanadi.' };
 }

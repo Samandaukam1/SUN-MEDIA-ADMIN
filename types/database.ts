@@ -2210,6 +2210,168 @@ export type Database = {
           },
         ]
       }
+      game_reward_campaigns: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          ends_at: string | null
+          game_key: string
+          id: string
+          starts_at: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          game_key: string
+          id?: string
+          starts_at?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          game_key?: string
+          id?: string
+          starts_at?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_reward_campaigns_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_reward_grants: {
+        Row: {
+          amount: number
+          campaign_id: string
+          created_at: string
+          ends_at: string | null
+          id: string
+          reward_type: string
+          rule_id: string
+          score: number
+          session_id: string
+          subscription_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          campaign_id: string
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          reward_type: string
+          rule_id: string
+          score: number
+          session_id: string
+          subscription_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          campaign_id?: string
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          reward_type?: string
+          rule_id?: string
+          score?: number
+          session_id?: string
+          subscription_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_reward_grants_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "game_reward_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_reward_grants_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "game_reward_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_reward_grants_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_reward_grants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_reward_rules: {
+        Row: {
+          amount: number
+          awarded: number
+          campaign_id: string
+          created_at: string
+          enabled: boolean
+          id: string
+          quantity: number | null
+          reward_type: string
+          score: number
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          awarded?: number
+          campaign_id: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          quantity?: number | null
+          reward_type: string
+          score: number
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          awarded?: number
+          campaign_id?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          quantity?: number | null
+          reward_type?: string
+          score?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_reward_rules_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "game_reward_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_rewards: {
         Row: {
           campaign_id: string
@@ -2310,6 +2472,7 @@ export type Database = {
           invalid_taps: number
           pro_reward_eligible: boolean | null
           reach_snapshot: number | null
+          reward_campaign_id: string | null
           reward_eligible: boolean
           reward_reason: string | null
           score: number
@@ -2341,6 +2504,7 @@ export type Database = {
           invalid_taps?: number
           pro_reward_eligible?: boolean | null
           reach_snapshot?: number | null
+          reward_campaign_id?: string | null
           reward_eligible?: boolean
           reward_reason?: string | null
           score?: number
@@ -2372,6 +2536,7 @@ export type Database = {
           invalid_taps?: number
           pro_reward_eligible?: boolean | null
           reach_snapshot?: number | null
+          reward_campaign_id?: string | null
           reward_eligible?: boolean
           reward_reason?: string | null
           score?: number
@@ -2403,6 +2568,13 @@ export type Database = {
             columns: ["coin_campaign_id"]
             isOneToOne: false
             referencedRelation: "sun_coin_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_sessions_reward_campaign_id_fkey"
+            columns: ["reward_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "game_reward_campaigns"
             referencedColumns: ["id"]
           },
           {
@@ -4846,6 +5018,7 @@ export type Database = {
           metadata: Json
           reference_id: string
           reward_id: string | null
+          reward_rule_id: string | null
           source: string
           type: string
           user_id: string
@@ -4859,6 +5032,7 @@ export type Database = {
           metadata?: Json
           reference_id: string
           reward_id?: string | null
+          reward_rule_id?: string | null
           source: string
           type: string
           user_id: string
@@ -4872,6 +5046,7 @@ export type Database = {
           metadata?: Json
           reference_id?: string
           reward_id?: string | null
+          reward_rule_id?: string | null
           source?: string
           type?: string
           user_id?: string
@@ -4889,6 +5064,13 @@ export type Database = {
             columns: ["reward_id"]
             isOneToOne: false
             referencedRelation: "sun_coin_reward_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sun_coin_ledger_reward_rule_id_fkey"
+            columns: ["reward_rule_id"]
+            isOneToOne: false
+            referencedRelation: "game_reward_rules"
             referencedColumns: ["id"]
           },
           {
@@ -5734,6 +5916,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_game_reward_campaign: { Args: { p_config: Json }; Returns: Json }
       create_group_chat: {
         Args: { p_member_ids: string[]; p_name: string }
         Returns: string
@@ -6478,6 +6661,10 @@ export type Database = {
         Args: { p_difficulty: string; p_game_key: string }
         Returns: Json
       }
+      set_game_reward_campaign_status: {
+        Args: { p_campaign: string; p_status: string }
+        Returns: Json
+      }
       set_home_logo: {
         Args: { p_client: string; p_url: string; p_variant?: string }
         Returns: undefined
@@ -6558,6 +6745,10 @@ export type Database = {
           p_user_id: string
         }
         Returns: undefined
+      }
+      update_game_reward_campaign: {
+        Args: { p_campaign: string; p_config: Json }
+        Returns: Json
       }
     }
     Enums: {

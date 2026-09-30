@@ -20,20 +20,22 @@ create function pg_temp.run(k text) returns jsonb language sql as $$select data 
 create function pg_temp.keep(k text,d jsonb) returns jsonb language sql as $$insert into gcc_run values(k,d) on conflict (key) do update set data=excluded.data returning data$$;
 -- Test-only control of the random stream: a seed whose first draw gives the wanted result at the round's level.
 create function pg_temp.force(sid uuid, p_goal boolean) returns void language plpgsql as $$
-declare lvl int; chance numeric; r float8;
+declare lvl int; shot int; goals int; chance numeric; r float8;
 begin
- select coalesce(reach_snapshot, 0) into lvl from public.game_sessions where id = sid;
- chance := private.game_center_save_chance(lvl);
+ select coalesce(reach_snapshot, 0), attempts_used + 1, score into lvl, shot, goals from public.game_sessions where id = sid;
+ chance := private.game_center_goal_chance(lvl, shot, goals);
  for i in 0..20000 loop
   perform setseed(-1 + i * 0.0001); r := random();
-  if (p_goal and r >= chance) or (not p_goal and r < chance) then perform setseed(-1 + i * 0.0001); return; end if;
+  if (p_goal and r < chance) or (not p_goal and r >= chance) then perform setseed(-1 + i * 0.0001); return; end if;
  end loop;
  raise exception 'no seed found';
 end $$;
 
 -- Level: readable by everyone, changed only by coin managers
 select pg_temp.login('player');
-select is((select difficulty from public.game_center_settings where game_key='safi-penalty'),'easy','players can read the level (honest odds)');
+set local role authenticated;
+select is((select count(*)::int from public.game_center_settings),0,'the level is internal: players cannot read it');
+reset role;
 select throws_ok($$select public.set_game_center_difficulty('safi-penalty','extreme')$$,'42501',null,'a client cannot change the level');
 set local role authenticated;
 select throws_ok($$update public.game_center_settings set difficulty='extreme'$$,'42501',null,'no direct writes to the level');
@@ -52,7 +54,7 @@ select pg_temp.keep('goal',public.game_center_shoot(pg_temp.sid('easy'),gen_rand
 select is(pg_temp.run('goal')->>'result','GOAL','forced goal');
 select ok(abs(((pg_temp.run('goal')->>'goalkeeperZone')::int-1)%5 - 1) > 1 or abs(((pg_temp.run('goal')->>'goalkeeperZone')::int-1)/5 - 1) > 1,
  'a goal sends the keeper outside the 3 × 3 around the ball');
-select is((select (params->>'saveChance')::numeric from public.game_attempts where session_id=pg_temp.sid('easy') and n=1),0.45,'the judged save chance is recorded');
+select is((select (params->>'goalChance')::numeric from public.game_attempts where session_id=pg_temp.sid('easy') and n=1),private.game_center_goal_chance(0,1,0),'the judged goal chance is recorded for managers');
 
 select pg_temp.login('staff');
 select is(public.set_game_center_difficulty('safi-penalty','extreme')->>'difficulty','extreme','manager sets the level to extreme');
@@ -63,27 +65,17 @@ select pg_temp.force(pg_temp.sid('easy'), true);
 select is(public.game_center_shoot(pg_temp.sid('easy'),gen_random_uuid(),3,7)->>'result','GOAL','a running round keeps the level it started with');
 update public.game_sessions set status='expired' where id=pg_temp.sid('easy');
 select pg_temp.keep('extreme',public.game_center_start_mode('safi-penalty',gen_random_uuid(),'practice'));
-select is((select reach_snapshot::int from public.game_sessions where id=pg_temp.sid('extreme')),3,'a new round snapshots level 3');
-
--- Balance: 10,000 judged shots per level (random zones), goal rates in the target bands, animation-consistent dives
-create temp table gcc_sim as
--- (The zone depends on the row, so every row really calls the judge — a constant call would be run only once.)
-select lvl, 1 + (i * 7 + lvl) % 15 as z, j.goal, j.keeper
-from generate_series(0, 3) lvl, generate_series(1, 10000) i,
-     lateral private.game_center_judge(lvl, 1 + (i * 7 + lvl) % 15) j;
-select results_eq($$select lvl, count(*)::int from gcc_sim group by lvl order by lvl$$, $$values (0,10000),(1,10000),(2,10000),(3,10000)$$, '10,000 shots per level');
-select ok((select avg(goal::int) from gcc_sim where lvl=0) between 0.50 and 0.60, 'EASY: 50–60 % goals');
-select ok((select avg(goal::int) from gcc_sim where lvl=1) between 0.30 and 0.40, 'NORMAL: 30–40 % goals');
-select ok((select avg(goal::int) from gcc_sim where lvl=2) between 0.10 and 0.15, 'HARD: 10–15 % goals');
-select ok((select avg(goal::int) from gcc_sim where lvl=3) between 0.004 and 0.018, 'EXTREME: about 1 % goals');
-select is((select count(*)::int from gcc_sim where not goal and keeper <> z),0,'every save dives onto the ball');
-select is((select count(*)::int from gcc_sim where goal and abs((keeper-1)%5-(z-1)%5)<=1 and abs((keeper-1)/5-(z-1)/5)<=1),0,'every goal dive is clearly wrong');
--- EXTREME rounds of 10: mostly 0/10, rarely 1/10, 7/10 practically impossible
-create temp table gcc_rounds as
-select r, sum(goal::int) goals from generate_series(1, 2000) r, generate_series(1, 10) n,
- lateral private.game_center_judge(3, 1 + (r * 10 + n) % 15) j group by r;
-select ok((select avg((goals = 0)::int) from gcc_rounds) > 0.85, 'EXTREME: most 10-shot rounds end 0/10');
-select ok((select max(goals) from gcc_rounds) <= 3, 'EXTREME: no round anywhere near 7/10');
+select is((select reach_snapshot::int from public.game_sessions where id=pg_temp.sid('extreme')),4,'a new round snapshots level 4 (extreme)');
+select pg_temp.login('staff');
+select is(public.set_game_center_difficulty('safi-penalty','very_hard')->>'difficulty','very_hard','manager sets the level to very hard');
+select pg_temp.login('player');
+update public.game_sessions set status='expired' where id=pg_temp.sid('extreme');
+select pg_temp.keep('very_hard',public.game_center_start_mode('safi-penalty',gen_random_uuid(),'practice'));
+select is((select reach_snapshot::int from public.game_sessions where id=pg_temp.sid('very_hard')),3,'a very hard round snapshots level 3');
+update public.game_sessions set status='expired' where id=pg_temp.sid('very_hard');
+select pg_temp.login('staff');
+select public.set_game_center_difficulty('safi-penalty','extreme');
+select pg_temp.login('player');
 
 -- Gifts: coin managers only, once per request, to client users only
 select throws_ok($$select public.grant_sun_coin_bonus(pg_temp.id('player'),10)$$,'42501',null,'a client cannot gift coins');

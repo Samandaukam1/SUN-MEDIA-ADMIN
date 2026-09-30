@@ -16,6 +16,7 @@ insert into public.client_members(client_id,user_id,role_id) select pg_temp.id('
 insert into public.client_members(client_id,user_id,role_id) select pg_temp.id('other_client'),pg_temp.id('other'),id from public.roles where key='client_owner';
 -- Independent of whatever SUN Coin campaign the database already runs (rolled back at the end).
 update public.sun_coin_campaigns set status='ended' where status='active';
+update public.game_reward_campaigns set status='ended' where status='active';
 update public.game_center_settings set difficulty='easy';
 select pg_temp.login('staff');
 select throws_ok($$select public.game_center_start('safi-penalty',gen_random_uuid())$$,'42501',null,'employees cannot start');
@@ -42,13 +43,13 @@ select throws_ok($$select public.game_center_shoot(pg_temp.sid(),gen_random_uuid
 -- Deterministic DB random stream is test-only; production has no override RPC.
 -- Test-only control of the random stream: a seed whose first draw gives the wanted result at the round's level.
 create function pg_temp.force(sid uuid, p_goal boolean) returns void language plpgsql as $$
-declare lvl int; chance numeric; r float8;
+declare lvl int; shot int; goals int; chance numeric; r float8;
 begin
- select coalesce(reach_snapshot, 0) into lvl from public.game_sessions where id = sid;
- chance := private.game_center_save_chance(lvl);
+ select coalesce(reach_snapshot, 0), attempts_used + 1, score into lvl, shot, goals from public.game_sessions where id = sid;
+ chance := private.game_center_goal_chance(lvl, shot, goals);
  for i in 0..20000 loop
   perform setseed(-1 + i * 0.0001); r := random();
-  if (p_goal and r >= chance) or (not p_goal and r < chance) then perform setseed(-1 + i * 0.0001); return; end if;
+  if (p_goal and r < chance) or (not p_goal and r >= chance) then perform setseed(-1 + i * 0.0001); return; end if;
  end loop;
  raise exception 'no seed found';
 end $$;
@@ -84,35 +85,37 @@ select is((select count(*)::int from public.game_sessions where id=pg_temp.sid()
 select is((select count(*)::int from public.game_attempts where session_id=pg_temp.sid()),0,'attempt table stays private');
 select throws_ok($$update public.game_sessions set score=99 where id=pg_temp.sid()$$,'42501',null,'client cannot forge score');
 reset role;
--- Restore agency fixture, then campaign rewards use the existing subscription extension.
+-- Restore agency fixture, then a Pro reward rule uses the existing subscription extension.
 update public.workspace_subscriptions set status='active' where source='internal';
-insert into public.game_campaigns(id,client_id,template,title,attempts,target_score,reward_days,win_mode,cooldown_minutes,max_wins_per_user)
-values(pg_temp.id('campaign'),pg_temp.id('client'),'penalty','SAFI Test',10,7,3,'skill',60,1);
 select private.extend_workspace_plan(private.client_workspace_id(pg_temp.id('client')),'pro',7,'manual','Test fixture');
 create temp table gc_expiry as select ends_at from public.workspace_subscriptions where workspace_id=private.client_workspace_id(pg_temp.id('client')) and status='active' order by ends_at desc limit 1;
 select is(public.get_my_entitlements()->'plan'->>'key','pro','fixture really is Pro');
+select pg_temp.login('staff');
+create temp table gc_rules as select public.create_game_reward_campaign('{"title":"SAFI Pro","status":"active","rules":[{"score":10,"type":"PRO_DAYS","amount":3,"quantity":1}]}') as data;
+select pg_temp.login('player');
 update gc_run set data=public.game_center_start_mode('safi-penalty',gen_random_uuid(),'free');
 select is((select data->>'rewardEligible' from gc_run),'true','existing Pro can play the daily free Reward Mode attempt');
 select lives_ok($$select pg_temp.goal(pg_temp.sid(),n) from generate_series(1,10)n$$,'full reward round');
-select is(public.game_center_finish(pg_temp.sid())->>'boxes','true','eligible result offers boxes');
-select throws_ok($$select public.game_center_claim(pg_temp.sid(),null)$$,'22023',null,'null box rejected');
-select is(public.game_center_claim(pg_temp.sid(),1)->>'won','true','server grants reward');
+create temp table gc_finish as select public.game_center_finish(pg_temp.sid()) as data;
+select is((select data->'reward' from gc_finish),'{"type":"PRO_DAYS","amount":3}'::jsonb || jsonb_build_object('endsAt',(select data->'reward'->'endsAt' from gc_finish)),'10/10 wins the configured 3 days of Pro');
+select is((select data->>'boxes' from gc_finish),'false','no prize boxes: the server has already decided');
+select throws_ok($$select public.game_center_claim(pg_temp.sid(),1)$$,'P0403',null,'nothing to claim afterwards');
 select is((select ends_at from public.workspace_subscriptions where workspace_id=private.client_workspace_id(pg_temp.id('client')) and status='active' order by ends_at desc limit 1),(select ends_at+interval '3 days' from gc_expiry),'reward extends existing Pro by exactly three days');
-select is(public.game_center_claim(pg_temp.sid(),2)->>'box','1','second claim returns original box');
-select is((select count(*)::int from public.game_rewards where session_id=pg_temp.sid()),1,'reward granted once');
-select throws_ok($$select public.game_center_start_mode('safi-penalty',gen_random_uuid(),'free')$$,'P0403','GAME_REWARD_UNAVAILABLE','after the maximum reward, Reward Mode closes without charging');
+select is(public.game_center_finish(pg_temp.sid()),(select data from gc_finish),'a repeated finish returns the same answer');
+select is((select count(*)::int from public.game_reward_grants where session_id=pg_temp.sid()),1,'reward granted once');
+select ok(exists(select 1 from public.notifications where user_id=pg_temp.id('player') and type='game.reward'),'the player is told about the Pro days');
+select throws_ok($$select public.game_center_start_mode('safi-penalty',gen_random_uuid(),'free')$$,'P0403','GAME_REWARD_UNAVAILABLE','its only reward is gone: Reward Mode closes without charging');
 update gc_run set data=public.game_center_start('safi-penalty',gen_random_uuid());
-select is((select data->>'mode' from gc_run),'practice','replay works after maximum rewards');
+select is((select data->>'mode' from gc_run),'practice','replay works after the rewards are gone');
 select lives_ok($$select pg_temp.goal(pg_temp.sid(),n) from generate_series(1,10)n$$,'practice replay after reward');
-select is(public.game_center_finish(pg_temp.sid())->>'boxes','false','practice never offers boxes');
-update public.game_campaigns set max_wins_per_user=10 where id=pg_temp.id('campaign');
+select is(public.game_center_finish(pg_temp.sid())->'reward','null'::jsonb,'practice never rewards');
+select pg_temp.login('staff');
+select public.update_game_reward_campaign((select (data->>'id')::uuid from gc_rules),'{"rules":[{"score":10,"type":"PRO_DAYS","amount":3,"quantity":5}]}');
+select pg_temp.login('player');
 select throws_ok($$select public.game_center_start_mode('safi-penalty',gen_random_uuid(),'free')$$,'P0403','GAME_FREE_COOLDOWN','one free Reward Mode attempt per 24 hours');
 select throws_ok($$select public.game_center_start_mode('safi-penalty',gen_random_uuid(),'paid')$$,'P0403','COIN_INSUFFICIENT_BALANCE','the next Reward Mode attempt costs 10 SC');
-update public.game_campaigns set max_rewards_total=1 where id=pg_temp.id('campaign');
-update public.game_sessions set started_at=started_at-interval '25 hours' where user_id=pg_temp.id('player') and entry_mode='free';
-select throws_ok($$select public.game_center_start_mode('safi-penalty',gen_random_uuid(),'free')$$,'P0403','GAME_REWARD_UNAVAILABLE','a sold-out Pro campaign closes Reward Mode');
 update gc_run set data=public.game_center_start_mode('safi-penalty',gen_random_uuid(),'practice');
-select is((select data->>'mode' from gc_run),'practice','practice stays open when nothing can be won');
+select is((select data->>'mode' from gc_run),'practice','practice stays open');
 select ok(not has_function_privilege('anon','public.game_center_shoot(uuid,uuid,integer,integer)','execute'),'anonymous RPC execution revoked');
 select * from finish();
 rollback;

@@ -3,18 +3,17 @@ import type { Metadata } from 'next';
 import { cellClass, rowClass, Table } from '@/components/panel/List';
 import { PageHeader } from '@/components/panel/PageHeader';
 import { EmptyRow, Stat } from '@/components/panel/Stat';
-import { SunCoinCampaignActions, SunCoinCampaignBuilder, SunCoinRefresh } from '@/components/pro/SunCoinCampaignForm';
-import { GameLevelPicker, SunCoinGiftForm, SunCoinPackForm, SunCoinPackToggle, SunCoinPurchaseActions } from '@/components/pro/SunCoinShopAdmin';
+import { SunCoinCampaignActions, SunCoinRefresh } from '@/components/pro/SunCoinCampaignForm';
+import { SunCoinGiftForm, SunCoinPackForm, SunCoinPackToggle, SunCoinPurchaseActions } from '@/components/pro/SunCoinShopAdmin';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { ButtonLink } from '@/components/ui/Button';
 import { Card, SectionTitle } from '@/components/ui/Card';
-import { SunCoinIcon } from '@/components/ui/SunCoinIcon';
 import { requirePermission } from '@/lib/auth';
 import { coinAdminDashboardSchema, type CoinCampaign } from '@/lib/schemas/sun-coin';
 import { createClient } from '@/lib/supabase/server';
 import { formatShortDateTime } from '@/lib/time';
 
-export const metadata: Metadata = { title: 'SUN Coin Campaign · SAFI Penalty' };
+export const metadata: Metadata = { title: 'SUN Coin · SAFI Penalty' };
 
 const coins = (amount: number) => `${amount.toLocaleString('en-US')} SC`;
 const price = (cents: number, currency: string) => (currency === 'USD' ? `$${(cents / 100).toFixed(2)}` : `${(cents / 100).toFixed(2)} ${currency}`);
@@ -25,20 +24,9 @@ const perCoin = (cents: number, count: number, currency: string) => {
 };
 const requestLabels = { pending: { label: 'Kutilmoqda', tone: 'warning' }, fulfilled: { label: 'To‘langan', tone: 'success' }, rejected: { label: 'Rad etilgan', tone: 'danger' }, cancelled: { label: 'Bekor qilingan', tone: 'neutral' } } as const;
 const campaignLabels: Record<CoinCampaign['status'], { label: string; tone: BadgeTone }> = {
-  draft: { label: 'OFF · Qoralama', tone: 'neutral' }, active: { label: 'ON · Faol', tone: 'success' },
-  paused: { label: 'OFF · Pauzada', tone: 'warning' }, ended: { label: 'OFF · Tugatilgan', tone: 'neutral' },
+  draft: { label: 'Qoralama', tone: 'neutral' }, active: { label: 'Eski tizim · ishlatilmaydi', tone: 'neutral' },
+  paused: { label: 'Pauzada', tone: 'neutral' }, ended: { label: 'Tugatilgan', tone: 'neutral' },
 };
-
-function availability(campaign: CoinCampaign) {
-  if (campaign.status !== 'active') return null;
-  const now = Date.now();
-  if (Date.parse(campaign.startsAt) > now) return 'Rejalashtirilgan — boshlanish vaqti kutilmoqda.';
-  if (campaign.endsAt && Date.parse(campaign.endsAt) <= now) return 'Muddati tugagan. Yangi kampaniya uchun bu kampaniyani tugating.';
-  if (!campaign.options.some((option) => option.amount <= campaign.remaining && (option.quantity === null || option.awarded < option.quantity))) {
-    return 'Mavjud pool yoki miqdor uchun mos mukofot qolmagan. Tarqatilmagan qoldiq tarixda saqlanadi.';
-  }
-  return 'Reward Mode uchun SUN Coin tarqatish yoqilgan.';
-}
 
 export default async function SunCoinCampaignPage() {
   await requirePermission('promo.manage');
@@ -47,15 +35,13 @@ export default async function SunCoinCampaignPage() {
   if (error) throw error;
   const dashboard = coinAdminDashboardSchema.parse(data);
   const campaigns = dashboard.campaigns.filter((campaign) => campaign.gameId === 'safi-penalty');
-  const { analytics, packs, purchaseRequests, settings } = dashboard;
-  const level = settings.find((s) => s.gameId === 'safi-penalty')?.difficulty ?? 'easy';
+  const { analytics, packs, purchaseRequests } = dashboard;
   const pendingCount = purchaseRequests.filter((r) => r.status === 'pending').length;
 
   return <div className="space-y-8">
-    <PageHeader title="SUN Coin Campaign" description="SAFI Penalty Reward Mode uchun SUN Coin mukofotlari va kampaniya tarixi." crumbs={[
-      { label: 'Game Center', href: '/clients/games' }, { label: 'SAFI Penalty', href: '/clients/games/safi-penalty' },
-      { label: 'Rewards', href: '/clients/games/safi-penalty' }, { label: 'SUN Coin Campaign' },
-    ]} actions={<><SunCoinRefresh /><ButtonLink href="#new-campaign" variant="primary">Yangi kampaniya</ButtonLink></>} />
+    <PageHeader title="SUN Coin" description="Wallet analitikasi, sovg‘alar va Coin Shop. O‘yin mukofotlari Reward Rules’da." crumbs={[
+      { label: 'Game Center', href: '/clients/games' }, { label: 'SAFI Penalty', href: '/clients/games/safi-penalty' }, { label: 'SUN Coin' },
+    ]} actions={<><SunCoinRefresh /><ButtonLink href="/clients/games/safi-penalty/rewards/rules" variant="primary">Reward Rules</ButtonLink></>} />
 
     <section aria-label="SUN Coin umumiy analitikasi">
       <SectionTitle>SUN Coin — umumiy wallet analitikasi</SectionTitle>
@@ -69,9 +55,8 @@ export default async function SunCoinCampaignPage() {
       <p className="mt-3 text-sm text-muted">Barcha o‘yinlar bo‘yicha yagona SUN Coin wallet. Jami mukofot olgan foydalanuvchilar: {analytics.totalWinners.toLocaleString('en-US')}.</p>
     </section>
 
-    <section aria-label="Sovg‘a va daraja" className="grid gap-6 xl:grid-cols-2">
-      <Card className="space-y-4"><SectionTitle>SUN Coin sovg‘a qilish</SectionTitle><SunCoinGiftForm /></Card>
-      <Card className="space-y-4"><SectionTitle>O‘yin darajasi · SAFI Penalty</SectionTitle><GameLevelPicker current={level} /></Card>
+    <section aria-label="Sovg‘a">
+      <Card className="max-w-2xl space-y-4"><SectionTitle>SUN Coin sovg‘a qilish</SectionTitle><SunCoinGiftForm /></Card>
     </section>
 
     <section aria-label="Coin Shop" className="space-y-4">
@@ -106,22 +91,17 @@ export default async function SunCoinCampaignPage() {
       </Card>
     </section>
 
-    <section id="new-campaign" className="scroll-mt-8">
-      <Card><SectionTitle action={<SunCoinIcon size={36} />}>Yangi SUN Coin kampaniyasi</SectionTitle><SunCoinCampaignBuilder /></Card>
-    </section>
-
-    <section aria-label="SUN Coin kampaniya tarixi">
-      <SectionTitle>Kampaniyalar va tarix</SectionTitle>
-      {campaigns.length === 0 ? <EmptyRow>Hali SUN Coin kampaniyasi yo‘q. Yuqoridagi forma orqali yarating.</EmptyRow> : <div className="space-y-5">
+    <section aria-label="Eski SUN Coin kampaniyalari">
+      <SectionTitle>Eski SUN Coin kampaniyalari — arxiv</SectionTitle>
+      <p className="mb-4 text-sm text-muted">SAFI mukofotlari endi Reward Rules orqali beriladi; bu kampaniyalar raundlarga ta’sir qilmaydi va tarix uchun saqlanadi.</p>
+      {campaigns.length === 0 ? <EmptyRow>Eski kampaniyalar yo‘q.</EmptyRow> : <div className="space-y-5">
         {campaigns.map((campaign) => {
           const state = campaignLabels[campaign.status];
-          const availabilityText = availability(campaign);
           return <Card key={campaign.id} className="space-y-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><h3 className="text-lg font-semibold">{campaign.title}</h3><p className="mt-1 text-sm text-muted">{formatShortDateTime(campaign.startsAt)} → {campaign.endsAt ? formatShortDateTime(campaign.endsAt) : 'Muddatsiz'} · Toshkent</p></div>
               <Badge dot tone={state.tone}>{state.label}</Badge>
             </div>
-            {availabilityText ? <p className="text-sm text-muted">{availabilityText}</p> : null}
             <dl className="grid grid-cols-2 gap-4 rounded-xl bg-surface-2 p-4 lg:grid-cols-4">
               {[['Campaign pool', coins(campaign.totalPool)], ['Distributed', coins(campaign.distributed)], ['Remaining', coins(campaign.remaining)], ['Total winners', String(campaign.totalWinners)]].map(([label, value]) => <div key={label}><dt className="text-sm text-muted">{label}</dt><dd className="mt-1 text-xl font-semibold tabular-nums">{value}</dd></div>)}
             </dl>
@@ -135,7 +115,7 @@ export default async function SunCoinCampaignPage() {
                 <td className={cellClass}>{campaign.strategy === 'WEIGHTED_RANDOM' ? option.weight : '—'}</td>
               </tr>)}
             </Table>
-            <SunCoinCampaignActions id={campaign.id} title={campaign.title} status={campaign.status} />
+            {campaign.status === 'active' || campaign.status === 'paused' ? <SunCoinCampaignActions id={campaign.id} title={campaign.title} status={campaign.status} endOnly /> : null}
             <p className="break-all text-xs text-subtle">Yaratilgan: {formatShortDateTime(campaign.createdAt)} · ID: {campaign.id}</p>
           </Card>;
         })}

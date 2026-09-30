@@ -4,6 +4,7 @@ import { cellClass, rowClass, Table } from '@/components/panel/List';
 import { PageHeader } from '@/components/panel/PageHeader';
 import { EmptyRow, Stat } from '@/components/panel/Stat';
 import { SunCoinCampaignActions, SunCoinCampaignBuilder, SunCoinRefresh } from '@/components/pro/SunCoinCampaignForm';
+import { SunCoinPackForm, SunCoinPackToggle, SunCoinPurchaseActions } from '@/components/pro/SunCoinShopAdmin';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { ButtonLink } from '@/components/ui/Button';
 import { Card, SectionTitle } from '@/components/ui/Card';
@@ -16,6 +17,13 @@ import { formatShortDateTime } from '@/lib/time';
 export const metadata: Metadata = { title: 'SUN Coin Campaign · SAFI Penalty' };
 
 const coins = (amount: number) => `${amount.toLocaleString('en-US')} SC`;
+const price = (cents: number, currency: string) => (currency === 'USD' ? `$${(cents / 100).toFixed(2)}` : `${(cents / 100).toFixed(2)} ${currency}`);
+/** Price of one SC with enough digits to compare packs honestly ($0.0480 vs $0.0499). */
+const perCoin = (cents: number, count: number, currency: string) => {
+  const value = (cents / count / 100).toFixed(4);
+  return currency === 'USD' ? `$${value}` : `${value} ${currency}`;
+};
+const requestLabels = { pending: { label: 'Kutilmoqda', tone: 'warning' }, fulfilled: { label: 'To‘langan', tone: 'success' }, rejected: { label: 'Rad etilgan', tone: 'danger' }, cancelled: { label: 'Bekor qilingan', tone: 'neutral' } } as const;
 const campaignLabels: Record<CoinCampaign['status'], { label: string; tone: BadgeTone }> = {
   draft: { label: 'OFF · Qoralama', tone: 'neutral' }, active: { label: 'ON · Faol', tone: 'success' },
   paused: { label: 'OFF · Pauzada', tone: 'warning' }, ended: { label: 'OFF · Tugatilgan', tone: 'neutral' },
@@ -39,7 +47,8 @@ export default async function SunCoinCampaignPage() {
   if (error) throw error;
   const dashboard = coinAdminDashboardSchema.parse(data);
   const campaigns = dashboard.campaigns.filter((campaign) => campaign.gameId === 'safi-penalty');
-  const { analytics } = dashboard;
+  const { analytics, packs, purchaseRequests } = dashboard;
+  const pendingCount = purchaseRequests.filter((r) => r.status === 'pending').length;
 
   return <div className="space-y-8">
     <PageHeader title="SUN Coin Campaign" description="SAFI Penalty Reward Mode uchun SUN Coin mukofotlari va kampaniya tarixi." crumbs={[
@@ -56,6 +65,38 @@ export default async function SunCoinCampaignPage() {
         <Stat label="Currently circulating" value={coins(analytics.circulating)} detail="Walletlardagi jami mavjud SUN Coin" />
       </div>
       <p className="mt-3 text-sm text-muted">Barcha o‘yinlar bo‘yicha yagona SUN Coin wallet. Jami mukofot olgan foydalanuvchilar: {analytics.totalWinners.toLocaleString('en-US')}.</p>
+    </section>
+
+    <section aria-label="Coin Shop" className="space-y-4">
+      <SectionTitle>Coin Shop — xarid so‘rovlari{pendingCount ? ` · ${pendingCount} ta kutilmoqda` : ''}</SectionTitle>
+      <p className="text-sm text-muted">Mijoz ilovada paketni tanlaydi. To‘lov SUN MEDIA bilan shartnoma bo‘yicha qabul qilinadi; “To‘lov qabul qilindi” bosilganda server SUN Coinni bir marta hisobga yozadi (PURCHASE). SUN Coin pulga qaytarilmaydi.</p>
+      {purchaseRequests.length === 0 ? <EmptyRow>Hali xarid so‘rovi yo‘q.</EmptyRow> : (
+        <Table columns={['Mijoz', 'Paket', 'Narx', 'Holat', 'Sana', '']}>
+          {purchaseRequests.map((r) => <tr key={r.id} className={rowClass}>
+            <td className={cellClass}><div className="font-medium">{r.userName ?? '—'}</div><div className="text-sm text-muted">{r.clientName ?? ''}</div></td>
+            <td className={`${cellClass} font-semibold tabular-nums`}>{coins(r.coins)}</td>
+            <td className={`${cellClass} tabular-nums`}>{price(r.priceCents, r.currency)}</td>
+            <td className={cellClass}><Badge dot tone={requestLabels[r.status].tone}>{requestLabels[r.status].label}</Badge>{r.note ? <div className="mt-1 text-xs text-muted">{r.note}</div> : null}</td>
+            <td className={`${cellClass} text-sm text-muted`}>{formatShortDateTime(r.createdAt)}</td>
+            <td className={cellClass}>{r.status === 'pending' ? <SunCoinPurchaseActions id={r.id} label={`${r.userName ?? 'Mijoz'}: ${coins(r.coins)} · ${price(r.priceCents, r.currency)}`} /> : null}</td>
+          </tr>)}
+        </Table>
+      )}
+      <Card className="space-y-5">
+        <SectionTitle>Coin Shop paketlari</SectionTitle>
+        {packs.length === 0 ? <EmptyRow>Paketlar yo‘q — mijozlar Coin Shop’da “Paketlar hali sozlanmagan” ko‘radi.</EmptyRow> : (
+          <Table columns={['Paket', 'Narx', 'Narx / SC', 'Holat', '']}>
+            {packs.map((p) => <tr key={p.id} className={rowClass}>
+              <td className={`${cellClass} font-semibold tabular-nums`}>{coins(p.coins)}</td>
+              <td className={`${cellClass} tabular-nums`}>{price(p.priceCents, p.currency)}</td>
+              <td className={`${cellClass} tabular-nums text-muted`}>{perCoin(p.priceCents, p.coins, p.currency)}</td>
+              <td className={cellClass}><Badge dot tone={p.isActive ? 'success' : 'neutral'}>{p.isActive ? 'Ko‘rinadi' : 'Yashirin'}</Badge></td>
+              <td className={cellClass}><SunCoinPackToggle id={p.id} isActive={p.isActive} /></td>
+            </tr>)}
+          </Table>
+        )}
+        <SunCoinPackForm />
+      </Card>
     </section>
 
     <section id="new-campaign" className="scroll-mt-8">

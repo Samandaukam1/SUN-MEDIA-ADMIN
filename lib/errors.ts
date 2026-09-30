@@ -23,6 +23,8 @@ const KNOWN: Record<string, string> = {
   COIN_INVALID_CONFIG: 'SUN Coin kampaniyasi sozlamalarini tekshiring.',
   COIN_CAMPAIGN_ALREADY_ACTIVE: 'Bu o‘yin uchun faol kampaniya bor. Avval uni pauzaga qo‘ying yoki tugating.',
   COIN_INVALID_TRANSITION: 'Kampaniyani bu holatga o‘tkazib bo‘lmaydi. Sahifani yangilang.',
+  COIN_INVALID_PACK: 'Paket ma’lumotlarini tekshiring.',
+  COIN_PURCHASE_CLOSED: 'Bu so‘rov allaqachon yopilgan. Sahifani yangilang.',
   'Cannot assign a role above your own': 'O‘zingizdan yuqori rolni bera olmaysiz.',
   'Cannot grant a permission you do not have': 'O‘zingizda yo‘q ruxsatni bera olmaysiz.',
   'Account is already provisioned': 'Bu akkaunt allaqachon sozlangan.',

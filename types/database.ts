@@ -4868,6 +4868,124 @@ export type Database = {
           },
         ]
       }
+      sun_coin_packs: {
+        Row: {
+          coins: number
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          is_active: boolean
+          price_cents: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          coins: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          is_active?: boolean
+          price_cents: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          coins?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          is_active?: boolean
+          price_cents?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sun_coin_packs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sun_coin_purchase_requests: {
+        Row: {
+          client_id: string | null
+          coins: number
+          created_at: string
+          currency: string
+          id: string
+          note: string | null
+          pack_id: string
+          price_cents: number
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          coins: number
+          created_at?: string
+          currency: string
+          id?: string
+          note?: string | null
+          pack_id: string
+          price_cents: number
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string | null
+          coins?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          note?: string | null
+          pack_id?: string
+          price_cents?: number
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sun_coin_purchase_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sun_coin_purchase_requests_pack_id_fkey"
+            columns: ["pack_id"]
+            isOneToOne: false
+            referencedRelation: "sun_coin_packs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sun_coin_purchase_requests_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sun_coin_purchase_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sun_coin_reward_options: {
         Row: {
           amount: number
@@ -5477,6 +5595,7 @@ export type Database = {
         Returns: string
       }
       authorize_password_reset: { Args: { p_user_id: string }; Returns: string }
+      cancel_sun_coin_purchase: { Args: { p_request: string }; Returns: Json }
       change_staff_role: {
         Args: { p_role_key: string; p_user_id: string }
         Returns: undefined
@@ -5612,6 +5731,7 @@ export type Database = {
         Args: { p_error: string; p_lead_id: string }
         Returns: undefined
       }
+      fulfill_sun_coin_purchase: { Args: { p_request: string }; Returns: Json }
       game_center_claim: {
         Args: { p_box: number; p_session: string }
         Returns: Json
@@ -5897,6 +6017,7 @@ export type Database = {
       get_my_games: { Args: never; Returns: Json }
       get_report: { Args: { p_report_id: string }; Returns: Json }
       get_sun_coin_admin_dashboard: { Args: never; Returns: Json }
+      get_sun_coin_shop: { Args: never; Returns: Json }
       get_sun_coin_wallet: { Args: { p_limit?: number }; Returns: Json }
       get_team_directory: {
         Args: never
@@ -6145,9 +6266,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      reject_sun_coin_purchase: {
+        Args: { p_note?: string; p_request: string }
+        Returns: Json
+      }
       remove_file: { Args: { p_file_id: string }; Returns: undefined }
       request_access: { Args: never; Returns: Json }
       request_pro_upgrade: { Args: { p_feature?: string }; Returns: undefined }
+      request_sun_coin_purchase: { Args: { p_pack: string }; Returns: Json }
       restore_lead: { Args: { p_lead_id: string }; Returns: undefined }
       review_content_version: {
         Args: {
@@ -6203,6 +6329,7 @@ export type Database = {
         Args: { p_payload: Json; p_shooting_id: string }
         Returns: string
       }
+      save_sun_coin_pack: { Args: { p_pack: Json }; Returns: Json }
       save_task: {
         Args: { p_payload: Json; p_task_id: string }
         Returns: string

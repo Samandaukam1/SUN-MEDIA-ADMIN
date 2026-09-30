@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { requirePermission } from '@/lib/auth';
 import { toUserMessage } from '@/lib/errors';
-import { coinCampaignSchema } from '@/lib/schemas/sun-coin';
+import { coinCampaignSchema, coinPackFormSchema } from '@/lib/schemas/sun-coin';
 import { createClient } from '@/lib/supabase/server';
 import { fieldErrorsFrom, type ActionState } from './state';
 
@@ -44,4 +44,53 @@ export async function setSunCoinCampaignStatus(id: string, status: 'active' | 'p
   if (error) return { status: 'error', message: toUserMessage(error) };
   refreshCampaigns();
   return { status: 'success', message: status === 'active' ? 'SUN Coin reward ON.' : status === 'paused' ? 'Kampaniya pauzada. SUN Coin reward OFF.' : 'Kampaniya tugatildi. Tarixi saqlandi.' };
+}
+
+export async function createSunCoinPack(_: ActionState, formData: FormData): Promise<ActionState> {
+  await requirePermission('promo.manage');
+  const parsed = coinPackFormSchema.safeParse({
+    coins: Number(formData.get('coins')),
+    price: Number(String(formData.get('price') ?? '').replace(',', '.')),
+    currency: String(formData.get('currency') ?? ''),
+    sortOrder: Number(formData.get('sortOrder') ?? 0),
+  });
+  if (!parsed.success) return { status: 'error', message: parsed.error.issues[0]?.message ?? 'Formani tekshiring.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('save_sun_coin_pack', {
+    p_pack: { coins: parsed.data.coins, priceCents: Math.round(parsed.data.price * 100), currency: parsed.data.currency.toUpperCase(), sortOrder: parsed.data.sortOrder },
+  });
+  if (error) return { status: 'error', message: toUserMessage(error) };
+  refreshCampaigns();
+  return { status: 'success', message: `${parsed.data.coins} SC paketi qo‘shildi.` };
+}
+
+export async function setSunCoinPackActive(id: string, isActive: boolean): Promise<ActionState> {
+  await requirePermission('promo.manage');
+  if (!z.uuid().safeParse(id).success) return { status: 'error', message: 'Paket topilmadi.' };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('save_sun_coin_pack', { p_pack: { id, isActive } });
+  if (error) return { status: 'error', message: toUserMessage(error) };
+  refreshCampaigns();
+  return { status: 'success', message: isActive ? 'Paket Coin Shop’da ko‘rinadi.' : 'Paket yashirildi.' };
+}
+
+/** After the payment has reached SUN MEDIA: the server credits the coins once and closes the request. */
+export async function fulfillSunCoinPurchase(id: string): Promise<ActionState> {
+  await requirePermission('promo.manage');
+  if (!z.uuid().safeParse(id).success) return { status: 'error', message: 'So‘rov topilmadi.' };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('fulfill_sun_coin_purchase', { p_request: id });
+  if (error) return { status: 'error', message: toUserMessage(error) };
+  refreshCampaigns();
+  return { status: 'success', message: 'To‘lov tasdiqlandi, SUN Coin hisobga tushdi.' };
+}
+
+export async function rejectSunCoinPurchase(id: string, note: string): Promise<ActionState> {
+  await requirePermission('promo.manage');
+  if (!z.uuid().safeParse(id).success) return { status: 'error', message: 'So‘rov topilmadi.' };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('reject_sun_coin_purchase', { p_request: id, p_note: note.slice(0, 300) });
+  if (error) return { status: 'error', message: toUserMessage(error) };
+  refreshCampaigns();
+  return { status: 'success', message: 'So‘rov rad etildi.' };
 }

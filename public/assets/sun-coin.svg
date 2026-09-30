@@ -13,7 +13,6 @@
 <path d="M46 66A102 102 0 0 1 201 56" fill="none" stroke="#FFFFFF" stroke-opacity="0.19" stroke-width="3" stroke-linecap="round"/>
 <path d="M59 207A106 106 0 0 0 198 203" fill="none" stroke="#D4FC18" stroke-opacity="0.54" stroke-width="2" stroke-linecap="round"/>
 <g transform="translate(38 76) scale(0.383)">
-  <rect x="1" y="0" width="468" height="122" rx="3" fill="#1A1A1B"/>
   <g fill="none" stroke="url(#sun-coin-silver)" stroke-width="17" stroke-linejoin="round" stroke-linecap="butt"><polyline points="129,30.5 44.5,30.5 44.5,54 123.5,54 123.5,85.5 38,85.5"/><polyline points="193,22 193,85 276.5,85 276.5,22"/><polyline points="334.5,94 334.5,30.5 429,30.5 429,94"/></g>
   <g fill="#F4F4F5" fill-rule="evenodd"><path d="M0 134L34 134L55 170L76 134L110 134L110 206L87 206L87 162L62 200L48 200L23 162L23 206L0 206Z"/><path d="M130 134L210 134L210 150L153 150L153 161L199 161L199 174L153 174L153 190L210 190L210 206L130 206Z"/><path d="M226 134L300 134L303.12 134.31L306.12 135.22L308.89 136.7L311.31 138.69L313.3 141.11L314.78 143.88L315.69 146.88L316 150L316 190L315.69 193.12L314.78 196.12L313.3 198.89L311.31 201.31L308.89 203.3L306.12 204.78L303.12 205.69L300 206L226 206ZM248 150L293 150L293 190L248 190Z"/><path d="M365 206L401 134L435 134L470 206L444 206L437 193L398 193L391 206ZM418 150L433 178L403 178Z"/></g>
   <rect x="334" y="134" width="23" height="72" fill="#D4FC18"/>

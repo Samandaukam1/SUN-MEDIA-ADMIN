@@ -49,7 +49,7 @@ export default async function GamesPage() {
               <tr key={g.id} className={rowClass}>
                 <td className={cellClass}>
                   <span className="font-medium">{g.title}</span>
-                  <span className="block text-[13px] text-muted">{`${g.client?.name ?? '—'} · ${g.template === 'catch' ? 'Tutish' : 'Quyish'} · ${g.reward_days} kun Pro`}</span>
+                  <span className="block text-[13px] text-muted">{`${g.client?.name ?? '—'} · ${g.template === 'penalty' ? 'Penalti' : g.template === 'catch' ? 'Tutish' : 'Quyish'} · ${g.reward_days} kun Pro`}</span>
                 </td>
                 <td className={`${cellClass} text-muted`}>
                   {`${MODE[g.win_mode] ?? g.win_mode}${g.win_mode === 'skill' ? '' : ` · ${Math.round(Number(g.win_probability) * 1000) / 10}%`}${g.guarantee_next ? ' · navbatdagi kafolatli' : ''}`}

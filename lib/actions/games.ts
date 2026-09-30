@@ -13,7 +13,7 @@ const color = z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, 'Rang #RRGGBB ko‘ri
 const campaignSchema = z
   .object({
     client_id: z.uuid('Mijozni tanlang'),
-    template: z.enum(['catch', 'pour']),
+    template: z.enum(['penalty', 'pour']),
     title: z.string().trim().min(1, 'Nomini yozing').max(80),
     subtitle: z.string().trim().max(160).transform((v) => v || null),
     rules: z.string().trim().max(1000).transform((v) => v || null),

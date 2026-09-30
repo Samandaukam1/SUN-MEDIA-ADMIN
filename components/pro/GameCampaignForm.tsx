@@ -20,7 +20,7 @@ const MODES = [
 export function GameCampaignForm({ clients }: { clients: { id: string; name: string }[] }) {
   const [state, action] = useActionState(createGameCampaign, idle);
   const [mode, setMode] = useState('skill');
-  const [template, setTemplate] = useState('catch');
+  const [template, setTemplate] = useState('penalty');
   const err = (k: string) => (state.status === 'error' ? state.fieldErrors?.[k] : undefined);
   return (
     <form action={action} className="space-y-4">
@@ -38,14 +38,14 @@ export function GameCampaignForm({ clients }: { clients: { id: string; name: str
           ))}
         </SelectInput>
         <SelectInput label="Shablon" name="template" value={template} onChange={(e) => setTemplate(e.target.value)}>
-          <option value="catch">Tutish (SAFI: tovuq va tuxum)</option>
+          <option value="penalty">Penalti (SAFI: tovuq-darvozabon, 3×5 darvoza)</option>
           <option value="pour">Quyish (WeDrink: stakan)</option>
         </SelectInput>
-        <TextInput label="Nomi" name="title" required maxLength={80} placeholder={template === 'catch' ? 'SAFI Challenge' : 'WeDrink Challenge'} error={err('title')} />
+        <TextInput label="Nomi" name="title" required maxLength={80} placeholder={template === 'penalty' ? 'SAFI Penalti' : 'WeDrink Challenge'} error={err('title')} />
       </div>
       <TextInput label="Qisqa matn (ixtiyoriy)" name="subtitle" maxLength={160} placeholder="10 ta tuxumni tuting — Pro yutib oling" />
       <div className="grid gap-4 md:grid-cols-3">
-        <TextInput label="Asosiy rang" name="primary" defaultValue={template === 'catch' ? '#E30613' : '#0EA5E9'} error={err('primary')} />
+        <TextInput label="Asosiy rang" name="primary" defaultValue={template === 'penalty' ? '#E30613' : '#0EA5E9'} error={err('primary')} />
         <TextInput label="Fon rangi" name="background" defaultValue="#FFF8EC" error={err('background')} />
         <TextInput label="Matn rangi" name="text" defaultValue="#1A1A1A" error={err('text')} />
       </div>

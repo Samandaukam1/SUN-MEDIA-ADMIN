@@ -16,6 +16,7 @@ insert into public.client_members(client_id,user_id,role_id) select pg_temp.id('
 insert into public.client_members(client_id,user_id,role_id) select pg_temp.id('other_client'),pg_temp.id('other'),id from public.roles where key='client_owner';
 -- Independent of whatever SUN Coin campaign the database already runs (rolled back at the end).
 update public.sun_coin_campaigns set status='ended' where status='active';
+update public.game_center_settings set difficulty='easy';
 select pg_temp.login('staff');
 select throws_ok($$select public.game_center_start('safi-penalty',gen_random_uuid())$$,'42501',null,'employees cannot start');
 select pg_temp.login('player');
@@ -39,15 +40,26 @@ select throws_ok($$select public.game_center_shoot(pg_temp.sid(),gen_random_uuid
 select throws_ok($$select public.game_center_shoot(pg_temp.sid(),null,1,1)$$,'22023',null,'null request rejected');
 select throws_ok($$select public.game_center_shoot(pg_temp.sid(),gen_random_uuid(),2,1)$$,'P0403',null,'cannot skip attempt numbers');
 -- Deterministic DB random stream is test-only; production has no override RPC.
-select setseed(.42);
-create temp table gc_keeper as select floor(random()*15)::int+1 as zone;
-select setseed(.42);
-create temp table gc_catch as select public.game_center_shoot(pg_temp.sid(),pg_temp.id('shot'),1,(select zone from gc_keeper)) as data;
-select is((select data->>'result' from gc_catch),'CATCH','keeper catches matching zone');
+-- Test-only control of the random stream: a seed whose first draw gives the wanted result at the round's level.
+create function pg_temp.force(sid uuid, p_goal boolean) returns void language plpgsql as $$
+declare lvl int; chance numeric; r float8;
+begin
+ select coalesce(reach_snapshot, 0) into lvl from public.game_sessions where id = sid;
+ chance := private.game_center_save_chance(lvl);
+ for i in 0..20000 loop
+  perform setseed(-1 + i * 0.0001); r := random();
+  if (p_goal and r >= chance) or (not p_goal and r < chance) then perform setseed(-1 + i * 0.0001); return; end if;
+ end loop;
+ raise exception 'no seed found';
+end $$;
+select pg_temp.force(pg_temp.sid(), false);
+create temp table gc_catch as select public.game_center_shoot(pg_temp.sid(),pg_temp.id('shot'),1,8) as data;
+select is((select data->>'result' from gc_catch),'CATCH','the keeper saves');
+select is((select (data->>'goalkeeperZone')::int from gc_catch),8,'a save lands on the ball''s zone');
 select is((select (data->>'score')::int from gc_catch),0,'CATCH scores zero');
-select is(public.game_center_shoot(pg_temp.sid(),pg_temp.id('shot'),1,(select zone from gc_keeper)),(select data from gc_catch),'same request returns exact response');
+select is(public.game_center_shoot(pg_temp.sid(),pg_temp.id('shot'),1,8),(select data from gc_catch),'same request returns exact response');
 select is((select count(*)::int from public.game_attempts where session_id=pg_temp.sid()),1,'retry writes one attempt');
-select throws_ok($$select public.game_center_shoot(pg_temp.sid(),pg_temp.id('shot'),1,((select zone from gc_keeper)%15)+1)$$,'22023',null,'cannot change zone on retry');
+select throws_ok($$select public.game_center_shoot(pg_temp.sid(),pg_temp.id('shot'),1,9)$$,'22023',null,'cannot change zone on retry');
 select throws_ok($$select public.game_center_shoot(pg_temp.sid(),gen_random_uuid(),1,1)$$,'P0403',null,'duplicate attempt with fresh key rejected');
 select throws_ok($$select public.game_next_attempt(pg_temp.sid())$$,'P0403',null,'legacy start endpoint cannot mutate v2 session');
 select throws_ok($$select public.game_finish(pg_temp.sid())$$,'P0403',null,'legacy finish endpoint cannot bypass v2 rules');
@@ -56,10 +68,9 @@ select throws_ok($$select public.game_center_shoot(pg_temp.sid(),gen_random_uuid
 select throws_ok($$select public.game_center_finish(pg_temp.sid())$$,'P0403',null,'another player cannot finish');
 select pg_temp.login('player');
 create function pg_temp.goal(sid uuid,n int) returns jsonb language plpgsql as $$
-declare k int;
-begin perform setseed(.42);k:=floor(random()*15)::int+1;perform setseed(.42);
-return public.game_center_shoot(sid,gen_random_uuid(),n,k%15+1);end$$;
-select is(pg_temp.goal(pg_temp.sid(),2)->>'result','GOAL','different zone scores a goal');
+begin perform pg_temp.force(sid, true);
+return public.game_center_shoot(sid,gen_random_uuid(),n,8);end$$;
+select is(pg_temp.goal(pg_temp.sid(),2)->>'result','GOAL','a goal when the keeper misses');
 select is((select score::int from public.game_sessions where id=pg_temp.sid()),1,'GOAL adds one server point');
 select lives_ok($$select pg_temp.goal(pg_temp.sid(),n) from generate_series(3,10)n$$,'remaining eight shots');
 select throws_ok($$select public.game_center_shoot(pg_temp.sid(),gen_random_uuid(),11,1)$$,'P0403',null,'no eleventh attempt');

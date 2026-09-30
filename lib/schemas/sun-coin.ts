@@ -95,11 +95,12 @@ export const coinGiftSchema = z.object({
   amount: z.number().int('Butun son kiriting').min(1, 'Kamida 1 SC').max(100_000, 'Bir sovg‘a 100 000 SC gacha'),
   note: z.string().trim().max(200),
 });
+/** Goal / save chances per level (server: private.game_center_save_chance). Rewards are decided separately. */
 export const GAME_LEVELS = [
-  { key: 'easy', label: 'Oson', detail: 'faqat sakragan zona', chance: 7 },
-  { key: 'normal', label: 'O‘rta', detail: '±1 ustun', chance: 17 },
-  { key: 'hard', label: 'Qiyin', detail: '±1 ustun va qator', chance: 40 },
-  { key: 'extreme', label: 'Juda qiyin', detail: '±2 ustun, ±1 qator', chance: 59 },
+  { key: 'easy', label: 'Oson', goal: 55, save: 45 },
+  { key: 'normal', label: 'O‘rta', goal: 35, save: 65 },
+  { key: 'hard', label: 'Qiyin', goal: 12.5, save: 87.5 },
+  { key: 'extreme', label: 'Juda qiyin', goal: 1, save: 99 },
 ] as const;
 export type GameLevel = (typeof GAME_LEVELS)[number]['key'];
 

@@ -106,11 +106,11 @@ export function GameLevelPicker({ current }: { current: GameLevel }) {
       <div className="flex flex-wrap gap-2">
         {GAME_LEVELS.map((l) => (
           <Button key={l.key} variant={l.key === current ? 'primary' : 'secondary'} disabled={pending} onClick={() => start(async () => setState(await setSafiLevel(l.key)))}>
-            {`${l.label} · ~${l.chance}%`}
+            {`${l.label} · gol ~${l.goal}%`}
           </Button>
         ))}
       </div>
-      <p className="text-sm text-muted">{`${GAME_LEVELS.find((l) => l.key === current)?.detail}. Foiz — tovuqning tasodifiy zarbani ushlash ehtimoli. Yangi raundlarga qo‘llanadi.`}</p>
+      <p className="text-sm text-muted">{`Tovuq ushlaydi ≈ ${GAME_LEVELS.find((l) => l.key === current)?.save}%. Natijani server hal qiladi; yangi raundlarga qo‘llanadi. Sovg‘a ehtimoli kampaniya sozlamalarida alohida.`}</p>
       {state.status !== 'idle' && state.message ? <Notice tone={state.status === 'error' ? 'danger' : 'success'} title={state.message} /> : null}
     </div>
   );

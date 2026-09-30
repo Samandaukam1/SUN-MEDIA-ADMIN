@@ -15,16 +15,29 @@ insert into public.clients(id,name,code) values(pg_temp.id('client'),'Coin Test'
 insert into public.client_members(client_id,user_id,role_id) select pg_temp.id('client'),pg_temp.id('player'),id from public.roles where key='client_owner';
 -- Independent of whatever SUN Coin campaign the database already runs (rolled back at the end).
 update public.sun_coin_campaigns set status='ended' where status='active';
+update public.game_center_settings set difficulty='easy';
 
 -- One full round: p_goals goals first, the rest caught (the keeper draw is replayed from a fixed seed).
+-- Test-only control of the random stream: a seed whose first draw gives the wanted result at the round's level.
+create function pg_temp.force(sid uuid, p_goal boolean) returns void language plpgsql as $$
+declare lvl int; chance numeric; r float8;
+begin
+ select coalesce(reach_snapshot, 0) into lvl from public.game_sessions where id = sid;
+ chance := private.game_center_save_chance(lvl);
+ for i in 0..20000 loop
+  perform setseed(-1 + i * 0.0001); r := random();
+  if (p_goal and r >= chance) or (not p_goal and r < chance) then perform setseed(-1 + i * 0.0001); return; end if;
+ end loop;
+ raise exception 'no seed found';
+end $$;
 create function pg_temp.round(p_mode text,p_goals int) returns jsonb language plpgsql as $$
-declare st jsonb; sid uuid; k int;
+declare st jsonb; sid uuid;
 begin
  st:=public.game_center_start_mode('safi-penalty',gen_random_uuid(),p_mode);
  sid:=(st->>'sessionId')::uuid;
  for n in 1..10 loop
-  perform setseed(.37); k:=floor(random()*15)::int+1; perform setseed(.37);
-  perform public.game_center_shoot(sid,gen_random_uuid(),n,case when n<=p_goals then k%15+1 else k end);
+  perform pg_temp.force(sid, n<=p_goals);
+  perform public.game_center_shoot(sid,gen_random_uuid(),n,8);
  end loop;
  return public.game_center_finish(sid)||jsonb_build_object('sessionId',sid,'mode',st->>'mode');
 end $$;
@@ -130,10 +143,9 @@ select pg_temp.login('staff');
 select public.set_sun_coin_campaign_status(pg_temp.c1(),'paused');
 select pg_temp.login('player');
 create function pg_temp.finish_all(sid uuid) returns jsonb language plpgsql as $$
-declare k int;
 begin
- for n in 1..10 loop perform setseed(.37); k:=floor(random()*15)::int+1; perform setseed(.37);
-  perform public.game_center_shoot(sid,gen_random_uuid(),n,k%15+1); end loop;
+ for n in 1..10 loop perform pg_temp.force(sid, true);
+  perform public.game_center_shoot(sid,gen_random_uuid(),n,8); end loop;
  return public.game_center_finish(sid);
 end $$;
 select is((pg_temp.finish_all((pg_temp.run('s_pause')->>'sessionId')::uuid)->>'coinAmount')::int,0,'paused before finishing: no reward');

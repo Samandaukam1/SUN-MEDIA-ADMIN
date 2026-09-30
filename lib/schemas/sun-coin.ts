@@ -75,8 +75,9 @@ export const coinPurchaseRequestSchema = z.object({
 });
 export const coinAdminDashboardSchema = z.object({
   campaigns: z.array(coinDashboardCampaignSchema),
-  analytics: z.object({ purchased: nonnegative, spent: nonnegative, rewarded: nonnegative, circulating: nonnegative, totalWinners: nonnegative }),
+  analytics: z.object({ purchased: nonnegative, spent: nonnegative, rewarded: nonnegative, gifted: nonnegative.default(0), circulating: nonnegative, totalWinners: nonnegative }),
   packs: z.array(coinPackSchema).default([]),
+  settings: z.array(z.object({ gameId: z.string(), difficulty: z.enum(['easy', 'normal', 'hard', 'extreme']), updatedAt: z.string() })).default([]),
   purchaseRequests: z.array(coinPurchaseRequestSchema).default([]),
 });
 
@@ -88,6 +89,19 @@ export const coinPackFormSchema = z.object({
   currency: z.string().trim().regex(/^[A-Za-z]{3}$/, '3 harfli valyuta kodi (USD, UZS)'),
   sortOrder: z.number().int().min(0).max(99),
 });
+
+export const coinGiftSchema = z.object({
+  email: z.email('Mijoz emailini kiriting'),
+  amount: z.number().int('Butun son kiriting').min(1, 'Kamida 1 SC').max(100_000, 'Bir sovg‘a 100 000 SC gacha'),
+  note: z.string().trim().max(200),
+});
+export const GAME_LEVELS = [
+  { key: 'easy', label: 'Oson', detail: 'faqat sakragan zona', chance: 7 },
+  { key: 'normal', label: 'O‘rta', detail: '±1 ustun', chance: 17 },
+  { key: 'hard', label: 'Qiyin', detail: '±1 ustun va qator', chance: 40 },
+  { key: 'extreme', label: 'Juda qiyin', detail: '±2 ustun, ±1 qator', chance: 59 },
+] as const;
+export type GameLevel = (typeof GAME_LEVELS)[number]['key'];
 
 export type CoinPack = z.infer<typeof coinPackSchema>;
 export type CoinPurchaseRequest = z.infer<typeof coinPurchaseRequestSchema>;

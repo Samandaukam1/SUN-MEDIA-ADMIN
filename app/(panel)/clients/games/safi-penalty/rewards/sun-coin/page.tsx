@@ -4,7 +4,7 @@ import { cellClass, rowClass, Table } from '@/components/panel/List';
 import { PageHeader } from '@/components/panel/PageHeader';
 import { EmptyRow, Stat } from '@/components/panel/Stat';
 import { SunCoinCampaignActions, SunCoinCampaignBuilder, SunCoinRefresh } from '@/components/pro/SunCoinCampaignForm';
-import { SunCoinPackForm, SunCoinPackToggle, SunCoinPurchaseActions } from '@/components/pro/SunCoinShopAdmin';
+import { GameLevelPicker, SunCoinGiftForm, SunCoinPackForm, SunCoinPackToggle, SunCoinPurchaseActions } from '@/components/pro/SunCoinShopAdmin';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { ButtonLink } from '@/components/ui/Button';
 import { Card, SectionTitle } from '@/components/ui/Card';
@@ -47,7 +47,8 @@ export default async function SunCoinCampaignPage() {
   if (error) throw error;
   const dashboard = coinAdminDashboardSchema.parse(data);
   const campaigns = dashboard.campaigns.filter((campaign) => campaign.gameId === 'safi-penalty');
-  const { analytics, packs, purchaseRequests } = dashboard;
+  const { analytics, packs, purchaseRequests, settings } = dashboard;
+  const level = settings.find((s) => s.gameId === 'safi-penalty')?.difficulty ?? 'easy';
   const pendingCount = purchaseRequests.filter((r) => r.status === 'pending').length;
 
   return <div className="space-y-8">
@@ -58,13 +59,19 @@ export default async function SunCoinCampaignPage() {
 
     <section aria-label="SUN Coin umumiy analitikasi">
       <SectionTitle>SUN Coin — umumiy wallet analitikasi</SectionTitle>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <Stat label="Gifted" value={coins(analytics.gifted)} detail="SUN MEDIA sovg‘alari" />
         <Stat label="Purchased" value={coins(analytics.purchased)} detail="Xarid qilingan SUN Coin" />
         <Stat label="Spent" value={coins(analytics.spent)} detail="O‘yinlarda sarflangan" />
         <Stat label="Rewarded" value={coins(analytics.rewarded)} detail="O‘yin mukofotlari" />
         <Stat label="Currently circulating" value={coins(analytics.circulating)} detail="Walletlardagi jami mavjud SUN Coin" />
       </div>
       <p className="mt-3 text-sm text-muted">Barcha o‘yinlar bo‘yicha yagona SUN Coin wallet. Jami mukofot olgan foydalanuvchilar: {analytics.totalWinners.toLocaleString('en-US')}.</p>
+    </section>
+
+    <section aria-label="Sovg‘a va daraja" className="grid gap-6 xl:grid-cols-2">
+      <Card className="space-y-4"><SectionTitle>SUN Coin sovg‘a qilish</SectionTitle><SunCoinGiftForm /></Card>
+      <Card className="space-y-4"><SectionTitle>O‘yin darajasi · SAFI Penalty</SectionTitle><GameLevelPicker current={level} /></Card>
     </section>
 
     <section aria-label="Coin Shop" className="space-y-4">

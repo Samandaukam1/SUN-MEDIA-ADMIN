@@ -8,7 +8,8 @@ import { TextArea, TextInput } from '@/components/ui/Inputs';
 import { Notice } from '@/components/ui/Notice';
 import { SubmitButton } from '@/components/ui/SubmitButton';
 import { idle, type ActionState } from '@/lib/actions/state';
-import { createSunCoinPack, fulfillSunCoinPurchase, rejectSunCoinPurchase, setSunCoinPackActive } from '@/lib/actions/sun-coin';
+import { createSunCoinPack, fulfillSunCoinPurchase, giftSunCoin, rejectSunCoinPurchase, setSafiLevel, setSunCoinPackActive } from '@/lib/actions/sun-coin';
+import { GAME_LEVELS, type GameLevel } from '@/lib/schemas/sun-coin';
 
 /** New Coin Shop pack. Prices are what SUN MEDIA charges; the app shows them as they are. */
 export function SunCoinPackForm() {
@@ -75,6 +76,42 @@ export function SunCoinPurchaseActions({ id, label }: { id: string; label: strin
           </div>
         </div>
       </Dialog>
+    </div>
+  );
+}
+
+/** Gift SUN Coin to a client user by email. */
+export function SunCoinGiftForm() {
+  const [state, action] = useActionState(giftSunCoin, idle);
+  const err = (key: string) => (state.status === 'error' ? state.fieldErrors?.[key] : undefined);
+  return (
+    <form action={action} className="space-y-4">
+      {state.status !== 'idle' && state.message ? <Notice tone={state.status === 'error' ? 'danger' : 'success'} title={state.message} /> : null}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <TextInput name="email" label="Mijoz emaili" type="email" required error={err('email')} placeholder="safi@client.local" />
+        <TextInput name="amount" label="SUN Coin (SC)" type="number" min={1} max={100000} step={1} required defaultValue={10} error={err('amount')} />
+        <TextInput name="note" label="Izoh (mijoz ko‘radi)" maxLength={200} error={err('note')} placeholder="Faol ishtirok uchun" />
+      </div>
+      <SubmitButton>Sovg‘a qilish</SubmitButton>
+    </form>
+  );
+}
+
+/** SAFI goalkeeper level: how far its dive reaches, with the resulting save chance for a random shot. */
+export function GameLevelPicker({ current }: { current: GameLevel }) {
+  const [pending, start] = useTransition();
+  const [state, setState] = useState<ActionState>(idle);
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {GAME_LEVELS.map((l) => (
+          <Button key={l.key} variant={l.key === current ? 'primary' : 'secondary'} disabled={pending} onClick={() => start(async () => setState(await setSafiLevel(l.key)))}>
+            {`${l.label} · ~${l.chance}%`}
+          </Button>
+        ))}
+      </div>
+      <p className="text-sm text-muted">{`${GAME_LEVELS.find((l) => l.key === current)?.detail}. Foiz — tovuqning tasodifiy zarbani ushlash ehtimoli. Yangi raundlarga qo‘llanadi.`}</p>
+      {state.status !== 'idle' && state.message ? <Notice tone={state.status === 'error' ? 'danger' : 'success'} title={state.message} /> : null}
     </div>
   );
 }

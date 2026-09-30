@@ -2181,6 +2181,35 @@ export type Database = {
           },
         ]
       }
+      game_center_settings: {
+        Row: {
+          difficulty: string
+          game_key: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          difficulty?: string
+          game_key: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          difficulty?: string
+          game_key?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_center_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_rewards: {
         Row: {
           campaign_id: string
@@ -2280,6 +2309,7 @@ export type Database = {
           id: string
           invalid_taps: number
           pro_reward_eligible: boolean | null
+          reach_snapshot: number | null
           reward_eligible: boolean
           reward_reason: string | null
           score: number
@@ -2310,6 +2340,7 @@ export type Database = {
           id?: string
           invalid_taps?: number
           pro_reward_eligible?: boolean | null
+          reach_snapshot?: number | null
           reward_eligible?: boolean
           reward_reason?: string | null
           score?: number
@@ -2340,6 +2371,7 @@ export type Database = {
           id?: string
           invalid_taps?: number
           pro_reward_eligible?: boolean | null
+          reach_snapshot?: number | null
           reward_eligible?: boolean
           reward_reason?: string | null
           score?: number
@@ -6053,6 +6085,15 @@ export type Database = {
         Args: { p_limit?: number; p_query: string }
         Returns: Json
       }
+      grant_sun_coin_bonus: {
+        Args: {
+          p_amount: number
+          p_note?: string
+          p_request?: string
+          p_user: string
+        }
+        Returns: Json
+      }
       grant_workspace_plan: {
         Args: {
           p_days: number
@@ -6334,6 +6375,7 @@ export type Database = {
         Args: { p_payload: Json; p_task_id: string }
         Returns: string
       }
+      search_sun_coin_recipients: { Args: { p_query?: string }; Returns: Json }
       send_crm_report: {
         Args: {
           p_client: string
@@ -6431,6 +6473,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_game_center_difficulty: {
+        Args: { p_difficulty: string; p_game_key: string }
+        Returns: Json
       }
       set_home_logo: {
         Args: { p_client: string; p_url: string; p_variant?: string }

@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { requirePermission } from '@/lib/auth';
 import { toUserMessage } from '@/lib/errors';
-import { coinCampaignSchema, coinPackFormSchema } from '@/lib/schemas/sun-coin';
+import { coinCampaignSchema, coinGiftSchema, coinPackFormSchema, type GameLevel } from '@/lib/schemas/sun-coin';
 import { createClient } from '@/lib/supabase/server';
 import { fieldErrorsFrom, type ActionState } from './state';
 
@@ -93,4 +93,38 @@ export async function rejectSunCoinPurchase(id: string, note: string): Promise<A
   if (error) return { status: 'error', message: toUserMessage(error) };
   refreshCampaigns();
   return { status: 'success', message: 'So‘rov rad etildi.' };
+}
+
+/** A gift to a client user found by email: ADMIN_BONUS in the ledger, the player is notified. */
+export async function giftSunCoin(_: ActionState, formData: FormData): Promise<ActionState> {
+  await requirePermission('promo.manage');
+  const parsed = coinGiftSchema.safeParse({
+    email: String(formData.get('email') ?? '').trim().toLowerCase(),
+    amount: Number(formData.get('amount')),
+    note: String(formData.get('note') ?? ''),
+  });
+  if (!parsed.success) return { status: 'error', message: parsed.error.issues[0]?.message ?? 'Formani tekshiring.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
+  const supabase = await createClient();
+  const found = await supabase.rpc('search_sun_coin_recipients', { p_query: parsed.data.email });
+  if (found.error) return { status: 'error', message: toUserMessage(found.error) };
+  const recipient = z.array(z.object({ userId: z.string(), email: z.string().nullable(), name: z.string() })).parse(found.data)
+    .find((r) => r.email?.toLowerCase() === parsed.data.email);
+  if (!recipient) return { status: 'error', message: 'Bu email bilan faol mijoz topilmadi.', fieldErrors: { email: 'Mijoz topilmadi' } };
+  const { data, error } = await supabase.rpc('grant_sun_coin_bonus', {
+    p_user: recipient.userId, p_amount: parsed.data.amount, p_note: parsed.data.note || undefined, p_request: crypto.randomUUID(),
+  });
+  if (error) return { status: 'error', message: toUserMessage(error) };
+  refreshCampaigns();
+  const balance = (data as { balance?: number } | null)?.balance;
+  return { status: 'success', message: `${recipient.name}: +${parsed.data.amount} SC${balance == null ? '' : ` (balans ${balance} SC)`}.` };
+}
+
+export async function setSafiLevel(level: GameLevel): Promise<ActionState> {
+  await requirePermission('promo.manage');
+  if (!['easy', 'normal', 'hard', 'extreme'].includes(level)) return { status: 'error', message: 'Bunday daraja yo‘q.' };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('set_game_center_difficulty', { p_game_key: 'safi-penalty', p_difficulty: level });
+  if (error) return { status: 'error', message: toUserMessage(error) };
+  refreshCampaigns();
+  return { status: 'success', message: 'Daraja yangilandi. Yangi raundlarga qo‘llanadi.' };
 }

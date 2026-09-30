@@ -2025,6 +2025,8 @@ export type Database = {
           hit: boolean | null
           n: number
           params: Json
+          request_id: string | null
+          response: Json | null
           session_id: string
           started_at: string
           submitted_at: string | null
@@ -2037,6 +2039,8 @@ export type Database = {
           hit?: boolean | null
           n: number
           params: Json
+          request_id?: string | null
+          response?: Json | null
           session_id: string
           started_at?: string
           submitted_at?: string | null
@@ -2049,6 +2053,8 @@ export type Database = {
           hit?: boolean | null
           n?: number
           params?: Json
+          request_id?: string | null
+          response?: Json | null
           session_id?: string
           started_at?: string
           submitted_at?: string | null
@@ -2256,58 +2262,79 @@ export type Database = {
       }
       game_sessions: {
         Row: {
+          attempt_limit: number
           attempts_used: number
           box_index: number | null
-          campaign_id: string
+          campaign_id: string | null
           client_id: string
           eligible: boolean
           expires_at: string
+          finish_response: Json | null
           finished_at: string | null
           flagged_reason: string | null
+          game_key: string | null
           guaranteed: boolean
           id: string
           invalid_taps: number
+          reward_eligible: boolean
+          reward_reason: string | null
           score: number
+          start_request: string | null
           started_at: string
           status: string
+          target_snapshot: number
           user_id: string
           won: boolean | null
           workspace_id: string
         }
         Insert: {
+          attempt_limit?: number
           attempts_used?: number
           box_index?: number | null
-          campaign_id: string
+          campaign_id?: string | null
           client_id: string
           eligible: boolean
           expires_at?: string
+          finish_response?: Json | null
           finished_at?: string | null
           flagged_reason?: string | null
+          game_key?: string | null
           guaranteed?: boolean
           id?: string
           invalid_taps?: number
+          reward_eligible?: boolean
+          reward_reason?: string | null
           score?: number
+          start_request?: string | null
           started_at?: string
           status?: string
+          target_snapshot?: number
           user_id: string
           won?: boolean | null
           workspace_id: string
         }
         Update: {
+          attempt_limit?: number
           attempts_used?: number
           box_index?: number | null
-          campaign_id?: string
+          campaign_id?: string | null
           client_id?: string
           eligible?: boolean
           expires_at?: string
+          finish_response?: Json | null
           finished_at?: string | null
           flagged_reason?: string | null
+          game_key?: string | null
           guaranteed?: boolean
           id?: string
           invalid_taps?: number
+          reward_eligible?: boolean
+          reward_reason?: string | null
           score?: number
+          start_request?: string | null
           started_at?: string
           status?: string
+          target_snapshot?: number
           user_id?: string
           won?: boolean | null
           workspace_id?: string
@@ -5400,6 +5427,24 @@ export type Database = {
       fail_meta_lead: {
         Args: { p_error: string; p_lead_id: string }
         Returns: undefined
+      }
+      game_center_claim: {
+        Args: { p_box: number; p_session: string }
+        Returns: Json
+      }
+      game_center_finish: { Args: { p_session: string }; Returns: Json }
+      game_center_shoot: {
+        Args: {
+          p_n: number
+          p_request: string
+          p_session: string
+          p_zone: number
+        }
+        Returns: Json
+      }
+      game_center_start: {
+        Args: { p_game_key: string; p_request: string }
+        Returns: Json
       }
       game_finish: { Args: { p_session: string }; Returns: Json }
       game_guarantee_next: { Args: { p_campaign: string }; Returns: undefined }

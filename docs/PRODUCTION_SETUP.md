@@ -96,6 +96,9 @@ Meta wizard va katta boshqaruv web panelda ishlaydi. Panel Next.js server kerak 
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<anon/publishable key>`
    - `SUPABASE_SECRET_KEY=<service_role>` — faqat server env, **Sensitive** belgisi bilan
    - `NEXT_PUBLIC_SITE_URL=https://<admin-domeni>`
+   - `npm run build` oldidan `scripts/build-check.mjs` ishlaydi: Vercel production'da (yoki `STRICT_ENV=1`)
+     yetishmagan yoki lokal manzilga qaragan sozlama build'ni to'xtatadi. `NEXT_PUBLIC_` nomi ostidagi
+     server kaliti har qanday muhitda build'ni to'xtatadi.
 3. Deploydan keyin:
    - Domenni `supabase/config.toml` → `[remotes.production.auth].additional_redirect_urls` ga
      `https://<admin-domeni>/auth/callback` qilib qo'shing va `npx supabase config push` qiling.
@@ -177,8 +180,10 @@ muddatsiz Pro beradi.
 
 - **Leaked password protection** (HaveIBeenPwned): Supabase → Authentication → Passwords (Pro rejada).
 - Git tarixida maxfiy kalit topilmadi, rotatsiya shart emas. Service role faqat ADMIN server env'da.
-- Test parol `SunMedia2026!` faqat preview akkauntlari uchun. Production'ga o'tishdan oldin ularning parolini
-  admin paneldan tiklang yoki akkauntlarni bloklang.
+- `SunMedia2026!` endi faqat **lokal** seed paroli (`supabase/seed.sql`, lokal Supabase). Cloud'dagi preview
+  akkauntlari (`*.local`) uchun u o'chirilgan: parollar tasodifiy qiymatlarga almashtirilgan va faqat
+  mashinadagi git'dan tashqari faylda saqlanadi. Ularni repo, README yoki chatga yozmang.
+  Production'ga o'tishdan oldin preview akkauntlarini bloklang yoki o'chiring.
 
 ## 11. Web preview’ni yangilash
 

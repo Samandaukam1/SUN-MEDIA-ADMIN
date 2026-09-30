@@ -9,6 +9,10 @@ export function getSecretKey(): string {
   return key;
 }
 
+/** Public origin of the panel (OAuth return links). Localhost is a development-only fallback. */
 export function getSiteUrl(): string {
-  return (process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` || 'http://localhost:3000').replace(/\/$/, '');
+  const url = process.env.NEXT_PUBLIC_SITE_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`);
+  if (url) return url.replace(/\/$/, '');
+  if (process.env.NODE_ENV === 'production') throw new Error('NEXT_PUBLIC_SITE_URL production muhitida sozlanmagan.');
+  return 'http://localhost:3000';
 }

@@ -5,6 +5,7 @@
   "scripts": {
     "predev": "node scripts/dev-check.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/build-check.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

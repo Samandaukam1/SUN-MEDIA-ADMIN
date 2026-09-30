@@ -14,7 +14,9 @@ const MAX_BYTES = 2 * 1024 * 1024;
  * "Bosh sahifa logosi": uploads to the public branding bucket with the admin's own session (storage policies
  * decide who may write where), then points the client (or the agency when clientId is null) at it.
  */
-export async function uploadHomeLogo(clientId: string | null, _: ActionState, formData: FormData): Promise<ActionState> {
+export type LogoVariant = 'light' | 'dark';
+
+export async function uploadHomeLogo(clientId: string | null, variant: LogoVariant, _: ActionState, formData: FormData): Promise<ActionState> {
   await requireStaff();
   const file = formData.get('logo');
   if (!(file instanceof File) || file.size === 0) return { status: 'error', message: 'Logo faylini tanlang.' };
@@ -23,20 +25,20 @@ export async function uploadHomeLogo(clientId: string | null, _: ActionState, fo
   if (file.size > MAX_BYTES) return { status: 'error', message: 'Logo 2 MB dan kichik bo‘lsin.' };
 
   const supabase = await createClient();
-  const path = `${clientId ? `clients/${clientId}` : 'agency'}/home-${Date.now()}.${ext}`;
+  const path = `${clientId ? `clients/${clientId}` : 'agency'}/home-${variant}-${Date.now()}.${ext}`;
   const { error: uploadError } = await supabase.storage.from('branding').upload(path, file, { contentType: file.type, upsert: false });
   if (uploadError) return { status: 'error', message: 'Logoni yuklashga ruxsat yo‘q yoki xato yuz berdi.' };
   const { data } = supabase.storage.from('branding').getPublicUrl(path);
-  const { error } = await supabase.rpc('set_home_logo', { p_client: clientId as string, p_url: data.publicUrl });
+  const { error } = await supabase.rpc('set_home_logo', { p_client: clientId as string, p_url: data.publicUrl, p_variant: variant });
   if (error) return { status: 'error', message: toUserMessage(error) };
   revalidatePath(clientId ? `/clients/${clientId}` : '/system/settings');
   return { status: 'success', message: 'Logo saqlandi. Ilovada keyingi ochilishda ko‘rinadi.' };
 }
 
-export async function clearHomeLogo(clientId: string | null): Promise<ActionState> {
+export async function clearHomeLogo(clientId: string | null, variant: LogoVariant): Promise<ActionState> {
   await requireStaff();
   const supabase = await createClient();
-  const { error } = await supabase.rpc('set_home_logo', { p_client: clientId as string, p_url: null as unknown as string });
+  const { error } = await supabase.rpc('set_home_logo', { p_client: clientId as string, p_url: null as unknown as string, p_variant: variant });
   if (error) return { status: 'error', message: toUserMessage(error) };
   revalidatePath(clientId ? `/clients/${clientId}` : '/system/settings');
   return { status: 'success', message: 'Standart logo qaytarildi.' };

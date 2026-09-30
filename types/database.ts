@@ -891,6 +891,7 @@ export type Database = {
           created_by: string | null
           deleted_at: string | null
           description: string | null
+          home_logo_dark_url: string | null
           home_logo_url: string | null
           id: string
           industry: string | null
@@ -910,6 +911,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
+          home_logo_dark_url?: string | null
           home_logo_url?: string | null
           id?: string
           industry?: string | null
@@ -929,6 +931,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
+          home_logo_dark_url?: string | null
           home_logo_url?: string | null
           id?: string
           industry?: string | null
@@ -5146,6 +5149,7 @@ export type Database = {
         Row: {
           client_id: string | null
           created_at: string
+          home_logo_dark_url: string | null
           home_logo_url: string | null
           id: string
           inherits_agency_plan: boolean
@@ -5157,6 +5161,7 @@ export type Database = {
         Insert: {
           client_id?: string | null
           created_at?: string
+          home_logo_dark_url?: string | null
           home_logo_url?: string | null
           id?: string
           inherits_agency_plan?: boolean
@@ -5168,6 +5173,7 @@ export type Database = {
         Update: {
           client_id?: string | null
           created_at?: string
+          home_logo_dark_url?: string | null
           home_logo_url?: string | null
           id?: string
           inherits_agency_plan?: boolean
@@ -6065,7 +6071,7 @@ export type Database = {
         }
       }
       set_home_logo: {
-        Args: { p_client: string; p_url: string }
+        Args: { p_client: string; p_url: string; p_variant?: string }
         Returns: undefined
       }
       set_staff_permissions: {

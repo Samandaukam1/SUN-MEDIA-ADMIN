@@ -26,7 +26,7 @@ export default async function SystemSettingsPage() {
   const supabase = await createClient();
   const { data, error } = await supabase.from('app_settings').select('key, value, updated_at').order('key');
   if (error) throw error;
-  const { data: agency } = await supabase.from('workspaces').select('home_logo_url').eq('kind', 'agency').maybeSingle();
+  const { data: agency } = await supabase.from('workspaces').select('home_logo_url, home_logo_dark_url').eq('kind', 'agency').maybeSingle();
   const host = new URL(getPublicEnv().url).host;
 
   return (
@@ -34,7 +34,11 @@ export default async function SystemSettingsPage() {
       <PageHeader title="Tizim sozlamalari" description="Platformaning barcha sozlamalari. Ish jadvali va eslatmalarni “Sozlamalar” bo‘limida o‘zgartirasiz." />
       <Card>
         <SectionTitle>Jamoa ilovasining markaziy logosi</SectionTitle>
-        <HomeLogoField clientId={null} current={agency?.home_logo_url ?? null} fallbackLabel="SUN MEDIA" />
+        <p className="mb-4 text-sm text-muted">Bo‘sh qoldirilsa, asl SUN MEDIA logosi ishlatiladi: yorug‘ mavzuda kulrang original, qorong‘u mavzuda grafit varianti.</p>
+        <div className="space-y-6">
+          <HomeLogoField clientId={null} variant="light" current={agency?.home_logo_url ?? null} fallbackLabel="SUN MEDIA" />
+          <HomeLogoField clientId={null} variant="dark" current={agency?.home_logo_dark_url ?? null} fallbackLabel="SUN MEDIA" />
+        </div>
       </Card>
       <Card className="grid gap-3 text-sm sm:grid-cols-3">
         <div>

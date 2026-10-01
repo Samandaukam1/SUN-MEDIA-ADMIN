@@ -1,0 +1,12 @@
+# Never upload local settings or keys; the deployment gets its settings from Vercel's environment.
+.env
+.env.*
+!.env.example
+node_modules
+.next
+.vercel
+*.tsbuildinfo
+# Database migrations, tests and docs are not part of the web panel.
+supabase
+tests
+docs

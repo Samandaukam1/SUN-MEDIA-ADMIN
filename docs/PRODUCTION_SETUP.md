@@ -113,7 +113,9 @@ Next.js server kerak, shuning uchun GitHub Pages emas.
 
 ## 5. Tizim egasi (System Owner)
 
-Cloud'da hali Tizim egasi yo'q. Tavsiya: `sunadmin1@mail.com` (hozir roli yo'q) — tasdiqlasangiz, rol beriladi.
+Tizim egasi: **`anisjonitp@gmail.com`** (Anisjon) — egasining tasdig'i bilan 2026-10-01 da berildi. Vaqtinchalik parol
+faqat egasining Mac'idagi `~/.sunmedia/preview-credentials.env` da; Google yoqilgach shu email bilan Google orqali kirish
+shu akkauntga o'zi bog'lanadi (email tasdiqlangan).
 Tizim egasi faqat web panelga kiradi; mobil ilovada "faqat web" ekrani chiqadi.
 Adminlar uni bloklay, parolini tiklay, rolini yoki ruxsatlarini o'zgartira olmaydi (bazada himoyalangan).
 

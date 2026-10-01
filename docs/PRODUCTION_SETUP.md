@@ -26,8 +26,8 @@ Auth redirect ro'yxati allaqachon sozlangan (`supabase/config.toml` → `[remote
 2. **APIs & Services → OAuth consent screen**: User type **External**, App name **SUN MEDIA**, support email, logo
    (ixtiyoriy). Scopes: `openid`, `email`, `profile`. Publishing status: **In production**.
 3. **APIs & Services → Credentials → Create credentials → OAuth client ID → Web application**:
-   - Authorized JavaScript origins: `https://samandaukam1.github.io`, `http://localhost:3000`
-     (admin panel domeni paydo bo'lganda uni ham qo'shing)
+   - Authorized JavaScript origins: `https://sunmedia-admin.vercel.app`, `https://samandaukam1.github.io`,
+     `http://localhost:3000`
    - Authorized redirect URIs: `https://vpxqviyacraeymgegvll.supabase.co/auth/v1/callback`
 4. **Supabase Dashboard → Authentication → Sign In / Providers → Google → Enable**: Client ID va Client Secret'ni
    joylashtiring → **Save**.
@@ -109,7 +109,7 @@ Next.js server kerak, shuning uchun GitHub Pages emas.
   maydon; `config.toml` → `[remotes.production.auth]` ham mos). **`config push` qilmang** — `config diff` ni o'qing:
   Twilio SMS dashboard'da yoqilgan va to'liq push uni o'chiradi.
 - `META_ALLOWED_RETURN_ORIGINS=http://localhost:3000,https://sunmedia-admin.vercel.app` (Edge Function secret).
-- Hali qilinmagan: domenni Google OAuth origins ro'yxatiga qo'shish (Google provider sozlanganda, 1-bo'lim).
+- Google OAuth origins ro'yxatiga admin domeni 1-bo'limda kiritilgan.
 
 ## 5. Tizim egasi (System Owner)
 

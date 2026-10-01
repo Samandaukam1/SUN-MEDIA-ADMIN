@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
 import { Logo } from '@/components/brand/Logo';
+import { googleSignInEnabled } from '@/lib/auth-providers';
 import { safeNextPath } from '@/lib/errors';
 import { devQuickLoginAvailable, supabaseHost } from './devAccess';
 import { LoginForm } from './LoginForm';
@@ -14,6 +15,7 @@ const ERRORS: Record<string, string> = {
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
   const params = await searchParams;
   const next = safeNextPath(params.next);
+  const google = await googleSignInEnabled();
   // DEV ONLY: imported behind the build-time NODE_ENV check, so production builds do not contain the panel at all.
   const DevQuickLogin = process.env.NODE_ENV === 'development' && devQuickLoginAvailable() ? (await import('./DevQuickLogin')).DevQuickLogin : null;
   return (
@@ -23,7 +25,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <div className="mx-auto w-full max-w-[400px] py-12">
           <h1 className="text-3xl font-bold tracking-tight">Boshqaruv paneli</h1>
           <p className="mt-2 mb-8 text-muted">SUN MEDIA jamoasi uchun. Hisobingiz bilan kiring.</p>
-          <LoginForm next={next} initialError={params.error ? ERRORS[params.error] : undefined} />
+          <LoginForm next={next} google={google} initialError={params.error ? ERRORS[params.error] : undefined} />
           {DevQuickLogin ? <DevQuickLogin next={next} host={supabaseHost()} /> : null}
         </div>
         <p className="text-[13px] text-subtle">Hisoblarni Owner yoki Admin yaratadi.</p>

@@ -19,7 +19,8 @@ function GoogleIcon() {
   );
 }
 
-export function LoginForm({ next, initialError }: { next: string; initialError?: string }) {
+/** `google`: show "Google bilan kirish" only when Supabase Auth has the provider switched on. */
+export function LoginForm({ next, google, initialError }: { next: string; google: boolean; initialError?: string }) {
   const [state, formAction, pending] = useActionState<SignInState, FormData>(signInAction, {});
   const [oauthError, setOauthError] = useState<string | null>(initialError ?? null);
   const [oauthPending, setOauthPending] = useState(false);
@@ -39,14 +40,18 @@ export function LoginForm({ next, initialError }: { next: string; initialError?:
 
   return (
     <div className="flex flex-col gap-6">
-      <Button type="button" variant="secondary" size="lg" onClick={signInWithGoogle} loading={oauthPending} icon={<GoogleIcon />}>
-        Google bilan kirish
-      </Button>
-      <div className="flex items-center gap-3 text-[13px] text-subtle">
-        <span className="h-px flex-1 bg-line" />
-        yoki email orqali
-        <span className="h-px flex-1 bg-line" />
-      </div>
+      {google ? (
+        <>
+          <Button type="button" variant="secondary" size="lg" onClick={signInWithGoogle} loading={oauthPending} icon={<GoogleIcon />}>
+            Google bilan kirish
+          </Button>
+          <div className="flex items-center gap-3 text-[13px] text-subtle">
+            <span className="h-px flex-1 bg-line" />
+            yoki email orqali
+            <span className="h-px flex-1 bg-line" />
+          </div>
+        </>
+      ) : null}
       <form action={formAction} className="flex flex-col gap-4" noValidate>
         <input type="hidden" name="next" value={next} />
         <Field label="Email" name="email" type="email" autoComplete="username" defaultValue={state.email} placeholder="ism@sunmedia.uz" error={state.fieldErrors?.email} required />

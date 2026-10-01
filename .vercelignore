@@ -6,7 +6,7 @@ node_modules
 .next
 .vercel
 *.tsbuildinfo
-# Database migrations, tests and docs are not part of the web panel.
-supabase
-tests
-docs
+# Database migrations, tests and docs at the repo root are not part of the web panel (lib/supabase is).
+/supabase
+/tests
+/docs

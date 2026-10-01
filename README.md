@@ -90,6 +90,9 @@ Production (bir marta):
 
 ## Vercel
 
+Production: **https://sunmedia-admin.vercel.app** — deploy tartibi, sozlamalar va ehtiyot choralari:
+`docs/PRODUCTION_SETUP.md` (4-bo‘lim).
+
 Settings → Environment Variables (Production va Preview):
 
 | O‘zgaruvchi | Turi |

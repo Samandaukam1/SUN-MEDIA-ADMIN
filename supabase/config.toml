@@ -436,11 +436,20 @@ verify_jwt = false
 # ---------------------------------------------------------------------------
 [remotes.production]
 project_id = "vpxqviyacraeymgegvll"
+# Before any `supabase config push`, run `supabase config diff` and read it: a push writes every declared value.
+# Twilio SMS is configured in the dashboard (enabled, with its own credentials) and is deliberately not declared
+# here — the base [auth.sms.twilio] block would switch it off and blank its credentials. Change single auth values
+# (e.g. redirect URLs) through the dashboard or the Management API instead of a full push.
+
+[remotes.production.db.pooler]
+# The hosted pooler's current settings.
+default_pool_size = 15
+max_client_conn = 200
 
 [remotes.production.auth]
 site_url = "https://samandaukam1.github.io/SUN-MEDIA-USER/"
-# Web preview (GitHub Pages) and the native app scheme. Add the admin panel / custom domain here when deployed.
-additional_redirect_urls = ["https://samandaukam1.github.io/SUN-MEDIA-USER/**", "sunmedia://**"]
+# Web preview (GitHub Pages), the native app scheme and the admin panel on Vercel. Add a custom domain here when one is set up.
+additional_redirect_urls = ["https://samandaukam1.github.io/SUN-MEDIA-USER/**", "sunmedia://**", "https://sunmedia-admin.vercel.app/**"]
 
 [remotes.production.auth.email]
 enable_confirmations = true

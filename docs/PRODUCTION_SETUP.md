@@ -86,25 +86,30 @@ Havola ilovaning `/reset-password` sahifasiga qaytadi (web va `sunmedia://`). Un
 Instagram statistikasi har kuni 03:00 (Toshkent) da yangilanadi. Birinchi ulashda oxirgi 30 kun olinadi.
 Obunachilar tarixi ulangan kundan boshlab saqlanadi.
 
-## 4. Admin panel hosting (Vercel)
+## 4. Admin panel hosting (Vercel) — bajarildi
 
-Meta wizard va katta boshqaruv web panelda ishlaydi. Panel Next.js server kerak qiladi, shuning uchun GitHub Pages emas.
+Panel internetda: **https://sunmedia-admin.vercel.app** (Vercel akkaunti `samandaukam1`, loyiha `sunmedia-admin`).
+Next.js server kerak, shuning uchun GitHub Pages emas.
 
-1. https://vercel.com → **Add New Project** → ADMIN repo.
-2. Environment variables:
-   - `NEXT_PUBLIC_SUPABASE_URL=https://vpxqviyacraeymgegvll.supabase.co`
-   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<anon/publishable key>`
-   - `SUPABASE_SECRET_KEY=<service_role>` — faqat server env, **Sensitive** belgisi bilan
-   - `NEXT_PUBLIC_SITE_URL=https://<admin-domeni>`
-   - `npm run build` oldidan `scripts/build-check.mjs` ishlaydi: Vercel production'da (yoki `STRICT_ENV=1`)
-     yetishmagan yoki lokal manzilga qaragan sozlama build'ni to'xtatadi. `NEXT_PUBLIC_` nomi ostidagi
-     server kaliti har qanday muhitda build'ni to'xtatadi.
-3. Deploydan keyin:
-   - Domenni `supabase/config.toml` → `[remotes.production.auth].additional_redirect_urls` ga
-     `https://<admin-domeni>/auth/callback` qilib qo'shing va `npx supabase config push` qiling.
-     Diqqat: bu buyruq tasdiq so'ramasdan qo'llanadi.
-   - `META_ALLOWED_RETURN_ORIGINS` secret'iga domenni qo'shing.
-   - Domenni Google OAuth origins ro'yxatiga ham qo'shing.
+- Production env (Vercel → Project → Settings → Environment Variables):
+  - `NEXT_PUBLIC_SUPABASE_URL=https://vpxqviyacraeymgegvll.supabase.co`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>`
+  - `SUPABASE_SERVICE_ROLE_KEY=<service_role>` — **Secret** (Sensitive), faqat server
+  - Sayt manzili `VERCEL_PROJECT_PRODUCTION_URL` dan olinadi; maxsus domen ulansa `NEXT_PUBLIC_SITE_URL` qo'shing.
+  - `npm run build` oldidan `scripts/build-check.mjs` ishlaydi: production'da yetishmagan yoki lokal manzilga qaragan
+    sozlama build'ni to'xtatadi; `NEXT_PUBLIC_` nomi ostidagi server kaliti har doim to'xtatadi.
+- Deploy CLI orqali (Git integratsiyasi ulanmagan — yangi commit o'zi chiqmaydi). Faqat commit qilingan kodni yuborish uchun:
+  ```sh
+  rm -rf /tmp/admin-deploy && mkdir /tmp/admin-deploy && git archive HEAD | tar -x -C /tmp/admin-deploy
+  mkdir /tmp/admin-deploy/.vercel && cp .vercel/project.json /tmp/admin-deploy/.vercel/
+  cd /tmp/admin-deploy && npx vercel deploy --prod
+  ```
+  `.vercelignore` `.env*`, `/supabase`, `/tests`, `/docs` ni yuklamaydi.
+- Supabase Auth redirect ro'yxatiga `https://sunmedia-admin.vercel.app/**` qo'shilgan (Management API orqali, faqat shu
+  maydon; `config.toml` → `[remotes.production.auth]` ham mos). **`config push` qilmang** — `config diff` ni o'qing:
+  Twilio SMS dashboard'da yoqilgan va to'liq push uni o'chiradi.
+- `META_ALLOWED_RETURN_ORIGINS=http://localhost:3000,https://sunmedia-admin.vercel.app` (Edge Function secret).
+- Hali qilinmagan: domenni Google OAuth origins ro'yxatiga qo'shish (Google provider sozlanganda, 1-bo'lim).
 
 ## 5. Tizim egasi (System Owner)
 

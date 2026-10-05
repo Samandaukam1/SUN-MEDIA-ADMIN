@@ -1,0 +1,33 @@
+'use client';
+import { useActionState, type ReactNode } from 'react';
+import { Button } from '@/components/ui/Button';
+import { Card, SectionTitle } from '@/components/ui/Card';
+import { saveSafiProduction } from '@/lib/actions/safi-production';
+import { safiArena, safiPersonality, type SafiAdmin } from '@/lib/schemas/safi-production';
+import { toLocalInput } from '@/lib/time';
+const input = 'w-full rounded-xl border border-line bg-surface px-3 py-2 text-ink';
+function Field({ name, label, value, type = 'text', min, max, step }: { name: string; label: string; value?: string | number; type?: string; min?: number; max?: number; step?: number }) { return <label className="grid gap-1 text-sm"><span>{label}</span><input className={input} name={name} defaultValue={value} type={type} min={min} max={max} step={step} /></label>; }
+function Toggle({ name, label, value }: { name: string; label: string; value: boolean }) { return <label className="flex items-center gap-2 text-sm"><input name={name} type="checkbox" defaultChecked={value} />{label}</label>; }
+function Choose({ name, label, value, options }: { name: string; label: string; value: string; options: readonly string[] }) { return <label className="grid gap-1 text-sm"><span>{label}</span><select className={input} name={name} defaultValue={value}>{options.map((x) => <option key={x} value={x}>{x || '—'}</option>)}</select></label>; }
+function Form({ operation, id, children }: { operation: string; id?: string; children: ReactNode }) {
+  const [state, action, pending] = useActionState(saveSafiProduction, { status: 'idle' });
+  return <form action={action} className="grid gap-4"><input type="hidden" name="operation" value={operation} />{id ? <input type="hidden" name="id" value={id} /> : null}{children}<Button type="submit" loading={pending} className="justify-self-start">Saqlash</Button>{state.status !== 'idle' ? <p role="status" className={state.status === 'error' ? 'text-danger' : 'text-accent'}>{state.message}</p> : null}</form>;
+}
+export function SafiProductionAdmin({ data }: { data: SafiAdmin }) {
+  const c = data.config;
+  return <div className="space-y-8">
+    <Card className="space-y-5"><SectionTitle>O‘yin va rejimlar</SectionTitle><Form operation="runtime">
+      <div className="flex flex-wrap gap-5"><Toggle name="enabled" label="SAFI ON" value={c.enabled} /><Toggle name="practice_enabled" label="Practice ON" value={c.practice_enabled} /><Toggle name="reward_enabled" label="Reward ON" value={c.reward_enabled} /><Toggle name="leaderboards_enabled" label="Reyting ON" value={c.leaderboards_enabled} /></div>
+      <div className="grid gap-4 md:grid-cols-3"><Field name="free_interval_hours" label="Bepul urinish oralig‘i (soat)" value={c.free_interval_hours} type="number" min={1} max={8760} /><Field name="attempt_cost" label="Qo‘shimcha urinish (SC)" value={c.attempt_cost} type="number" min={1} max={100000} /><Field name="lucky_percent" label="Lucky Egg (%)" value={c.lucky_chance * 100} type="number" min={0} max={10} step={.01} /><Choose name="arena" label="Arena" value={c.arena} options={safiArena.options} /><Choose name="personality" label="SAFI xarakteri" value={c.personality} options={safiPersonality.options} /></div>
+      <p className="text-sm text-muted">Arena, xarakter, Boss va kosmetika gol ehtimolini o‘zgartirmaydi. Har bir hisob, shu jumladan 10/10, barcha qiyinliklarda mumkin. Faol raundlar yangi sozlamalar bilan buzilmaydi.</p>
+    </Form></Card>
+    <Card className="space-y-5"><SectionTitle>Kampaniya yutuq limitlari</SectionTitle>{data.campaignLimits.map((x) => <Form key={x.id} operation="limits" id={x.id}><h3 className="font-semibold">{x.title}</h3><div className="grid gap-4 md:grid-cols-2"><Field name="maxWins" label="Bir o‘yinchining yutuqlari (bo‘sh = cheklanmagan)" value={x.maxWins ?? ''} type="number" min={1} max={10000} /><Field name="cooldownHours" label="Yutuqlar oralig‘i (soat)" value={x.cooldownHours} type="number" min={0} max={8760} /></div></Form>)}{!data.campaignLimits.length ? <p className="text-muted">Kampaniya mavjud emas.</p> : null}</Card>
+    <Card className="space-y-5"><SectionTitle>Boss va mavsum tadbirlari</SectionTitle>{[...data.events, undefined].map((e) => <details key={e?.id ?? 'new'} className="rounded-xl border border-line p-4"><summary className="cursor-pointer font-semibold">{e?.title ?? 'Yangi tadbir'}</summary><div className="pt-4"><Form operation="event" id={e?.id}>
+      <Field name="title" label="Tadbir nomi" value={e?.title} /><div className="flex gap-5"><Toggle name="enabled" label="Tadbir ON" value={e?.enabled ?? false} /><Toggle name="boss" label="SUPER CHICKEN" value={e?.boss ?? true} /></div>
+      <div className="grid gap-4 md:grid-cols-2"><Field name="starts_at" label="Boshlanish · Toshkent" type="datetime-local" value={toLocalInput(e?.starts_at)} /><Field name="ends_at" label="Tugash · Toshkent" type="datetime-local" value={toLocalInput(e?.ends_at)} /><Choose name="arena" label="Arena" value={e?.arena ?? 'night'} options={safiArena.options} /><Choose name="personality" label="Xarakter" value={e?.personality ?? 'SHOWMAN'} options={safiPersonality.options} /></div>
+    </Form></div></details>)}</Card>
+    <Card className="space-y-5"><SectionTitle>Kosmetika katalogi</SectionTitle>{[...data.cosmetics, undefined].map((x) => <details key={x?.id ?? 'new'} className="rounded-xl border border-line p-4"><summary className="cursor-pointer font-semibold">{x?.title ?? 'Yangi buyum'} {x ? `· ${x.price} SC` : ''}</summary><div className="pt-4"><Form operation="cosmetic" id={x?.id}>
+      <div className="grid gap-4 md:grid-cols-3">{x ? <><input type="hidden" name="code" value={x.code} /><p className="text-sm text-muted">Kod: {x.code}</p></> : <Field name="code" label="Kod" />}<Field name="title" label="Buyum nomi" value={x?.title} />{x ? <><input type="hidden" name="slot" value={x.slot} /><p className="text-sm text-muted">Slot: {x.slot}</p></> : <Choose name="slot" label="Slot" value="gloves" options={['gloves','outfit','arena','trail','goal_effect','nameplate','badge']} />}<Field name="price" label="Narx (SC)" value={x?.price ?? 0} type="number" min={0} max={100000} /><Field name="color" label="Rang" value={x?.appearance.color ?? '#70BC22'} type="color" /><Choose name="appearance_arena" label="Arena ko‘rinishi" value={x?.appearance.arena ?? ''} options={['',...safiArena.options]} /><Choose name="symbol" label="Nishon shakli" value={x?.appearance.symbol ?? ''} options={['','star','shield','egg']} /></div><Toggle name="enabled" label="Sotuv ON" value={x?.enabled ?? true} />
+    </Form></div></details>)}</Card>
+  </div>;
+}

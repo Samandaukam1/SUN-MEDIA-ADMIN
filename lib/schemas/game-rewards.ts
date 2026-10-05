@@ -116,4 +116,4 @@ export function unreachableRules(top: number, rules: readonly { score: number; e
   return rules.filter((r) => r.enabled && r.score > top).map((r) => r.score).sort((a, b) => a - b);
 }
 
-export const percent = (p: number) => `${(Math.round(p * 1000) / 10).toLocaleString('en-US')}%`;
+export const percent = (p: number) => p > 0 && p < .001 ? "<0.1%" : `${(Math.round(p * 1000) / 10).toLocaleString('en-US')}%`;

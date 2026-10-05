@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   public: {
     Tables: {
       announcement_reads: {
@@ -2210,6 +2215,248 @@ export type Database = {
           },
         ]
       }
+      game_engagement_daily_awards: {
+        Row: {
+          day_key: string
+          definition_id: string
+          winners: number
+        }
+        Insert: {
+          day_key: string
+          definition_id: string
+          winners?: number
+        }
+        Update: {
+          day_key?: string
+          definition_id?: string
+          winners?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_engagement_daily_awards_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "game_engagement_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_engagement_daily_budget: {
+        Row: {
+          coins_awarded: number
+          day_key: string
+          game_key: string
+        }
+        Insert: {
+          coins_awarded?: number
+          day_key: string
+          game_key: string
+        }
+        Update: {
+          coins_awarded?: number
+          day_key?: string
+          game_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_engagement_daily_budget_game_key_fkey"
+            columns: ["game_key"]
+            isOneToOne: false
+            referencedRelation: "game_engagement_settings"
+            referencedColumns: ["game_key"]
+          },
+        ]
+      }
+      game_engagement_definitions: {
+        Row: {
+          code: string
+          created_at: string
+          daily_reward_limit: number
+          description: string
+          enabled: boolean
+          ends_at: string | null
+          game_key: string
+          id: string
+          kind: string
+          metric: string
+          reward_coins: number
+          starts_at: string
+          target: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          daily_reward_limit?: number
+          description?: string
+          enabled?: boolean
+          ends_at?: string | null
+          game_key: string
+          id?: string
+          kind: string
+          metric: string
+          reward_coins?: number
+          starts_at?: string
+          target: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          daily_reward_limit?: number
+          description?: string
+          enabled?: boolean
+          ends_at?: string | null
+          game_key?: string
+          id?: string
+          kind?: string
+          metric?: string
+          reward_coins?: number
+          starts_at?: string
+          target?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_engagement_definitions_game_key_fkey"
+            columns: ["game_key"]
+            isOneToOne: false
+            referencedRelation: "game_engagement_settings"
+            referencedColumns: ["game_key"]
+          },
+        ]
+      }
+      game_engagement_progress: {
+        Row: {
+          coins_awarded: number
+          completed_at: string | null
+          definition_id: string
+          id: string
+          period_date: string
+          progress: number
+          session_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          coins_awarded?: number
+          completed_at?: string | null
+          definition_id: string
+          id?: string
+          period_date: string
+          progress?: number
+          session_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          coins_awarded?: number
+          completed_at?: string | null
+          definition_id?: string
+          id?: string
+          period_date?: string
+          progress?: number
+          session_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_engagement_progress_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "game_engagement_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_engagement_progress_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_engagement_settings: {
+        Row: {
+          daily_coin_cap: number
+          game_key: string
+          updated_at: string
+        }
+        Insert: {
+          daily_coin_cap?: number
+          game_key: string
+          updated_at?: string
+        }
+        Update: {
+          daily_coin_cap?: number
+          game_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      game_player_stats: {
+        Row: {
+          current_streak: number
+          game_key: string
+          games_played: number
+          goals: number
+          last_played_date: string | null
+          longest_combo: number
+          longest_streak: number
+          personal_best: number
+          saves_faced: number
+          shots: number
+          updated_at: string
+          user_id: string
+          zone_goals: number[]
+          zone_shots: number[]
+        }
+        Insert: {
+          current_streak?: number
+          game_key: string
+          games_played?: number
+          goals?: number
+          last_played_date?: string | null
+          longest_combo?: number
+          longest_streak?: number
+          personal_best?: number
+          saves_faced?: number
+          shots?: number
+          updated_at?: string
+          user_id: string
+          zone_goals?: number[]
+          zone_shots?: number[]
+        }
+        Update: {
+          current_streak?: number
+          game_key?: string
+          games_played?: number
+          goals?: number
+          last_played_date?: string | null
+          longest_combo?: number
+          longest_streak?: number
+          personal_best?: number
+          saves_faced?: number
+          shots?: number
+          updated_at?: string
+          user_id?: string
+          zone_goals?: number[]
+          zone_shots?: number[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_player_stats_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_reward_campaigns: {
         Row: {
           created_at: string
@@ -2217,10 +2464,12 @@ export type Database = {
           ends_at: string | null
           game_key: string
           id: string
+          max_wins_per_user: number | null
           starts_at: string
           status: string
           title: string
           updated_at: string
+          win_cooldown_hours: number
         }
         Insert: {
           created_at?: string
@@ -2228,10 +2477,12 @@ export type Database = {
           ends_at?: string | null
           game_key: string
           id?: string
+          max_wins_per_user?: number | null
           starts_at?: string
           status?: string
           title: string
           updated_at?: string
+          win_cooldown_hours?: number
         }
         Update: {
           created_at?: string
@@ -2239,10 +2490,12 @@ export type Database = {
           ends_at?: string | null
           game_key?: string
           id?: string
+          max_wins_per_user?: number | null
           starts_at?: string
           status?: string
           title?: string
           updated_at?: string
+          win_cooldown_hours?: number
         }
         Relationships: [
           {
@@ -2451,6 +2704,74 @@ export type Database = {
           },
         ]
       }
+      game_round_stats: {
+        Row: {
+          completed_at: string
+          corner_goals: number
+          corner_mask: number
+          day_key: string
+          events: Json
+          game_key: string
+          goal_zone_mask: number
+          goals_after_saves: number
+          longest_combo: number
+          mode: string
+          saves: number
+          score: number
+          session_id: string
+          shots: number
+          user_id: string
+          zone_goals: number[]
+          zone_shots: number[]
+        }
+        Insert: {
+          completed_at: string
+          corner_goals: number
+          corner_mask: number
+          day_key: string
+          events?: Json
+          game_key: string
+          goal_zone_mask: number
+          goals_after_saves: number
+          longest_combo: number
+          mode: string
+          saves: number
+          score: number
+          session_id: string
+          shots: number
+          user_id: string
+          zone_goals: number[]
+          zone_shots: number[]
+        }
+        Update: {
+          completed_at?: string
+          corner_goals?: number
+          corner_mask?: number
+          day_key?: string
+          events?: Json
+          game_key?: string
+          goal_zone_mask?: number
+          goals_after_saves?: number
+          longest_combo?: number
+          mode?: string
+          saves?: number
+          score?: number
+          session_id?: string
+          shots?: number
+          user_id?: string
+          zone_goals?: number[]
+          zone_shots?: number[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_round_stats_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_sessions: {
         Row: {
           attempt_limit: number
@@ -2470,6 +2791,7 @@ export type Database = {
           guaranteed: boolean
           id: string
           invalid_taps: number
+          presentation_snapshot: Json
           pro_reward_eligible: boolean | null
           reach_snapshot: number | null
           reward_campaign_id: string | null
@@ -2502,6 +2824,7 @@ export type Database = {
           guaranteed?: boolean
           id?: string
           invalid_taps?: number
+          presentation_snapshot?: Json
           pro_reward_eligible?: boolean | null
           reach_snapshot?: number | null
           reward_campaign_id?: string | null
@@ -2534,6 +2857,7 @@ export type Database = {
           guaranteed?: boolean
           id?: string
           invalid_taps?: number
+          presentation_snapshot?: Json
           pro_reward_eligible?: boolean | null
           reach_snapshot?: number | null
           reward_campaign_id?: string | null
@@ -4249,6 +4573,224 @@ export type Database = {
         }
         Relationships: []
       }
+      safi_cosmetics: {
+        Row: {
+          appearance: Json
+          code: string
+          enabled: boolean
+          id: string
+          price: number
+          slot: string
+          title: string
+        }
+        Insert: {
+          appearance?: Json
+          code: string
+          enabled?: boolean
+          id?: string
+          price?: number
+          slot: string
+          title: string
+        }
+        Update: {
+          appearance?: Json
+          code?: string
+          enabled?: boolean
+          id?: string
+          price?: number
+          slot?: string
+          title?: string
+        }
+        Relationships: []
+      }
+      safi_equipment: {
+        Row: {
+          item_id: string
+          slot: string
+          user_id: string
+        }
+        Insert: {
+          item_id: string
+          slot: string
+          user_id: string
+        }
+        Update: {
+          item_id?: string
+          slot?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safi_equipment_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "safi_cosmetics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safi_equipment_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safi_equipment_user_id_item_id_fkey"
+            columns: ["user_id", "item_id"]
+            isOneToOne: false
+            referencedRelation: "safi_inventory"
+            referencedColumns: ["user_id", "item_id"]
+          },
+        ]
+      }
+      safi_events: {
+        Row: {
+          arena: string
+          boss: boolean
+          enabled: boolean
+          ends_at: string
+          id: string
+          personality: string
+          starts_at: string
+          title: string
+        }
+        Insert: {
+          arena?: string
+          boss?: boolean
+          enabled?: boolean
+          ends_at: string
+          id?: string
+          personality?: string
+          starts_at: string
+          title: string
+        }
+        Update: {
+          arena?: string
+          boss?: boolean
+          enabled?: boolean
+          ends_at?: string
+          id?: string
+          personality?: string
+          starts_at?: string
+          title?: string
+        }
+        Relationships: []
+      }
+      safi_inventory: {
+        Row: {
+          item_id: string
+          purchased_at: string
+          request_id: string
+          user_id: string
+        }
+        Insert: {
+          item_id: string
+          purchased_at?: string
+          request_id: string
+          user_id: string
+        }
+        Update: {
+          item_id?: string
+          purchased_at?: string
+          request_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safi_inventory_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "safi_cosmetics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "safi_inventory_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      safi_player_identity: {
+        Row: {
+          listed: boolean
+          nickname: string
+          public_id: string
+          user_id: string
+        }
+        Insert: {
+          listed?: boolean
+          nickname: string
+          public_id?: string
+          user_id: string
+        }
+        Update: {
+          listed?: boolean
+          nickname?: string
+          public_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safi_player_identity_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      safi_runtime_config: {
+        Row: {
+          arena: string
+          attempt_cost: number
+          enabled: boolean
+          free_interval_hours: number
+          game_key: string
+          leaderboards_enabled: boolean
+          lucky_chance: number
+          personality: string
+          practice_enabled: boolean
+          reward_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          arena?: string
+          attempt_cost?: number
+          enabled?: boolean
+          free_interval_hours?: number
+          game_key: string
+          leaderboards_enabled?: boolean
+          lucky_chance?: number
+          personality?: string
+          practice_enabled?: boolean
+          reward_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          arena?: string
+          attempt_cost?: number
+          enabled?: boolean
+          free_interval_hours?: number
+          game_key?: string
+          leaderboards_enabled?: boolean
+          lucky_chance?: number
+          personality?: string
+          practice_enabled?: boolean
+          reward_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safi_runtime_config_game_key_fkey"
+            columns: ["game_key"]
+            isOneToOne: true
+            referencedRelation: "game_center_settings"
+            referencedColumns: ["game_key"]
+          },
+        ]
+      }
       service_types: {
         Row: {
           content_types: Database["public"]["Enums"]["content_type"][]
@@ -5012,6 +5554,7 @@ export type Database = {
         Row: {
           amount: number
           campaign_id: string | null
+          cosmetic_item_id: string | null
           created_at: string
           game_session_id: string | null
           id: string
@@ -5026,6 +5569,7 @@ export type Database = {
         Insert: {
           amount: number
           campaign_id?: string | null
+          cosmetic_item_id?: string | null
           created_at?: string
           game_session_id?: string | null
           id?: string
@@ -5040,6 +5584,7 @@ export type Database = {
         Update: {
           amount?: number
           campaign_id?: string | null
+          cosmetic_item_id?: string | null
           created_at?: string
           game_session_id?: string | null
           id?: string
@@ -5057,6 +5602,13 @@ export type Database = {
             columns: ["campaign_id"]
             isOneToOne: false
             referencedRelation: "sun_coin_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sun_coin_ledger_cosmetic_item_id_fkey"
+            columns: ["cosmetic_item_id"]
+            isOneToOne: false
+            referencedRelation: "safi_cosmetics"
             referencedColumns: ["id"]
           },
           {
@@ -5873,6 +6425,11 @@ export type Database = {
         Args: { p_results: Json }
         Returns: undefined
       }
+      configure_game_engagement: {
+        Args: { p_daily_coin_cap: number; p_game_key: string }
+        Returns: Json
+      }
+      configure_safi: { Args: { p_config: Json }; Returns: Json }
       create_file_upload: {
         Args: {
           p_chat_room_id?: string
@@ -5941,6 +6498,10 @@ export type Database = {
       end_workspace_subscription: {
         Args: { p_subscription: string }
         Returns: undefined
+      }
+      equip_safi_cosmetic: {
+        Args: { p_item: string; p_slot: string }
+        Returns: Json
       }
       fail_meta_lead: {
         Args: { p_error: string; p_lead_id: string }
@@ -6166,6 +6727,11 @@ export type Database = {
           total_bytes: number
         }[]
       }
+      get_game_engagement: { Args: { p_game_key?: string }; Returns: Json }
+      get_game_engagement_admin: {
+        Args: { p_game_key?: string }
+        Returns: Json
+      }
       get_inbox_counts: { Args: never; Returns: Json }
       get_instagram_summary: {
         Args: { p_client: string; p_days?: number }
@@ -6231,6 +6797,10 @@ export type Database = {
       get_my_entitlements: { Args: { p_client?: string }; Returns: Json }
       get_my_games: { Args: never; Returns: Json }
       get_report: { Args: { p_report_id: string }; Returns: Json }
+      get_safi_admin: { Args: never; Returns: Json }
+      get_safi_leaderboard: { Args: { p_period?: string }; Returns: Json }
+      get_safi_locker: { Args: never; Returns: Json }
+      get_safi_public_config: { Args: never; Returns: Json }
       get_sun_coin_admin_dashboard: { Args: never; Returns: Json }
       get_sun_coin_shop: { Args: never; Returns: Json }
       get_sun_coin_wallet: { Args: { p_limit?: number }; Returns: Json }
@@ -6440,6 +7010,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      purchase_safi_cosmetic: {
+        Args: { p_item: string; p_request: string }
+        Returns: Json
+      }
       redeem_promo: { Args: { p_code: string }; Returns: Json }
       register_external_file: {
         Args: {
@@ -6535,6 +7109,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      save_game_engagement_definition: {
+        Args: { p_config: Json }
+        Returns: Json
+      }
       save_meta_assets: {
         Args: {
           p_assets: Json
@@ -6549,6 +7127,8 @@ export type Database = {
           external_id: string
         }[]
       }
+      save_safi_cosmetic: { Args: { p_config: Json }; Returns: Json }
+      save_safi_event: { Args: { p_config: Json }; Returns: Json }
       save_shooting: {
         Args: { p_payload: Json; p_shooting_id: string }
         Returns: string
@@ -6668,6 +7248,18 @@ export type Database = {
       set_home_logo: {
         Args: { p_client: string; p_url: string; p_variant?: string }
         Returns: undefined
+      }
+      set_safi_campaign_limits: {
+        Args: {
+          p_campaign: string
+          p_cooldown_hours: number
+          p_max_wins: number
+        }
+        Returns: Json
+      }
+      set_safi_identity: {
+        Args: { p_listed: boolean; p_nickname: string }
+        Returns: Json
       }
       set_staff_permissions: {
         Args: { p_permissions: string[]; p_user_id: string }

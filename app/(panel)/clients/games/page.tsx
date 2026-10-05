@@ -37,8 +37,13 @@ export default async function GamesPage() {
     <div>
       <PageHeader title="Game Center" description="Mijoz ilovasidagi brendli mini-o‘yinlar va mukofot kampaniyalari." />
       <Card className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div><SectionTitle>SAFI Penalty</SectionTitle><p className="text-muted">Rewards · SUN Coin Campaign — pool, score shartlari va analitika.</p></div>
+        <div><SectionTitle>SAFI Penalty</SectionTitle><p className="text-muted">Reward Rules, SUN Coin wallet va Coin Shop.</p></div>
         <ButtonLink href="/clients/games/safi-penalty" variant="primary">Mukofotlarni boshqarish</ButtonLink>
+        <ButtonLink href="/clients/games/safi-penalty/control">SAFI sozlamalari</ButtonLink>
+      </Card>
+      <Card className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <div><SectionTitle>Challenge va yutuqlar</SectionTitle><p className="text-muted">Kundalik topshiriqlar, faollik seriyalari, o‘yin statistikasi va mukofot limitlari.</p></div>
+        <ButtonLink href="/clients/games/engagement">Challenge va analitika</ButtonLink>
       </Card>
       <Card className="mb-8">
         <SectionTitle>Yangi kampaniya</SectionTitle>

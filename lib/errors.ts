@@ -20,6 +20,8 @@ const SQLSTATE: Record<string, string> = {
 // Known messages raised by our RPCs / Supabase Auth, translated. Anything else stays generic so raw
 // database text (constraint names, values, SQL) never reaches the screen.
 const KNOWN: Record<string, string> = {
+  GAME_ENGAGEMENT_INVALID_CONFIG: 'Challenge yoki yutuq sozlamalarini tekshiring.',
+  GAME_ENGAGEMENT_DEFINITION_IN_USE: 'Progress boshlangan. Natija turi, maqsad yoki SUN Coin miqdorini almashtirish uchun yangi topshiriq yarating.',
   COIN_INVALID_CONFIG: 'SUN Coin kampaniyasi sozlamalarini tekshiring.',
   COIN_CAMPAIGN_ALREADY_ACTIVE: 'Bu o‘yin uchun faol kampaniya bor. Avval uni pauzaga qo‘ying yoki tugating.',
   COIN_INVALID_TRANSITION: 'Kampaniyani bu holatga o‘tkazib bo‘lmaydi. Sahifani yangilang.',

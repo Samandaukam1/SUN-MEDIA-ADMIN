@@ -18,7 +18,7 @@ export function Hero({ settings, secondaryHref }: { settings: SiteSettings; seco
       <div className="relative mx-auto flex w-full max-w-6xl flex-1 flex-col justify-end px-5 pt-[43svh] pb-12 sm:px-8 lg:justify-center lg:pt-32 lg:pb-24">
         <div className="max-w-[640px]">
           {settings.hero_eyebrow ? (
-            <Reveal className="mb-5 sm:mb-7" y={14}>
+            <Reveal onMount className="mb-5 sm:mb-7" y={14}>
               <Eyebrow>{settings.hero_eyebrow}</Eyebrow>
             </Reveal>
           ) : null}
@@ -27,11 +27,11 @@ export function Hero({ settings, secondaryHref }: { settings: SiteSettings; seco
             className="font-display s-silver text-[37px] leading-[1.02] font-medium tracking-[-0.045em] text-balance sm:text-[64px] lg:text-[78px]"
           />
           {settings.hero_subtitle ? (
-            <Reveal delay={0.55} y={16}>
+            <Reveal onMount delay={0.55} y={16}>
               <p className="mt-5 max-w-[520px] text-[16px] sm:mt-7 leading-relaxed text-[#b4b4ba] sm:text-[19px]">{settings.hero_subtitle}</p>
             </Reveal>
           ) : null}
-          <Reveal delay={0.7} y={16} className="mt-8 flex flex-wrap items-center gap-3 sm:mt-10">
+          <Reveal onMount delay={0.7} y={16} className="mt-8 flex flex-wrap items-center gap-3 sm:mt-10">
             <ApplyButton label={settings.primary_cta_label} />
             {secondaryHref ? (
               <Link href={secondaryHref} className="s-btn s-btn-glass lg">

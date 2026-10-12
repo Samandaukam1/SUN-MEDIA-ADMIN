@@ -12,22 +12,25 @@ export function Reveal({
   y = 28,
   className,
   as = 'div',
+  onMount = false,
 }: {
   children: ReactNode;
   delay?: number;
   y?: number;
   className?: string;
   as?: 'div' | 'section' | 'li' | 'article' | 'header' | 'p' | 'span';
+  /** Above the fold (hero): play on load instead of waiting to scroll into view. */
+  onMount?: boolean;
 }) {
   const reduce = useReducedMotion();
   const Tag = motion[as];
+  // filter: none once visible, so glass inside blurs the page again (a filtered parent becomes its backdrop root).
+  const shown = reduce ? { opacity: 1 } : { opacity: 1, y: 0, filter: 'blur(0px)', transitionEnd: { filter: 'none' } };
   return (
     <Tag
       className={className}
       initial={reduce ? { opacity: 0 } : { opacity: 0, y, filter: 'blur(10px)' }}
-      // filter: none once visible, so glass inside blurs the page again (a filtered parent becomes its backdrop root).
-      whileInView={reduce ? { opacity: 1 } : { opacity: 1, y: 0, filter: 'blur(0px)', transitionEnd: { filter: 'none' } }}
-      viewport={{ once: true, margin: '0px 0px -12% 0px' }}
+      {...(onMount ? { animate: shown } : { whileInView: shown, viewport: { once: true, margin: '0px 0px -12% 0px' } })}
       transition={{ duration: 0.9, delay, ease: EASE }}
     >
       {children}

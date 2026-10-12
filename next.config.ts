@@ -12,6 +12,16 @@ const supabase = (() => {
 })();
 const supabaseWs = supabase.replace(/^http/, 'ws');
 
+// Site images (partner logos, case covers) live in Supabase Storage and go through next/image.
+const storagePattern = (() => {
+  try {
+    const u = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '');
+    return [{ protocol: u.protocol.replace(':', '') as 'http' | 'https', hostname: u.hostname, port: u.port, pathname: '/storage/v1/object/public/**' }];
+  } catch {
+    return [];
+  }
+})();
+
 // Next.js injects inline bootstrap scripts, so 'unsafe-inline' stays for scripts; the policy still
 // blocks framing, plugins, foreign form targets and connections to anything but Supabase.
 const csp = [
@@ -44,6 +54,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // Logo uploads (≤ 2 MB) go through a server action.
   experimental: { serverActions: { bodySizeLimit: '3mb' } },
+  images: { remotePatterns: storagePattern, formats: ['image/avif', 'image/webp'] },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

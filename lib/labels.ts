@@ -172,6 +172,7 @@ export const CLIENT_STATUS: Record<Enums['client_status'], { label: string; tone
 /** Uzbek names for permissions shown in account forms. */
 export const PERMISSION_LABEL: Record<string, string> = {
   'dashboard.view': 'Agentlik bosh sahifasi',
+  'site.manage': 'Sayt: sahifalar, kontent va arizalar',
   'clients.read_all': 'Barcha mijozlarni ko‘rish',
   'clients.manage': 'Mijozlarni boshqarish',
   'employees.read': 'Xodimlarni ko‘rish',
@@ -214,6 +215,7 @@ export const PERMISSION_LABEL: Record<string, string> = {
 export const PERMISSION_MODULE_LABEL: Record<string, string> = {
   clients: 'Mijozlar',
   commercial: 'Tarif va shartnomalar',
+  website: 'Sayt',
   dashboard: 'Bosh sahifa',
   files: 'Fayllar',
   team: 'Jamoa',

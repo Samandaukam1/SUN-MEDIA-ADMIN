@@ -111,6 +111,35 @@ Next.js server kerak, shuning uchun GitHub Pages emas.
 - `META_ALLOWED_RETURN_ORIGINS=http://localhost:3000,https://sunmedia-admin.vercel.app` (Edge Function secret).
 - Google OAuth origins ro'yxatiga admin domeni 1-bo'limda kiritilgan.
 
+## 4a. Ochiq sayt (landing) va xodimlar kirish kodi
+
+- Panel domeni endi **ochiq sayt**: `/`, `/xizmatlar`, `/keyslar`, `/keyslar/<slug>`, `/hamkorlar`, `/biz-haqimizda`,
+  `/aloqa` (+ `robots.txt`, `sitemap.xml`, OG rasm). Panelning bosh sahifasi `/panel` ga ko'chdi.
+- Panelga kirish: footerdagi kichik yozuv (standart "Xodimlar uchun") → 6 xonali kod → `/login` → odatiy email + parol.
+  To'g'ri kod `sm_gate` httpOnly cookie'sini 30 daqiqaga beradi. Kodsiz `/login` va panel sahifalari saytga qaytaradi;
+  tizimga kirgan xodim yozuvni bossa to'g'ridan-to'g'ri `/panel` ochiladi. Kod — qo'shimcha to'siq, parol o'rnini bosmaydi.
+- Kod bazada faqat bcrypt holida (`private.site_gate`), git'da yo'q. Almashtirish: **Panel → Sayt → Kirish kodi**
+  (faqat Tizim egasi). Birinchi marta yoki unutilsa — SQL Editor'da (kod faqat shu so'rovda bo'ladi):
+  ```sql
+  insert into private.site_gate (id, code_hash)
+  values (true, extensions.crypt('<6 raqam>', extensions.gen_salt('bf', 10)))
+  on conflict (id) do update set code_hash = excluded.code_hash, updated_at = now();
+  ```
+- Limitlar (bazada): bir tashrifchi 15 daqiqada 5 ta xato kod, hammasi bo'lib soatiga 200 ta xato; arizalar — bir
+  tashrifchidan 10 daqiqada 3 ta, hammasi bo'lib soatiga 120 ta. Tashrifchi kaliti — IP'ning HMAC'i (IP saqlanmaydi).
+- Ixtiyoriy env: `SITE_GATE_SECRET` (cookie imzosi). Bo'lmasa server kalitidan olinadi; almashtirilsa ochiq turgan barcha
+  kod-cookie'lar bekor bo'ladi.
+- Kontent: **Panel → Sayt** (ruxsat `site.manage`, standart Admin rolida). Saqlangan o'zgarish saytda darhol chiqadi
+  (`revalidateTag`). Rasmlar `branding` bucket'ining `site/` papkasida (2 MB gacha, brauzerda WebP'ga siqiladi);
+  o'chirilgan yoki almashtirilgan rasm storage'dan ham o'chadi. Bo'sh bo'limlar (hamkorlar, keyslar, raqamlar, fikrlar)
+  saytda o'zi yashirinadi — soxta ma'lumot qo'yilmagan.
+- Sayt kontentini server `get_site_content()` orqali service role bilan o'qiydi: anonim mijoz hech qanday funksiyani
+  chaqira olmaydi (016 xavfsizlik invarianti saqlangan).
+- Arizalar: **Panel → Sayt → Arizalar** (Yangi / Ko'rilgan / Arxiv). Yangi ariza `site.manage` egalariga bildirishnoma va
+  mobil push yuboradi. CRM emas — oddiy ro‘yxat.
+- Footerdagi "developed by Jaxongirmans IT Teams" banneri `https://t.me/jaxongirman` ga olib boradi
+  (`public/credits/jaxongirmans-it-teams.png`).
+
 ## 5. Tizim egasi (System Owner)
 
 Tizim egasi: **`anisjonitp@gmail.com`** (Anisjon) — egasining tasdig'i bilan 2026-10-01 da berildi. Vaqtinchalik parol

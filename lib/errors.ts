@@ -76,8 +76,8 @@ export function toUserMessage(error: unknown): string {
   return 'Amalni bajarib bo‘lmadi. Qayta urinib ko‘ring.';
 }
 
-/** Only same-origin relative paths are accepted as post-login destinations. */
+/** Only same-origin relative paths are accepted as post-login destinations; the default is the panel's home. */
 export function safeNextPath(value: unknown): string {
-  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) return '/';
+  if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\') || value === '/') return '/panel';
   return value;
 }

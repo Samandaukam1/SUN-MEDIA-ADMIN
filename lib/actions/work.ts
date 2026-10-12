@@ -194,7 +194,7 @@ export async function markAttendanceAction(input: { userId: string; date: string
     );
   if (error) return { status: 'error', message: toUserMessage(error) };
   revalidatePath('/team/attendance');
-  revalidatePath('/');
+  revalidatePath('/panel');
   return { status: 'success' };
 }
 
@@ -209,7 +209,7 @@ export async function markAllPresentAction(input: { userIds: string[]; date: str
     .upsert(ids.data.map((user_id) => ({ user_id, work_date: input.date, status: 'present' as const })), { onConflict: 'user_id,work_date', ignoreDuplicates: true });
   if (error) return { status: 'error', message: toUserMessage(error) };
   revalidatePath('/team/attendance');
-  revalidatePath('/');
+  revalidatePath('/panel');
   return { status: 'success' };
 }
 

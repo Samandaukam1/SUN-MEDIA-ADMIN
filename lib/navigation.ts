@@ -8,12 +8,12 @@ export type NavPage = { href: string; label: string } & Gate;
 export type NavSection = { key: string; label: string; icon: IconName; pages: NavPage[] } & Gate;
 
 /**
- * Seven sections for admins, an eighth ("Tizim boshqaruvi") only for the Tizim egasi. Everything else is a tab
+ * Eight sections for admins ("Sayt" runs the public website), a ninth ("Tizim boshqaruvi") only for the Tizim egasi. Everything else is a tab
  * inside its section, so the sidebar never grows. Each page is gated by the same rule its page enforces.
  * Daily work (attendance, shootings, tasks, client chat) happens in the mobile app; the web is for large jobs.
  */
 const SECTIONS: NavSection[] = [
-  { key: 'home', label: 'Bosh sahifa', icon: 'home', pages: [{ href: '/', label: 'Bugun' }] },
+  { key: 'home', label: 'Bosh sahifa', icon: 'home', pages: [{ href: '/panel', label: 'Bugun' }] },
   {
     key: 'work',
     label: 'Ish jarayoni',
@@ -62,6 +62,25 @@ const SECTIONS: NavSection[] = [
     pages: [
       { href: '/crm', label: 'Lidlar', permission: 'crm.read' },
       { href: '/crm/reports', label: 'CRM hisobotlari', permission: 'crm.read' },
+    ],
+  },
+  {
+    key: 'site',
+    label: 'Sayt',
+    icon: 'globe',
+    permission: 'site.manage',
+    pages: [
+      { href: '/site', label: 'Umumiy', permission: 'site.manage' },
+      { href: '/site/applications', label: 'Arizalar', permission: 'site.manage' },
+      { href: '/site/pages', label: 'Sahifalar', permission: 'site.manage' },
+      { href: '/site/texts', label: 'Matnlar', permission: 'site.manage' },
+      { href: '/site/services', label: 'Xizmatlar', permission: 'site.manage' },
+      { href: '/site/cases', label: 'Keyslar', permission: 'site.manage' },
+      { href: '/site/partners', label: 'Hamkorlar', permission: 'site.manage' },
+      { href: '/site/testimonials', label: 'Fikrlar', permission: 'site.manage' },
+      { href: '/site/highlights', label: 'Raqamlar', permission: 'site.manage' },
+      { href: '/site/process', label: 'Jarayon, FAQ', permission: 'site.manage' },
+      { href: '/site/security', label: 'Kirish kodi', permission: 'site.manage' },
     ],
   },
   {

@@ -5101,6 +5101,579 @@ export type Database = {
           },
         ]
       }
+      site_applications: {
+        Row: {
+          company: string
+          created_at: string
+          fingerprint: string
+          full_name: string
+          handled_at: string | null
+          handled_by: string | null
+          id: string
+          link_url: string | null
+          message: string
+          phone: string
+          service: string
+          source_path: string
+          status: string
+          user_agent: string
+        }
+        Insert: {
+          company?: string
+          created_at?: string
+          fingerprint: string
+          full_name: string
+          handled_at?: string | null
+          handled_by?: string | null
+          id?: string
+          link_url?: string | null
+          message?: string
+          phone: string
+          service?: string
+          source_path?: string
+          status?: string
+          user_agent?: string
+        }
+        Update: {
+          company?: string
+          created_at?: string
+          fingerprint?: string
+          full_name?: string
+          handled_at?: string | null
+          handled_by?: string | null
+          id?: string
+          link_url?: string | null
+          message?: string
+          phone?: string
+          service?: string
+          source_path?: string
+          status?: string
+          user_agent?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_applications_handled_by_fkey"
+            columns: ["handled_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_benefits: {
+        Row: {
+          created_at: string
+          description: string
+          icon: string
+          id: string
+          is_published: boolean
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          icon?: string
+          id?: string
+          is_published?: boolean
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          icon?: string
+          id?: string
+          is_published?: boolean
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      site_cases: {
+        Row: {
+          category: string
+          challenge: string
+          client_name: string
+          cover_url: string | null
+          created_at: string
+          gallery: string[]
+          id: string
+          is_featured: boolean
+          is_published: boolean
+          partner_id: string | null
+          results: Json
+          slug: string
+          solution: string
+          sort_order: number
+          summary: string
+          title: string
+          updated_at: string
+          video_url: string | null
+          year: number | null
+        }
+        Insert: {
+          category?: string
+          challenge?: string
+          client_name?: string
+          cover_url?: string | null
+          created_at?: string
+          gallery?: string[]
+          id?: string
+          is_featured?: boolean
+          is_published?: boolean
+          partner_id?: string | null
+          results?: Json
+          slug: string
+          solution?: string
+          sort_order?: number
+          summary: string
+          title: string
+          updated_at?: string
+          video_url?: string | null
+          year?: number | null
+        }
+        Update: {
+          category?: string
+          challenge?: string
+          client_name?: string
+          cover_url?: string | null
+          created_at?: string
+          gallery?: string[]
+          id?: string
+          is_featured?: boolean
+          is_published?: boolean
+          partner_id?: string | null
+          results?: Json
+          slug?: string
+          solution?: string
+          sort_order?: number
+          summary?: string
+          title?: string
+          updated_at?: string
+          video_url?: string | null
+          year?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_cases_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "site_partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_faqs: {
+        Row: {
+          answer: string
+          created_at: string
+          id: string
+          is_published: boolean
+          question: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          answer: string
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          question: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          answer?: string
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          question?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      site_pages: {
+        Row: {
+          is_published: boolean
+          key: string
+          nav_label: string
+          path: string
+          seo_description: string
+          seo_title: string
+          show_in_nav: boolean
+          sort_order: number
+          subtitle: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          is_published?: boolean
+          key: string
+          nav_label: string
+          path: string
+          seo_description?: string
+          seo_title?: string
+          show_in_nav?: boolean
+          sort_order?: number
+          subtitle?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          is_published?: boolean
+          key?: string
+          nav_label?: string
+          path?: string
+          seo_description?: string
+          seo_title?: string
+          show_in_nav?: boolean
+          sort_order?: number
+          subtitle?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      site_partners: {
+        Row: {
+          created_at: string
+          description: string
+          highlight: string
+          id: string
+          industry: string
+          is_published: boolean
+          logo_url: string | null
+          name: string
+          since_year: number | null
+          sort_order: number
+          updated_at: string
+          website_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          highlight?: string
+          id?: string
+          industry?: string
+          is_published?: boolean
+          logo_url?: string | null
+          name: string
+          since_year?: number | null
+          sort_order?: number
+          updated_at?: string
+          website_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          highlight?: string
+          id?: string
+          industry?: string
+          is_published?: boolean
+          logo_url?: string | null
+          name?: string
+          since_year?: number | null
+          sort_order?: number
+          updated_at?: string
+          website_url?: string | null
+        }
+        Relationships: []
+      }
+      site_sections: {
+        Row: {
+          eyebrow: string
+          is_visible: boolean
+          key: string
+          sort_order: number
+          subtitle: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          eyebrow?: string
+          is_visible?: boolean
+          key: string
+          sort_order?: number
+          subtitle?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          eyebrow?: string
+          is_visible?: boolean
+          key?: string
+          sort_order?: number
+          subtitle?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      site_services: {
+        Row: {
+          bullets: string[]
+          created_at: string
+          details: string
+          icon: string
+          id: string
+          is_published: boolean
+          sort_order: number
+          summary: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          bullets?: string[]
+          created_at?: string
+          details?: string
+          icon?: string
+          id?: string
+          is_published?: boolean
+          sort_order?: number
+          summary: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          bullets?: string[]
+          created_at?: string
+          details?: string
+          icon?: string
+          id?: string
+          is_published?: boolean
+          sort_order?: number
+          summary?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      site_settings: {
+        Row: {
+          about_body: string
+          about_title: string
+          address: string | null
+          cta_subtitle: string
+          cta_title: string
+          email: string | null
+          facebook_url: string | null
+          footer_note: string
+          form_button_label: string
+          form_link_label: string
+          form_link_placeholder: string
+          form_subtitle: string
+          form_success_text: string
+          form_success_title: string
+          form_title: string
+          gate_label: string
+          hero_eyebrow: string
+          hero_subtitle: string
+          hero_title: string
+          id: boolean
+          instagram_url: string | null
+          linkedin_url: string | null
+          map_url: string | null
+          phone_primary: string | null
+          phone_secondary: string | null
+          primary_cta_label: string
+          secondary_cta_label: string
+          seo_description: string
+          seo_title: string
+          telegram_url: string | null
+          tiktok_url: string | null
+          updated_at: string
+          working_hours: string | null
+          youtube_url: string | null
+        }
+        Insert: {
+          about_body?: string
+          about_title?: string
+          address?: string | null
+          cta_subtitle?: string
+          cta_title?: string
+          email?: string | null
+          facebook_url?: string | null
+          footer_note?: string
+          form_button_label?: string
+          form_link_label?: string
+          form_link_placeholder?: string
+          form_subtitle?: string
+          form_success_text?: string
+          form_success_title?: string
+          form_title?: string
+          gate_label?: string
+          hero_eyebrow?: string
+          hero_subtitle?: string
+          hero_title: string
+          id?: boolean
+          instagram_url?: string | null
+          linkedin_url?: string | null
+          map_url?: string | null
+          phone_primary?: string | null
+          phone_secondary?: string | null
+          primary_cta_label?: string
+          secondary_cta_label?: string
+          seo_description?: string
+          seo_title?: string
+          telegram_url?: string | null
+          tiktok_url?: string | null
+          updated_at?: string
+          working_hours?: string | null
+          youtube_url?: string | null
+        }
+        Update: {
+          about_body?: string
+          about_title?: string
+          address?: string | null
+          cta_subtitle?: string
+          cta_title?: string
+          email?: string | null
+          facebook_url?: string | null
+          footer_note?: string
+          form_button_label?: string
+          form_link_label?: string
+          form_link_placeholder?: string
+          form_subtitle?: string
+          form_success_text?: string
+          form_success_title?: string
+          form_title?: string
+          gate_label?: string
+          hero_eyebrow?: string
+          hero_subtitle?: string
+          hero_title?: string
+          id?: boolean
+          instagram_url?: string | null
+          linkedin_url?: string | null
+          map_url?: string | null
+          phone_primary?: string | null
+          phone_secondary?: string | null
+          primary_cta_label?: string
+          secondary_cta_label?: string
+          seo_description?: string
+          seo_title?: string
+          telegram_url?: string | null
+          tiktok_url?: string | null
+          updated_at?: string
+          working_hours?: string | null
+          youtube_url?: string | null
+        }
+        Relationships: []
+      }
+      site_stats: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          is_published: boolean
+          label: string
+          sort_order: number
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          id?: string
+          is_published?: boolean
+          label: string
+          sort_order?: number
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          is_published?: boolean
+          label?: string
+          sort_order?: number
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      site_steps: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          is_published: boolean
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          is_published?: boolean
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          is_published?: boolean
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      site_testimonials: {
+        Row: {
+          author_name: string
+          author_role: string
+          avatar_url: string | null
+          created_at: string
+          id: string
+          is_published: boolean
+          partner_id: string | null
+          quote: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          author_name: string
+          author_role?: string
+          avatar_url?: string | null
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          partner_id?: string | null
+          quote: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          author_name?: string
+          author_role?: string
+          avatar_url?: string | null
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          partner_id?: string | null
+          quote?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_testimonials_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "site_partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       social_accounts: {
         Row: {
           client_id: string
@@ -6801,6 +7374,7 @@ export type Database = {
       get_safi_leaderboard: { Args: { p_period?: string }; Returns: Json }
       get_safi_locker: { Args: never; Returns: Json }
       get_safi_public_config: { Args: never; Returns: Json }
+      get_site_content: { Args: never; Returns: Json }
       get_sun_coin_admin_dashboard: { Args: never; Returns: Json }
       get_sun_coin_shop: { Args: never; Returns: Json }
       get_sun_coin_wallet: { Args: { p_limit?: number }; Returns: Json }
@@ -7268,6 +7842,26 @@ export type Database = {
       set_sun_coin_campaign_status: {
         Args: { p_campaign: string; p_status: string }
         Returns: Json
+      }
+      site_gate_set_code: { Args: { p_code: string }; Returns: undefined }
+      site_gate_status: { Args: never; Returns: Json }
+      site_gate_verify: {
+        Args: { p_code: string; p_fingerprint: string }
+        Returns: Json
+      }
+      site_submit_application: {
+        Args: {
+          p_company: string
+          p_fingerprint: string
+          p_full_name: string
+          p_link_url: string
+          p_message: string
+          p_phone: string
+          p_service: string
+          p_source_path: string
+          p_user_agent: string
+        }
+        Returns: string
       }
       submit_content_version: {
         Args: {

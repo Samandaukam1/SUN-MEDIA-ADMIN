@@ -6,6 +6,9 @@ Next.js 15 (App Router) + TypeScript. Vercel'ga deploy qilinadi. Supabase backen
 
 To‘liq arxitektura: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+Domen ochilganda **ochiq sayt** chiqadi (landing va sahifalar, kontenti Panel → Sayt'da); panelning bosh sahifasi
+`/panel`. Panelga kirish footerdagi kichik yozuv → 6 xonali kod → login orqali: [PRODUCTION_SETUP.md](docs/PRODUCTION_SETUP.md) (4a).
+
 ## Lokal ishga tushirish
 
 ```bash
@@ -14,6 +17,9 @@ npm run db:start      # Docker'da lokal Supabase
 npm run db:reset      # migratsiyalar + faqat-lokal seed
 npm run dev           # http://localhost:3000
 ```
+
+Lokal bazada footer kodi yo‘q (seed'da ham) — birinchi marta o‘zingizga o‘rnating (Studio SQL yoki `psql`):
+`insert into private.site_gate (id, code_hash) values (true, extensions.crypt('<6 raqam>', extensions.gen_salt('bf', 10))) on conflict (id) do update set code_hash = excluded.code_hash;`
 
 `next dev` `.env.development.local` faylini o‘qiydi (Git'ga kirmaydi):
 
@@ -101,5 +107,6 @@ Settings → Environment Variables (Production va Preview):
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (yoki `…_ANON_KEY`) | public |
 | `NEXT_PUBLIC_SITE_URL` | public (masalan `https://admin.sunmedia.uz`) |
 | `SUPABASE_SECRET_KEY` (yoki `SUPABASE_SERVICE_ROLE_KEY`) | **faqat server** — `NEXT_PUBLIC_` prefiksisiz |
+| `SITE_GATE_SECRET` | ixtiyoriy, faqat server — footer kod-cookie imzosi (bo'lmasa server kalitidan olinadi) |
 
 Supabase → Auth → URL Configuration: Site URL = admin domeni; Redirect URLs ga `https://<admin-domen>/auth/callback`, `sunmedia://auth/callback`, `sunmedia://reset-password` qo‘shing.

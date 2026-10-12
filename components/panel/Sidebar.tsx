@@ -22,7 +22,7 @@ export function Sidebar({ sections, create, user }: Props) {
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col bg-sidebar text-sidebar-text">
       <div className="px-6 pt-7 pb-5">
-        <Link href="/" aria-label="SUN MEDIA — Bosh sahifa">
+        <Link href="/panel" aria-label="SUN MEDIA — Bosh sahifa">
           <Logo width={128} onDark />
         </Link>
       </div>

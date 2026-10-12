@@ -29,7 +29,7 @@ export default async function NoAccessPage({ searchParams }: { searchParams: Pro
         {context?.profile?.email ? <p className="mt-2 text-sm text-subtle">{context.profile.email}</p> : null}
       </div>
       <div className="flex gap-3">
-        {reason === 'permission' && isStaff ? <ButtonLink href="/">Bosh sahifa</ButtonLink> : null}
+        {reason === 'permission' && isStaff ? <ButtonLink href="/panel">Bosh sahifa</ButtonLink> : null}
         {context ? (
           <form action="/auth/signout" method="post">
             <Button type="submit" variant="ghost">

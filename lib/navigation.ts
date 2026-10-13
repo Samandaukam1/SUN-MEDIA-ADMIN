@@ -8,7 +8,7 @@ export type NavPage = { href: string; label: string } & Gate;
 export type NavSection = { key: string; label: string; icon: IconName; pages: NavPage[] } & Gate;
 
 /**
- * Eight sections for admins ("Sayt" runs the public website), a ninth ("Tizim boshqaruvi") only for the Tizim egasi. Everything else is a tab
+ * Sections for admins ("Sayt" runs the public website; "Mijoz tahlili" interviews new clients), one more ("Tizim boshqaruvi") only for the Tizim egasi. Everything else is a tab
  * inside its section, so the sidebar never grows. Each page is gated by the same rule its page enforces.
  * Daily work (attendance, shootings, tasks) happens in the mobile app; chat (team and clients) is here too.
  */
@@ -49,6 +49,13 @@ const SECTIONS: NavSection[] = [
       { href: '/clients/promo', label: 'Promo kodlar', permission: 'promo.manage' },
       { href: '/clients/games', label: 'Game Center', permission: 'promo.manage' },
     ],
+  },
+  {
+    key: 'prospects',
+    label: 'Mijoz tahlili',
+    icon: 'sparkles',
+    permission: 'prospects.manage',
+    pages: [{ href: '/tahlil', label: 'Yangi mijozlar', permission: 'prospects.manage' }],
   },
   {
     key: 'team',

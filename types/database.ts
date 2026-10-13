@@ -4270,6 +4270,104 @@ export type Database = {
           },
         ]
       }
+      prospect_analyses: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          input: Json
+          kind: string
+          model: string | null
+          prospect_id: string
+          result: Json
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          input?: Json
+          kind: string
+          model?: string | null
+          prospect_id: string
+          result?: Json
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          input?: Json
+          kind?: string
+          model?: string | null
+          prospect_id?: string
+          result?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospect_analyses_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prospect_analyses_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prospects: {
+        Row: {
+          answers: Json
+          company: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          instagram: string | null
+          name: string
+          notes: string | null
+          phone: string | null
+          status: Database["public"]["Enums"]["prospect_status"]
+          updated_at: string
+        }
+        Insert: {
+          answers?: Json
+          company?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          instagram?: string | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          status?: Database["public"]["Enums"]["prospect_status"]
+          updated_at?: string
+        }
+        Update: {
+          answers?: Json
+          company?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          instagram?: string | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          status?: Database["public"]["Enums"]["prospect_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       push_tokens: {
         Row: {
           app_version: string | null
@@ -8298,6 +8396,7 @@ export type Database = {
         | "on_hold"
         | "completed"
         | "cancelled"
+      prospect_status: "new" | "analyzed" | "won" | "lost"
       publication_status:
         | "planned"
         | "scheduled"
@@ -8581,6 +8680,7 @@ export const Constants = {
         "completed",
         "cancelled",
       ],
+      prospect_status: ["new", "analyzed", "won", "lost"],
       publication_status: [
         "planned",
         "scheduled",

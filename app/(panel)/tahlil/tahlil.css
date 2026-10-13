@@ -1,0 +1,83 @@
+/*
+ * "Mijoz tahlili": the website's motion inside the panel. A light running around a card edge, a shine over the
+ * main button, drifting glow, and the AI "working" pulse. Off for prefers-reduced-motion.
+ */
+@layer components {
+  .t-aura {
+    position: absolute;
+    inset: -60%;
+    background: conic-gradient(from 0deg, transparent 0deg, rgb(212 252 24 / 0.95) 40deg, transparent 95deg, transparent 180deg, rgb(244 244 245 / 0.5) 220deg, transparent 275deg);
+    animation: t-spin 9s linear infinite;
+  }
+
+  @keyframes t-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .t-shine {
+    overflow: hidden;
+  }
+
+  .t-shine::after {
+    content: '';
+    position: absolute;
+    inset: -2px auto -2px -40%;
+    width: 35%;
+    background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.5), transparent);
+    transform: skewX(-20deg);
+    animation: t-shine 4.5s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    pointer-events: none;
+  }
+
+  @keyframes t-shine {
+    0%,
+    60% {
+      left: -40%;
+    }
+    100% {
+      left: 130%;
+    }
+  }
+
+  .t-drift {
+    animation: t-drift 16s ease-in-out infinite alternate;
+  }
+
+  @keyframes t-drift {
+    0% {
+      transform: translate3d(-6%, -4%, 0) scale(1);
+    }
+    100% {
+      transform: translate3d(8%, 6%, 0) scale(1.15);
+    }
+  }
+
+  .t-scan {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 0%, rgb(212 252 24 / 0.16) 48%, rgb(212 252 24 / 0.5) 50%, transparent 52%);
+    background-size: 100% 220%;
+    animation: t-scan 2.4s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes t-scan {
+    0% {
+      background-position: 0 120%;
+    }
+    100% {
+      background-position: 0 -120%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .t-aura,
+    .t-shine::after,
+    .t-drift,
+    .t-scan {
+      animation: none;
+    }
+  }
+}

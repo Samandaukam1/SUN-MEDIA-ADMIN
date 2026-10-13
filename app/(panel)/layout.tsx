@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import type { CreateItem } from '@/components/panel/CreateMenu';
 import { PanelShell } from '@/components/panel/PanelShell';
 import { can, canUsePanel, requireStaff } from '@/lib/auth';
+import { loadMyChats, unreadTotal } from '@/lib/chat';
 import { navigationFor } from '@/lib/navigation';
 
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
@@ -11,7 +12,9 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   if (context.temporary_password) redirect('/parol');
   // Web panel = management (system owner, admins, Rahbar); other staff have their own cabinet.
   if (!canUsePanel(context)) redirect('/xodim');
-  const sections = navigationFor(context);
+  // Unread chat messages on the sidebar's Chat entry.
+  const unread = unreadTotal(await loadMyChats().catch(() => []));
+  const sections = navigationFor(context).map((s) => (s.key === 'chat' ? { ...s, badge: unread } : s));
   const create: CreateItem[] = [
     can(context, 'content.manage') ? { href: '/work/content/new', label: 'Yangi kontent', icon: 'film' as const, hint: 'Reels, post, stories…' } : null,
     can(context, 'shootings.manage') ? { href: '/work/shootings/new', label: 'Yangi syomka', icon: 'video' as const, hint: 'Vaqt, joy va jamoa' } : null,

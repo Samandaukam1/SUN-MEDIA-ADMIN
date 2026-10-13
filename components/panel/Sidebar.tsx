@@ -67,6 +67,11 @@ export function Sidebar({ sections, create, user, open = false, onClose }: Sideb
                   {on ? <span className="absolute top-2 bottom-2 left-0 w-[3px] rounded-full bg-brand" aria-hidden /> : null}
                   <Icon name={section.icon} className={on ? 'text-brand' : undefined} />
                   {section.label}
+                  {section.badge ? (
+                    <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-brand px-1.5 text-[11px] font-bold text-on-brand">
+                      {section.badge > 99 ? '99+' : section.badge}
+                    </span>
+                  ) : null}
                 </Link>
               </li>
             );

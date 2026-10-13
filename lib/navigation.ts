@@ -10,10 +10,19 @@ export type NavSection = { key: string; label: string; icon: IconName; pages: Na
 /**
  * Eight sections for admins ("Sayt" runs the public website), a ninth ("Tizim boshqaruvi") only for the Tizim egasi. Everything else is a tab
  * inside its section, so the sidebar never grows. Each page is gated by the same rule its page enforces.
- * Daily work (attendance, shootings, tasks, client chat) happens in the mobile app; the web is for large jobs.
+ * Daily work (attendance, shootings, tasks) happens in the mobile app; chat (team and clients) is here too.
  */
 const SECTIONS: NavSection[] = [
   { key: 'home', label: 'Bosh sahifa', icon: 'home', pages: [{ href: '/panel', label: 'Bugun' }] },
+  {
+    key: 'chat',
+    label: 'Chat',
+    icon: 'message',
+    pages: [
+      { href: '/chat', label: 'Jamoa' },
+      { href: '/chat/mijozlar', label: 'Mijozlar' },
+    ],
+  },
   {
     key: 'work',
     label: 'Ish jarayoni',

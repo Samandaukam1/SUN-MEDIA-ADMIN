@@ -1,7 +1,7 @@
 import type { IconName } from '@/components/ui/Icon';
 
 /** What the client components receive: only the pages this person may open (section href = first page). */
-export type VisibleSection = { key: string; label: string; icon: IconName; href: string; pages: { href: string; label: string }[] };
+export type VisibleSection = { key: string; label: string; icon: IconName; href: string; pages: { href: string; label: string }[]; badge?: number };
 
 /** The section and page a path belongs to: the longest page href that prefixes it ('/' only matches itself). */
 export function locate(sections: VisibleSection[], pathname: string) {

@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: 'Xodim qo‘shish' };
 
 /** Jamoa → Xodim qo‘shish: a real login (Supabase Auth, created on the server) with role and permissions. */
 export default async function NewEmployeePage() {
-  const context = await requirePermission('employees.manage');
+  const context = await requirePermission('employees.create');
   const options = await loadEmployeeFormOptions(context);
   return (
     <div>

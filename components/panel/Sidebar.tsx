@@ -74,11 +74,13 @@ export function Sidebar({ sections, create, user, open = false, onClose }: Sideb
         </ul>
       </nav>
       <div className="flex items-center gap-3 border-t border-white/[0.06] px-5 py-4">
-        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-on-brand">{user.initials}</span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-sidebar-active">{user.name}</p>
-          <p className="truncate text-xs">{user.role}</p>
-        </div>
+        <Link href="/profil" title="Mening profilim" className="flex min-w-0 flex-1 items-center gap-3 rounded-lg hover:opacity-90">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand text-xs font-bold text-on-brand">{user.initials}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-sidebar-active">{user.name}</span>
+            <span className="block truncate text-xs">{user.role}</span>
+          </span>
+        </Link>
         <Link href="/parol" title="Parolni almashtirish" aria-label="Parolni almashtirish" className="rounded-lg p-2 text-sidebar-text hover:bg-white/[0.06] hover:text-sidebar-active">
           <Icon name="key" size={17} />
         </Link>

@@ -187,6 +187,12 @@ Next.js server kerak, shuning uchun GitHub Pages emas.
   bajarilgan / rejadagi ishlar, fayllar (PDF, rasm, Excel, Word, PowerPoint, 50 MB gacha, 20 tagacha) → “Nashr qilish”.
 - **Xodim kabineti** (`/xodim`): faqat o'ziga biriktirilgan vazifalar, holat (Boshlash → Tekshiruvga / Bajarildi),
   izoh, material yuklash (o'z sessiyasi bilan; `create_file_upload` / `complete_file_upload`).
+- **Yangi mijoz va yangi xodimni faqat Tizim egasi qo'shadi** (2026-10-13): `clients.create` (mijoz kompaniyasi va mijoz
+  logini) va `employees.create` (yangi xodim, kirish so'roviga xodim sifatida ruxsat) hech bir rolda yo'q; Tizim egasi
+  ularni avtomatik ega. Kerak bo'lsa, ma'lum odamga Jamoa → xodim → “Rol va ruxsatlar”dan berish mumkin. Admin mavjud
+  mijoz/xodimlarni tahrirlash, bloklash va parol tiklashda davom etadi, lekin o'zidan yuqori rangdagilarni (Rahbar,
+  Tizim egasi) tahrirlay olmaydi. Tizim egasi hammaning (Rahbar ham) ismi, lavozimi, roli va ruxsatlarini boshqaradi;
+  har kim o'z ismi va telefonini **Mening profilim** (`/profil`, yon menyudagi ism) orqali o'zgartiradi.
 - Rahbar (`owner` roli) endi `analytics.manage` va `reports.manage` ga ham ega; rollar/xodimlarni boshqara olmaydi,
   Tizim egasiga tegolmaydi (bazadagi rank va himoya qoidalari).
 

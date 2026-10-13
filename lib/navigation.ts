@@ -47,7 +47,7 @@ const SECTIONS: NavSection[] = [
     icon: 'users',
     pages: [
       { href: '/team', label: 'Xodimlar', anyOf: ['employees.read', 'employees.manage'] },
-      { href: '/team/new', label: 'Xodim qo‘shish', permission: 'employees.manage' },
+      { href: '/team/new', label: 'Xodim qo‘shish', permission: 'employees.create' },
       { href: '/team/accounts', label: 'Akkauntlar', permission: 'employees.manage' },
       { href: '/team/attendance', label: 'Davomat', permission: 'attendance.manage' },
       { href: '/team/performance', label: 'Ish samaradorligi', permission: 'performance.read' },

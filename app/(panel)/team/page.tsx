@@ -47,14 +47,13 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
     .filter((p) => !params.status || p.status === params.status);
 
   const all = peopleRes.data;
-  const canManage = can(context, 'employees.manage');
 
   return (
     <div>
       <PageHeader
         title="Xodimlar"
         description="SUN MEDIA xodimlari, lavozimi, roli va akkaunt holati."
-        actions={canManage ? <ButtonLink href="/team/new" variant="primary">+ Xodim</ButtonLink> : null}
+        actions={can(context, 'employees.create') ? <ButtonLink href="/team/new" variant="primary">+ Xodim</ButtonLink> : null}
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">

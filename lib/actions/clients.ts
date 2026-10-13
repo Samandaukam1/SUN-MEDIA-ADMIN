@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
-import { requireStaff } from '@/lib/auth';
+import { can, requireStaff } from '@/lib/auth';
 import { toUserMessage } from '@/lib/errors';
 import { createClient } from '@/lib/supabase/server';
 import { fieldErrorsFrom, type ActionState } from './state';
@@ -56,9 +56,10 @@ function read(formData: FormData) {
   };
 }
 
-/** Clients → Add client (RLS: clients.manage). */
+/** Clients → Add client: the system owner's right (RLS: clients.create). */
 export async function createClientRecord(_: ActionState, formData: FormData): Promise<ActionState> {
   const context = await requireStaff();
+  if (!can(context, 'clients.create')) return { status: 'error', message: 'Yangi mijozni faqat Tizim egasi qo‘shadi.' };
   const parsed = clientSchema.safeParse(read(formData));
   if (!parsed.success) return { status: 'error', message: 'Formadagi xatolarni tuzating.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
   const input = parsed.data;

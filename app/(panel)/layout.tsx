@@ -16,8 +16,8 @@ export default async function PanelLayout({ children }: { children: React.ReactN
     can(context, 'content.manage') ? { href: '/work/content/new', label: 'Yangi kontent', icon: 'film' as const, hint: 'Reels, post, stories…' } : null,
     can(context, 'shootings.manage') ? { href: '/work/shootings/new', label: 'Yangi syomka', icon: 'video' as const, hint: 'Vaqt, joy va jamoa' } : null,
     can(context, 'tasks.manage') ? { href: '/work/tasks/new', label: 'Yangi vazifa', icon: 'checkSquare' as const, hint: 'Kimga va qachongacha' } : null,
-    can(context, 'clients.manage') ? { href: '/clients?new=1', label: 'Yangi mijoz', icon: 'briefcase' as const, hint: 'Kompaniya va login' } : null,
-    can(context, 'employees.manage') ? { href: '/team/new', label: 'Yangi xodim', icon: 'users' as const, hint: 'Lavozim, login va parol' } : null,
+    can(context, 'clients.create') ? { href: '/clients?new=1', label: 'Yangi mijoz', icon: 'briefcase' as const, hint: 'Kompaniya va login' } : null,
+    can(context, 'employees.create') ? { href: '/team/new', label: 'Yangi xodim', icon: 'users' as const, hint: 'Lavozim, login va parol' } : null,
   ].filter((i) => i !== null);
 
   return (

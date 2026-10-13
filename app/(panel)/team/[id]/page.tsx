@@ -56,9 +56,17 @@ export default async function EmployeePage({ params, searchParams }: { params: P
     : null;
   const roles = person.user_roles.map((r) => r.role).filter((r): r is NonNullable<typeof r> => !!r).sort((a, b) => a.rank - b.rank);
   const status = lookup(ACCOUNT_STATUS, person.status, ACCOUNT_STATUS.active);
-  // A Tizim egasi account is managed only by the Tizim egasi (the database enforces this too).
-  const protectedAccount = roles.some((r) => r.key === 'system_owner') && !isSystemOwner(context);
-  const canManage = can(context, 'employees.manage') && person.id !== context.userId && !protectedAccount;
+  // A Tizim egasi account is managed only by the Tizim egasi; others only manage people at their rank or below
+  // (the database enforces the same rule; the form simply is not offered when the save would be refused).
+  const owner = isSystemOwner(context);
+  const protectedAccount = roles.some((r) => r.key === 'system_owner') && !owner;
+  const { data: myRoles } = owner ? { data: [] } : await supabase.from('roles').select('key, rank').in('key', context.roles.map((r) => r.key));
+  const myRank = owner ? 0 : Math.min(...(myRoles ?? []).map((r) => r.rank), 1000);
+  const theirRank = Math.min(...roles.map((r) => r.rank), 1000);
+  const self = person.id === context.userId;
+  const canManage = can(context, 'employees.manage') && !self && !protectedAccount && (owner || theirRank >= myRank);
+  // The system owner also edits their own name, phone and job title.
+  const canEditProfile = canManage || (owner && self);
   const tabs = TABS.map((t) => ({ key: t.key, label: t.label, href: `/team/${id}?tab=${t.key}`, count: t.key === 'clients' ? person.teams.length : undefined }));
 
   return (
@@ -105,7 +113,7 @@ export default async function EmployeePage({ params, searchParams }: { params: P
             department={person.employee?.department ?? null}
             employmentType={person.employee?.employment_type ?? 'full_time'}
             employeeStatus={person.employee?.status ?? 'active'}
-            editable={canManage}
+            editable={canEditProfile}
           />
         </Card>
       ) : null}

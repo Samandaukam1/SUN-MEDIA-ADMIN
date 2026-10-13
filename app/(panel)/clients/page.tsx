@@ -44,7 +44,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       <PageHeader
         title="Barcha mijozlar"
         description="Kompaniyalar, ularning loginlari, SUN MEDIA jamoasi va tariflari."
-        actions={can(context, 'clients.manage') ? <AddClientDialog defaultOpen={params.new === '1'} /> : null}
+        actions={can(context, 'clients.create') ? <AddClientDialog defaultOpen={params.new === '1'} /> : null}
       />
 
       <form className="mb-6 flex flex-wrap gap-3" role="search">

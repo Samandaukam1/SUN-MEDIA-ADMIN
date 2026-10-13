@@ -21,13 +21,18 @@ export function GrantAccessDialog({
   staffRoles,
   clients,
   canStaff,
+  canClient,
+  canDecline,
 }: {
   userId: string;
   email: string | null;
   fullName: string;
   staffRoles: Option[];
   clients: Option[];
+  /** Adding a SUN MEDIA employee / a client login is the system owner's right (employees.create / clients.create). */
   canStaff: boolean;
+  canClient: boolean;
+  canDecline: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -39,10 +44,12 @@ export function GrantAccessDialog({
 
   return (
     <div className="flex flex-wrap justify-end gap-2">
-      <Button size="md" onClick={() => setOpen(true)}>
-        Kirish berish
-      </Button>
-      {canStaff ? (
+      {canStaff || canClient ? (
+        <Button size="md" onClick={() => setOpen(true)}>
+          Kirish berish
+        </Button>
+      ) : null}
+      {canDecline ? (
         <Button
           size="md"
           variant="ghost"
@@ -89,9 +96,11 @@ export function GrantAccessDialog({
                   SUN MEDIA xodimi
                 </Button>
               ) : null}
-              <Button type="button" variant={kind === 'client' ? 'primary' : 'secondary'} onClick={() => setKind('client')}>
-                Mijoz akkaunti
-              </Button>
+              {canClient ? (
+                <Button type="button" variant={kind === 'client' ? 'primary' : 'secondary'} onClick={() => setKind('client')}>
+                  Mijoz akkaunti
+                </Button>
+              ) : null}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <TextInput label="Ism" name="first_name" defaultValue={first ?? ''} required error={state.status === 'error' ? state.fieldErrors?.first_name : undefined} />

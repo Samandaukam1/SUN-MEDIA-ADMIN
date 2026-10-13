@@ -98,7 +98,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             <Badge tone={status.tone} dot>
               {status.label}
             </Badge>
-            {manage && active === 'users' ? <AddClientUserDialog clientId={client.id} clientName={client.name} /> : null}
+            {can(context, 'clients.create') && active === 'users' ? <AddClientUserDialog clientId={client.id} clientName={client.name} /> : null}
           </>
         }
       />

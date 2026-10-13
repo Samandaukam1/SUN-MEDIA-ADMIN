@@ -32,6 +32,9 @@ insert into public.user_roles (user_id, role_id)
 select i.id, r.id from ap_ids i join public.roles r on r.key = case i.key when 'owner' then 'system_owner' when 'owner2' then 'system_owner' when 'pm' then 'project_manager' else i.key end
 where i.key in ('owner', 'owner2', 'admin', 'pm', 'editor');
 insert into public.employees (user_id) select id from ap_ids where key in ('owner', 'owner2', 'admin', 'pm', 'editor');
+-- Adding people is the system owner's; here the owner has handed both rights to this admin (037 covers the default).
+insert into public.user_permissions (user_id, permission_key)
+select pg_temp.ap('admin'), k from unnest(array['employees.create', 'clients.create']) k;
 insert into public.clients (id, name, code) values (pg_temp.ap('client'), 'Provision test', 'PV' || upper(left(replace(pg_temp.ap('client')::text, '-', ''), 10)));
 insert into public.client_members (client_id, user_id, role_id)
 select pg_temp.ap('client'), pg_temp.ap('client_user'), id from public.roles where key = 'client_owner';
@@ -75,7 +78,7 @@ select throws_ok(
 reset role;
 
 -- A manager with employees.manage cannot hand out permissions they do not hold
-insert into public.user_permissions (user_id, permission_key) values (pg_temp.ap('pm'), 'employees.manage');
+insert into public.user_permissions (user_id, permission_key) values (pg_temp.ap('pm'), 'employees.manage'), (pg_temp.ap('pm'), 'employees.create');
 select pg_temp.ap_login('pm');
 select throws_ok(
   $$select public.provision_staff_member(pg_temp.ap('new_by_pm'), 'Yangi', 'Operator', 'operator', null, null, null, 'full_time', array['finance.read'])$$,

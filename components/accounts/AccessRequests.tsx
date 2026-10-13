@@ -17,7 +17,8 @@ export async function AccessRequests({ context }: { context: StaffContext }) {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('get_access_requests');
   if (error || !data || data.length === 0) return null;
-  const canStaff = can(context, 'employees.manage');
+  const canStaff = can(context, 'employees.create');
+  const canClient = can(context, 'clients.create');
   const options = canStaff ? await loadEmployeeFormOptions(context) : null;
   const { data: clients } = await supabase.from('clients').select('id, name').is('deleted_at', null).eq('status', 'active').order('name');
 
@@ -50,6 +51,8 @@ export async function AccessRequests({ context }: { context: StaffContext }) {
                   email={r.email}
                   fullName={r.full_name ?? ''}
                   canStaff={canStaff}
+                  canClient={canClient}
+                  canDecline={can(context, 'employees.manage')}
                   staffRoles={(options?.roles ?? []).filter((x) => x.value !== 'system_owner')}
                   clients={(clients ?? []).map((c) => ({ value: c.id, label: c.name }))}
                 />

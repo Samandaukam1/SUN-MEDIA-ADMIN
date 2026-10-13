@@ -38,6 +38,9 @@ insert into public.user_roles (user_id, role_id)
 select i.id, r.id from crm_ids i join public.roles r on r.key = case i.key when 'admin' then 'admin' when 'rahbar' then 'owner' else 'editor' end
 where i.key in ('admin', 'rahbar', 'editor');
 insert into public.employees (user_id) select id from crm_ids where key in ('admin', 'rahbar', 'editor');
+-- Granting access requests adds people: the system owner gave this admin that right (see 037 for the default).
+insert into public.user_permissions (user_id, permission_key)
+select id, k from crm_ids, unnest(array['employees.create', 'clients.create']) k where key = 'admin';
 
 insert into public.clients (id, name, code) values
   (pg_temp.c('client_a'), 'CRM Test A', 'CRMTA'), (pg_temp.c('client_b'), 'CRM Test B', 'CRMTB');

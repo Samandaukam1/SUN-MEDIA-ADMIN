@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { createLogin, deleteLogin, setLoginBlocked, setTemporaryPassword } from '@/lib/accounts';
-import { requirePermission, requireStaff } from '@/lib/auth';
+import { can, requirePermission, requireStaff } from '@/lib/auth';
 import { toUserMessage } from '@/lib/errors';
 import { guardSystemOwner } from '@/lib/protect';
 import { createClient } from '@/lib/supabase/server';
@@ -40,7 +40,8 @@ const employeeSchema = z.object({
 
 /** Team → Add employee: creates the login, then provisions it with the admin's own session. */
 export async function createEmployeeAccount(_: CredentialsState, formData: FormData): Promise<CredentialsState> {
-  await requirePermission('employees.manage');
+  // Adding people is the system owner's right (or whoever they handed "Yangi xodim qo‘shish" to).
+  await requirePermission('employees.create');
   const parsed = employeeSchema.safeParse({
     first_name: formData.get('first_name'),
     last_name: formData.get('last_name'),
@@ -99,7 +100,9 @@ const clientUserSchema = z.object({
 
 /** Client → Users → Add login (client owner or client employee). */
 export async function createClientAccount(_: CredentialsState, formData: FormData): Promise<CredentialsState> {
-  await requireStaff();
+  const context = await requireStaff();
+  // Checked before the login is created: client logins are added by the system owner (clients.create).
+  if (!can(context, 'clients.create')) return { status: 'error', message: 'Yangi mijoz loginini faqat Tizim egasi qo‘shadi.' };
   const parsed = clientUserSchema.safeParse({
     client_id: formData.get('client_id'),
     first_name: formData.get('first_name'),
@@ -277,7 +280,7 @@ export async function grantAccessRequest(_: ActionState, formData: FormData): Pr
   const v = parsed.data;
   const supabase = await createClient();
   if (v.kind === 'staff') {
-    await requirePermission('employees.manage');
+    await requirePermission('employees.create');
     const { error } = await supabase.rpc('provision_staff_member', {
       p_user_id: v.user_id,
       p_first_name: v.first_name,
@@ -287,6 +290,7 @@ export async function grantAccessRequest(_: ActionState, formData: FormData): Pr
     });
     if (error) return { status: 'error', message: toUserMessage(error) };
   } else {
+    await requirePermission('clients.create');
     if (!v.client_id || !z.uuid().safeParse(v.client_id).success) return { status: 'error', message: 'Mijozni tanlang.', fieldErrors: { client_id: 'Mijozni tanlang' } };
     const { error } = await supabase.rpc('provision_client_user', {
       p_user_id: v.user_id,
@@ -312,4 +316,23 @@ export async function declineAccessRequest(userId: string): Promise<ActionState>
   revalidatePath('/team/accounts');
   revalidatePath('/system/accounts');
   return { status: 'success', message: 'So‘rov rad etildi.' };
+}
+
+const selfSchema = z.object({ first_name: name('Ism'), last_name: name('Familiya'), phone });
+
+/** "Mening profilim": anyone signed in to the panel edits their own name and phone (the RPC allows only self). */
+export async function updateMyProfile(_: ActionState, formData: FormData): Promise<ActionState> {
+  const context = await requireStaff();
+  const parsed = selfSchema.safeParse({ first_name: formData.get('first_name'), last_name: formData.get('last_name'), phone: formData.get('phone') ?? '' });
+  if (!parsed.success) return { status: 'error', message: 'Formadagi xatolarni tuzating.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('update_account_profile', {
+    p_user_id: context.userId,
+    p_first_name: parsed.data.first_name,
+    p_last_name: parsed.data.last_name,
+    p_phone: parsed.data.phone ?? undefined,
+  });
+  if (error) return { status: 'error', message: toUserMessage(error) };
+  revalidatePath('/', 'layout');
+  return { status: 'success', message: 'Saqlandi.' };
 }

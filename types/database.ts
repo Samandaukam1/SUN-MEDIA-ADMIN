@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   public: {
     Tables: {
       announcement_reads: {
@@ -3319,6 +3314,64 @@ export type Database = {
           },
         ]
       }
+      monthly_report_files: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          mime_type: string | null
+          name: string
+          report_id: string
+          size_bytes: number | null
+          storage_path: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          name: string
+          report_id: string
+          size_bytes?: number | null
+          storage_path: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          mime_type?: string | null
+          name?: string
+          report_id?: string
+          size_bytes?: number | null
+          storage_path?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_report_files_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "monthly_report_files_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "monthly_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "monthly_report_files_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       monthly_report_metrics: {
         Row: {
           label: string
@@ -3452,6 +3505,8 @@ export type Database = {
           status: Database["public"]["Enums"]["report_status"]
           title: string
           updated_at: string
+          work_done: string | null
+          work_planned: string | null
         }
         Insert: {
           client_id: string
@@ -3468,6 +3523,8 @@ export type Database = {
           status?: Database["public"]["Enums"]["report_status"]
           title: string
           updated_at?: string
+          work_done?: string | null
+          work_planned?: string | null
         }
         Update: {
           client_id?: string
@@ -3484,6 +3541,8 @@ export type Database = {
           status?: Database["public"]["Enums"]["report_status"]
           title?: string
           updated_at?: string
+          work_done?: string | null
+          work_planned?: string | null
         }
         Relationships: [
           {
@@ -5994,6 +6053,8 @@ export type Database = {
       }
       social_metrics: {
         Row: {
+          ad_currency: string
+          ad_spend: number | null
           client_id: string
           comments: number | null
           created_at: string
@@ -6001,20 +6062,29 @@ export type Database = {
           followers_end: number | null
           followers_start: number | null
           id: string
+          leads: number | null
           likes: number | null
           period_end: string
           period_start: string
+          posts_count: number | null
           profile_visits: number | null
+          published_at: string | null
+          published_by: string | null
           reach: number | null
+          reels_count: number | null
           saves: number | null
           shares: number | null
           social_account_id: string
           source: Database["public"]["Enums"]["metric_source"]
+          status: Database["public"]["Enums"]["metric_status"]
+          stories_count: number | null
           synced_at: string | null
           updated_at: string
           views: number | null
         }
         Insert: {
+          ad_currency?: string
+          ad_spend?: number | null
           client_id: string
           comments?: number | null
           created_at?: string
@@ -6022,20 +6092,29 @@ export type Database = {
           followers_end?: number | null
           followers_start?: number | null
           id?: string
+          leads?: number | null
           likes?: number | null
           period_end: string
           period_start: string
+          posts_count?: number | null
           profile_visits?: number | null
+          published_at?: string | null
+          published_by?: string | null
           reach?: number | null
+          reels_count?: number | null
           saves?: number | null
           shares?: number | null
           social_account_id: string
           source: Database["public"]["Enums"]["metric_source"]
+          status?: Database["public"]["Enums"]["metric_status"]
+          stories_count?: number | null
           synced_at?: string | null
           updated_at?: string
           views?: number | null
         }
         Update: {
+          ad_currency?: string
+          ad_spend?: number | null
           client_id?: string
           comments?: number | null
           created_at?: string
@@ -6043,15 +6122,22 @@ export type Database = {
           followers_end?: number | null
           followers_start?: number | null
           id?: string
+          leads?: number | null
           likes?: number | null
           period_end?: string
           period_start?: string
+          posts_count?: number | null
           profile_visits?: number | null
+          published_at?: string | null
+          published_by?: string | null
           reach?: number | null
+          reels_count?: number | null
           saves?: number | null
           shares?: number | null
           social_account_id?: string
           source?: Database["public"]["Enums"]["metric_source"]
+          status?: Database["public"]["Enums"]["metric_status"]
+          stories_count?: number | null
           synced_at?: string | null
           updated_at?: string
           views?: number | null
@@ -6060,6 +6146,13 @@ export type Database = {
           {
             foreignKeyName: "social_metrics_entered_by_fkey"
             columns: ["entered_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "social_metrics_published_by_fkey"
+            columns: ["published_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -6993,6 +7086,26 @@ export type Database = {
       }
     }
     Functions: {
+      add_report_file: {
+        Args: { p_name: string; p_report_id: string; p_storage_path: string }
+        Returns: {
+          client_id: string
+          created_at: string
+          id: string
+          mime_type: string | null
+          name: string
+          report_id: string
+          size_bytes: number | null
+          storage_path: string
+          uploaded_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "monthly_report_files"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       apply_billing_event: {
         Args: {
           p_event_id: string
@@ -7022,6 +7135,8 @@ export type Database = {
           status: Database["public"]["Enums"]["report_status"]
           title: string
           updated_at: string
+          work_done: string | null
+          work_planned: string | null
         }
         SetofOptions: {
           from: "*"
@@ -7243,6 +7358,8 @@ export type Database = {
           status: Database["public"]["Enums"]["report_status"]
           title: string
           updated_at: string
+          work_done: string | null
+          work_planned: string | null
         }
         SetofOptions: {
           from: "*"
@@ -7476,6 +7593,10 @@ export type Database = {
       get_my_context: { Args: never; Returns: Json }
       get_my_entitlements: { Args: { p_client?: string }; Returns: Json }
       get_my_games: { Args: never; Returns: Json }
+      get_partner_cabinet: {
+        Args: { p_client: string; p_from: string; p_to: string }
+        Returns: Json
+      }
       get_report: { Args: { p_report_id: string }; Returns: Json }
       get_safi_admin: { Args: never; Returns: Json }
       get_safi_leaderboard: { Args: { p_period?: string }; Returns: Json }
@@ -7683,6 +7804,8 @@ export type Database = {
           status: Database["public"]["Enums"]["report_status"]
           title: string
           updated_at: string
+          work_done: string | null
+          work_planned: string | null
         }
         SetofOptions: {
           from: "*"
@@ -7750,6 +7873,7 @@ export type Database = {
         Returns: Json
       }
       remove_file: { Args: { p_file_id: string }; Returns: undefined }
+      remove_report_file: { Args: { p_file_id: string }; Returns: string }
       request_access: { Args: never; Returns: Json }
       request_pro_upgrade: { Args: { p_feature?: string }; Returns: undefined }
       request_sun_coin_purchase: { Args: { p_pack: string }; Returns: Json }
@@ -7956,6 +8080,14 @@ export type Database = {
         Args: { p_code: string; p_fingerprint: string }
         Returns: Json
       }
+      site_login_begin: {
+        Args: { p_account: string; p_visitor: string }
+        Returns: Json
+      }
+      site_login_finish: {
+        Args: { p_attempt: number; p_success: boolean }
+        Returns: undefined
+      }
       site_save_plan: { Args: { p_items: Json; p_plan: Json }; Returns: string }
       site_submit_application: {
         Args: {
@@ -8115,6 +8247,7 @@ export type Database = {
         | "ad_account"
         | "lead_form"
       metric_source: "manual" | "api"
+      metric_status: "draft" | "published"
       notification_priority: "low" | "normal" | "high"
       priority_level: "low" | "normal" | "high" | "urgent"
       project_kind: "retainer" | "campaign" | "one_off"
@@ -8396,6 +8529,7 @@ export const Constants = {
         "lead_form",
       ],
       metric_source: ["manual", "api"],
+      metric_status: ["draft", "published"],
       notification_priority: ["low", "normal", "high"],
       priority_level: ["low", "normal", "high", "urgent"],
       project_kind: ["retainer", "campaign", "one_off"],

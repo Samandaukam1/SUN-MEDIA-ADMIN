@@ -3,6 +3,7 @@ import 'server-only';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
 
+import { isPanelUser } from '@/lib/cabinet/routing';
 import { createClient } from '@/lib/supabase/server';
 import { myContextSchema, type StaffContext } from '@/types/app';
 
@@ -17,10 +18,11 @@ export const getSessionContext = cache(async () => {
   return { ...myContextSchema.parse(data), userId };
 });
 
-/** Admin panel is for SUN MEDIA staff only; client users and role-less accounts are turned away. */
+/** Admin panel is for SUN MEDIA staff only: partners go to their cabinet, role-less accounts are turned away. */
 export async function requireStaff(): Promise<StaffContext> {
   const context = await getSessionContext();
   if (!context) redirect('/login');
+  if (context.status === 'active' && context.kind === 'client') redirect('/kabinet');
   if (context.status !== 'active' || context.kind !== 'staff') redirect('/no-access');
   return context;
 }
@@ -39,7 +41,7 @@ export function can(context: StaffContext, permission: string): boolean {
  * everyone else works in the mobile app.
  */
 export function canUsePanel(context: StaffContext): boolean {
-  return isSystemOwner(context) || ['dashboard.view', 'employees.manage', 'clients.manage'].some((p) => context.permissions.includes(p));
+  return isPanelUser(context);
 }
 
 /** Tizim boshqaruvi pages and actions. */

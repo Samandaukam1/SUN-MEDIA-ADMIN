@@ -3,6 +3,7 @@ import { Card, SectionTitle } from '@/components/ui/Card';
 import { createClient } from '@/lib/supabase/server';
 import { agencyDateKey, formatShortDateTime } from '@/lib/time';
 import { monthLabel, shiftMonth } from './ClientStatsTab';
+import { ReportFiles } from './ReportFiles';
 import { GenerateReportForm, HighlightsForm, ReportActions } from './StatsForms';
 
 /** Client → Hisobotlar: prepare, review and publish monthly reports. */
@@ -10,7 +11,7 @@ export async function ClientReportsTab({ clientId, manage }: { clientId: string;
   const supabase = await createClient();
   const { data: reports, error } = await supabase
     .from('monthly_reports')
-    .select('id, period_month, status, title, highlights, generated_at, published_at, pdf_path, pdf_generated_at, metrics:monthly_report_metrics(metric_key, value, target_value)')
+    .select('id, period_month, status, title, highlights, work_done, work_planned, generated_at, published_at, pdf_path, pdf_generated_at, metrics:monthly_report_metrics(metric_key, value, target_value), files:monthly_report_files(id, name, size_bytes, created_at)')
     .eq('client_id', clientId)
     .order('period_month', { ascending: false });
   if (error) throw error;
@@ -24,7 +25,8 @@ export async function ClientReportsTab({ clientId, manage }: { clientId: string;
           <SectionTitle>Yangi hisobot</SectionTitle>
           <GenerateReportForm clientId={clientId} months={months} />
           <p className="mt-3 text-[13px] text-muted">
-            Tarif bajarilishi, syomkalar, tasdiqlar va “Statistika”da kiritilgan raqamlardan hisoblanadi. Qayta tayyorlash qoralamani yangilaydi.
+            Tarif bajarilishi, syomkalar, tasdiqlar va “Statistika”da <b>nashr qilingan</b> raqamlardan hisoblanadi (qoralama raqamlar kirmaydi). Qayta
+            tayyorlash qoralamani yangilaydi. Hamkor faqat “Hamkorga yuborilgan” hisobotni ko‘radi.
           </p>
         </Card>
       ) : null}
@@ -55,7 +57,7 @@ export async function ClientReportsTab({ clientId, manage }: { clientId: string;
                   </p>
                 </div>
                 <Badge tone={r.status === 'published' ? 'success' : 'warning'} dot>
-                  {r.status === 'published' ? 'Mijozga yuborilgan' : 'Qoralama'}
+                  {r.status === 'published' ? 'Hamkorga yuborilgan' : 'Qoralama — hamkorga ko‘rinmaydi'}
                 </Badge>
               </div>
               <div className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -72,7 +74,14 @@ export async function ClientReportsTab({ clientId, manage }: { clientId: string;
                   <p className="text-xl font-bold">{metric('social.followers_growth')?.value != null ? Number(metric('social.followers_growth')!.value).toLocaleString('ru-RU') : '—'}</p>
                 </div>
               </div>
-              {manage ? <HighlightsForm reportId={r.id} clientId={clientId} value={r.highlights} /> : r.highlights ? <p className="whitespace-pre-wrap text-sm">{r.highlights}</p> : null}
+              {manage ? (
+                <div className="space-y-5">
+                  <HighlightsForm reportId={r.id} clientId={clientId} value={r.highlights} workDone={r.work_done} workPlanned={r.work_planned} />
+                  <ReportFiles reportId={r.id} clientId={clientId} files={[...r.files].sort((a, b) => a.created_at.localeCompare(b.created_at))} />
+                </div>
+              ) : r.highlights ? (
+                <p className="whitespace-pre-wrap text-sm">{r.highlights}</p>
+              ) : null}
               {manage ? (
                 <div className="mt-4 border-t border-line pt-4">
                   <ReportActions reportId={r.id} clientId={clientId} published={r.status === 'published'} pdfPath={r.pdf_path} />

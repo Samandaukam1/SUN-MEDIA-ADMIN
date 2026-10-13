@@ -26,20 +26,17 @@ const SHORTCUTS: { href: string; label: string; hint: string; icon: IconName }[]
   { href: '/site/testimonials', label: 'Fikrlar', hint: 'Hamkorlar so‘zlari', icon: 'send' },
   { href: '/site/highlights', label: 'Raqamlar va afzalliklar', hint: 'Ko‘rsatkichlar, “Nega SUN MEDIA”', icon: 'trendingUp' },
   { href: '/site/process', label: 'Jarayon va savollar', hint: 'Bosqichlar va FAQ', icon: 'checkSquare' },
-  { href: '/site/security', label: 'Kirish kodi', hint: 'Footerdagi 6 xonali kod', icon: 'lock' },
 ];
 
 export default async function SiteOverviewPage() {
   await requirePermission('site.manage');
   const supabase = await createClient();
-  const [counts, settingsResult, latestResult, gateResult] = await Promise.all([
+  const [counts, settingsResult, latestResult] = await Promise.all([
     siteCounts(),
     supabase.from('site_settings').select('phone_primary, email, address, instagram_url, telegram_url').eq('id', true).single(),
     supabase.from('site_applications').select('id, full_name, phone, service, status, created_at').order('created_at', { ascending: false }).limit(5),
-    supabase.rpc('site_gate_status'),
   ]);
   const settings = settingsResult.data;
-  const gate = (gateResult.data ?? {}) as { configured?: boolean };
 
   const checklist = [
     { done: !!settings?.phone_primary, label: 'Telefon raqam', href: '/site/texts' },
@@ -50,7 +47,6 @@ export default async function SiteOverviewPage() {
     { done: counts.plans > 0, label: 'Tariflar', href: '/site/plans' },
     { done: counts.stats > 0, label: 'Raqamlar (loyihalar, yillar…)', href: '/site/highlights' },
     { done: counts.testimonials > 0, label: 'Hamkorlar fikrlari', href: '/site/testimonials' },
-    { done: gate.configured === true, label: 'Xodimlar kirish kodi', href: '/site/security' },
   ];
   const ready = checklist.filter((c) => c.done).length;
 

@@ -170,7 +170,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
       {active === 'plan' && visible.plan ? <ClientPlanTab clientId={client.id} manage={can(context, 'subscriptions.manage')} /> : null}
       {active === 'stats' && visible.stats ? (
-        <ClientStatsTab clientId={client.id} month={month} canEnter={can(context, 'analytics.manage')} canAddAccounts={manage} />
+        <ClientStatsTab clientId={client.id} month={month} canEnter={can(context, 'analytics.manage')} canAddAccounts={manage || can(context, 'analytics.manage')} />
       ) : null}
       {active === 'reports' && visible.reports ? <ClientReportsTab clientId={client.id} manage={can(context, 'reports.manage')} /> : null}
       {active === 'integrations' && visible.integrations ? (

@@ -1,66 +1,10 @@
 'use server';
 
-import { cookies, headers } from 'next/headers';
 import { z } from 'zod';
 
-import { getSessionContext } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createGateToken, GATE_COOKIE, GATE_TTL_SECONDS, gateSecret, verifyGateToken, visitorKey } from './gate-token';
 import { normalizeLink, normalizePhone } from './normalize';
-
-async function visitor(): Promise<{ key: string; userAgent: string } | null> {
-  const secret = gateSecret();
-  if (!secret) return null;
-  const h = await headers();
-  const ip = h.get('x-real-ip') || h.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  return { key: await visitorKey(secret, ip), userAgent: (h.get('user-agent') ?? '').slice(0, 300) };
-}
-
-// ---------------------------------------------------------------------------
-// Footer gate
-// ---------------------------------------------------------------------------
-
-export type GateResult =
-  | { status: 'open'; to: string }
-  | { status: 'invalid'; remaining: number }
-  | { status: 'locked'; retryAfter: number }
-  | { status: 'error'; message: string };
-
-/** Footer link pressed: signed-in staff go straight to the panel; a code typed in the last 30 minutes skips the prompt. */
-export async function gateShortcut(): Promise<string | null> {
-  const context = await getSessionContext().catch(() => null);
-  if (context?.kind === 'staff' && context.status === 'active') return '/panel';
-  const store = await cookies();
-  return (await verifyGateToken(store.get(GATE_COOKIE)?.value, gateSecret())) ? '/login' : null;
-}
-
-export async function openGate(code: string): Promise<GateResult> {
-  if (typeof code !== 'string' || !/^\d{6}$/.test(code)) return { status: 'invalid', remaining: -1 };
-  const secret = gateSecret();
-  const who = await visitor();
-  if (!secret || !who) return { status: 'error', message: 'Kirish vaqtincha ishlamayapti.' };
-
-  const { data, error } = await createAdminClient().rpc('site_gate_verify', { p_code: code, p_fingerprint: who.key });
-  if (error) return { status: 'error', message: 'Serverga ulanib bo‘lmadi. Qayta urinib ko‘ring.' };
-  const result = z
-    .object({ ok: z.boolean(), reason: z.string().optional(), remaining: z.number().optional(), retryAfter: z.number().optional() })
-    .parse(data);
-
-  if (result.ok) {
-    const store = await cookies();
-    store.set(GATE_COOKIE, await createGateToken(secret), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: GATE_TTL_SECONDS,
-    });
-    return { status: 'open', to: '/login' };
-  }
-  if (result.reason === 'locked') return { status: 'locked', retryAfter: result.retryAfter ?? 900 };
-  if (result.reason === 'not_configured') return { status: 'error', message: 'Kirish kodi hali o‘rnatilmagan.' };
-  return { status: 'invalid', remaining: result.remaining ?? 0 };
-}
+import { currentVisitor as visitor } from './visitor';
 
 // ---------------------------------------------------------------------------
 // "Ariza qoldirish"

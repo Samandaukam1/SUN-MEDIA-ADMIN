@@ -111,24 +111,14 @@ Next.js server kerak, shuning uchun GitHub Pages emas.
 - `META_ALLOWED_RETURN_ORIGINS=http://localhost:3000,https://sunmedia-admin.vercel.app` (Edge Function secret).
 - Google OAuth origins ro'yxatiga admin domeni 1-bo'limda kiritilgan.
 
-## 4a. Ochiq sayt (landing) va xodimlar kirish kodi
+## 4a. Ochiq sayt (landing)
 
 - Panel domeni endi **ochiq sayt**: `/`, `/xizmatlar`, `/keyslar`, `/keyslar/<slug>`, `/hamkorlar`, `/biz-haqimizda`,
   `/aloqa` (+ `robots.txt`, `sitemap.xml`, OG rasm). Panelning bosh sahifasi `/panel` ga ko'chdi.
-- Panelga kirish: footerdagi kichik yozuv (standart "Xodimlar uchun") → 6 xonali kod → `/login` → odatiy email + parol.
-  To'g'ri kod `sm_gate` httpOnly cookie'sini 30 daqiqaga beradi. Kodsiz `/login` va panel sahifalari saytga qaytaradi;
-  tizimga kirgan xodim yozuvni bossa to'g'ridan-to'g'ri `/panel` ochiladi. Kod — qo'shimcha to'siq, parol o'rnini bosmaydi.
-- Kod bazada faqat bcrypt holida (`private.site_gate`), git'da yo'q. Almashtirish: **Panel → Sayt → Kirish kodi**
-  (faqat Tizim egasi). Birinchi marta yoki unutilsa — SQL Editor'da (kod faqat shu so'rovda bo'ladi):
-  ```sql
-  insert into private.site_gate (id, code_hash)
-  values (true, extensions.crypt('<6 raqam>', extensions.gen_salt('bf', 10)))
-  on conflict (id) do update set code_hash = excluded.code_hash, updated_at = now();
-  ```
-- Limitlar (bazada): bir tashrifchi 15 daqiqada 5 ta xato kod, hammasi bo'lib soatiga 200 ta xato; arizalar — bir
-  tashrifchidan 10 daqiqada 3 ta, hammasi bo'lib soatiga 120 ta. Tashrifchi kaliti — IP'ning HMAC'i (IP saqlanmaydi).
-- Ixtiyoriy env: `SITE_GATE_SECRET` (cookie imzosi). Bo'lmasa server kalitidan olinadi; almashtirilsa ochiq turgan barcha
-  kod-cookie'lar bekor bo'ladi.
+- Kirish 4b-bo'limda. (Avvalgi 6 xonali footer kodi 2026-10-13 da login oynasi bilan almashtirildi; `private.site_gate`
+  jadvali bazada qoldi, ilova uni ishlatmaydi.)
+- Arizalar limiti (bazada): bir tashrifchidan 10 daqiqada 3 ta, hammasi bo'lib soatiga 120 ta. Tashrifchi kaliti —
+  IP'ning HMAC'i (IP saqlanmaydi). Ixtiyoriy env: `SITE_GATE_SECRET` (HMAC siri; bo'lmasa server kalitidan olinadi).
 - Kontent: **Panel → Sayt** (ruxsat `site.manage`, standart Admin rolida). Saqlangan o'zgarish saytda darhol chiqadi
   (`revalidateTag`). Rasmlar `branding` bucket'ining `site/` papkasida (2 MB gacha, brauzerda WebP'ga siqiladi);
   o'chirilgan yoki almashtirilgan rasm storage'dan ham o'chadi. Bo'sh bo'limlar (hamkorlar, keyslar, raqamlar, fikrlar)
@@ -159,6 +149,40 @@ Next.js server kerak, shuning uchun GitHub Pages emas.
   `/tariflar` sahifasi va bloki, tugma nomi, `.svg` taqiqi).
 - Footerdagi "developed by Jaxongirmans IT Teams" banneri `https://t.me/jaxongirman` ga olib boradi
   (`public/credits/jaxongirmans-it-teams.png`).
+
+
+## 4b. Kirish va kabinetlar (xodimlar va hamkorlar)
+
+- Footerda ikkita tugma: **“Xodimlar uchun”** (matni Sayt → Matnlar'da) va **“Hamkorlar uchun”**. Ikkalasi bir xil
+  login oynasini ochadi: Email (login) + parol (ko'rsatish/yashirish), xatolar aniq. Tizim bitta (Supabase Auth).
+- Qaysi kabinet ochilishini **serverdagi akkaunt** belgilaydi (tugma, URL yoki brauzer emas): Tizim egasi va boshqaruv
+  (`dashboard.view` / `employees.manage` / `clients.manage`) → `/panel`; boshqa xodimlar → `/xodim`; hamkor akkauntlari
+  → `/kabinet`. Masalan SAFI “Xodimlar uchun” orqali kirsa ham `/kabinet` ochiladi. Kirmagan odam yopiq sahifaga
+  borsa, saytga mos oyna ochiq holda qaytadi. Bloklangan / to'xtatilgan / rolsiz akkaunt kira olmaydi.
+- **Vaqtinchalik parol** (admin yaratgan yoki tiklagan): birinchi kirishda `/parol` majburiy — joriy parol + yangi parol
+  (kamida 10 belgi, harf va raqam, login'siz). Shundan keyin `mark_password_changed` belgilanadi.
+- **Parolni tiklash**: Panel → Jamoa (xodim) yoki Mijoz → Loginlar (hamkor) → “Parolni tiklash” — yangi kuchli
+  vaqtinchalik parol bir marta ko'rsatiladi (`authorize_password_reset` + Auth admin). O'z-o'zini email orqali tiklash
+  custom SMTP sozlangach qo'shiladi.
+- **Urinishlar limiti** (bazada, `site_login_begin/finish`, faqat server kaliti bilan): bir login + bir tashrifchi
+  15 daqiqada 5 xato → 15 daqiqa blok; bir tashrifchi 15 daqiqada 20 xato; bir login hamma joydan soatiga 30 xato.
+  Login va IP bazaga faqat HMAC holida yoziladi. Supabase Auth'ning o'z limitlari ham amal qiladi.
+- **Chiqish** shu brauzer sessiyasini tugatadi (boshqa qurilmalar qoladi) va keshni tozalaydi; yopiq sahifalar
+  `Cache-Control: private, no-store`.
+- **Hamkor kabineti** (`/kabinet`): faqat o'z brendi (`client_members` orqali; `?brend=` faqat o'z a'zoligi ichida
+  tanlaydi), `get_partner_cabinet` RPC — faqat **nashr qilingan** statistika va hisobotlar. Davr filtri (oy / 3 / 6 / 12
+  oy / ixtiyoriy), platforma filtri, kartalar va grafiklar bir xil ma'lumotdan; foiz faqat nomi yozilgan oldingi davr
+  bilan. Kiritilmagan qiymat — “Ma'lumot kiritilmagan” (haqiqiy 0 — 0). Qo'lda kiritilgan raqamlar “qo'lda kiritilgan”
+  deb, Instagram API raqamlari “avtomatik sinxronlangan” deb belgilanadi. Fayllar va PDF — RLS + 2 daqiqalik link.
+- **Statistika kiritish** (Rahbar, Admin, SMM — `analytics.manage`): Mijoz → Statistika → oy → platforma akkaunti:
+  auditoriya, faollik, Reels/post/Stories, reklama xarajati (so'm/USD), lidlar (CPL avtomatik). “Qoralama saqlash” —
+  hamkorga ko'rinmaydi; “Nashr qilish” — ko'rinadi. Bir akkaunt uchun bir oyga bitta yozuv; ustma-ust davr bazada rad etiladi.
+- **Hisobot** (`reports.manage`): Mijoz → Hisobotlar → tayyorlash (faqat nashr qilingan raqamlardan) → yutuqlar,
+  bajarilgan / rejadagi ishlar, fayllar (PDF, rasm, Excel, Word, PowerPoint, 50 MB gacha, 20 tagacha) → “Nashr qilish”.
+- **Xodim kabineti** (`/xodim`): faqat o'ziga biriktirilgan vazifalar, holat (Boshlash → Tekshiruvga / Bajarildi),
+  izoh, material yuklash (o'z sessiyasi bilan; `create_file_upload` / `complete_file_upload`).
+- Rahbar (`owner` roli) endi `analytics.manage` va `reports.manage` ga ham ega; rollar/xodimlarni boshqara olmaydi,
+  Tizim egasiga tegolmaydi (bazadagi rank va himoya qoidalari).
 
 ## 5. Tizim egasi (System Owner)
 

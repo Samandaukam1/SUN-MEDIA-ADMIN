@@ -3,7 +3,7 @@
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
 
-import { requirePermission, requireSystemOwner } from '@/lib/auth';
+import { requirePermission } from '@/lib/auth';
 import { getPublicEnv } from '@/lib/env';
 import { toUserMessage } from '@/lib/errors';
 import { isCollectionKey, SITE_COLLECTIONS, type SiteCollectionKey, type SiteField } from '@/lib/site/collections';
@@ -391,26 +391,6 @@ export async function deleteApplication(id: string): Promise<ActionState> {
   revalidatePath('/site/applications');
   revalidatePath('/site');
   return { status: 'success', message: 'Ariza o‘chirildi.' };
-}
-
-// ---------------------------------------------------------------------------
-// Footer gate code (Tizim egasi only)
-// ---------------------------------------------------------------------------
-
-export async function changeGateCode(_: ActionState, formData: FormData): Promise<ActionState> {
-  await requireSystemOwner();
-  const code = String(formData.get('code') ?? '').trim();
-  const confirm = String(formData.get('confirm') ?? '').trim();
-  if (!/^[0-9]{6}$/.test(code)) return { status: 'error', message: 'Kod aynan 6 ta raqam bo‘lsin.', fieldErrors: { code: '6 ta raqam' } };
-  if (code !== confirm) return { status: 'error', message: 'Kodlar bir xil emas.', fieldErrors: { confirm: 'Qayta bir xil kiriting' } };
-  if (/^(\d)\1{5}$/.test(code) || '0123456789'.includes(code) || '9876543210'.includes(code)) {
-    return { status: 'error', message: 'Juda oson kod. Boshqa raqamlarni tanlang.', fieldErrors: { code: 'Oson kod' } };
-  }
-  const supabase = await createClient();
-  const { error } = await supabase.rpc('site_gate_set_code', { p_code: code });
-  if (error) return { status: 'error', message: toUserMessage(error) };
-  revalidatePath('/site/security');
-  return { status: 'success', message: 'Yangi kod o‘rnatildi. Eski kod endi ishlamaydi.' };
 }
 
 /** Images uploaded in an editor that was then cancelled. */

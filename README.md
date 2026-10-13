@@ -7,7 +7,9 @@ Next.js 15 (App Router) + TypeScript. Vercel'ga deploy qilinadi. Supabase backen
 To‘liq arxitektura: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 Domen ochilganda **ochiq sayt** chiqadi (landing va sahifalar, kontenti Panel → Sayt'da); panelning bosh sahifasi
-`/panel`. Panelga kirish footerdagi kichik yozuv → 6 xonali kod → login orqali: [PRODUCTION_SETUP.md](docs/PRODUCTION_SETUP.md) (4a).
+`/panel`. Kirish — saytning footeridagi **“Xodimlar uchun” / “Hamkorlar uchun”** oynasi (email + parol). Qaysi kabinet
+ochilishini akkauntning o‘zi belgilaydi: boshqaruv → `/panel`, boshqa xodimlar → `/xodim`, hamkorlar → `/kabinet`;
+vaqtinchalik parol bilan kirgan har kim avval `/parol` da yangisini o‘rnatadi. Batafsil: [PRODUCTION_SETUP.md](docs/PRODUCTION_SETUP.md) (4b).
 
 ## Lokal ishga tushirish
 
@@ -17,9 +19,6 @@ npm run db:start      # Docker'da lokal Supabase
 npm run db:reset      # migratsiyalar + faqat-lokal seed
 npm run dev           # http://localhost:3000
 ```
-
-Lokal bazada footer kodi yo‘q (seed'da ham) — birinchi marta o‘zingizga o‘rnating (Studio SQL yoki `psql`):
-`insert into private.site_gate (id, code_hash) values (true, extensions.crypt('<6 raqam>', extensions.gen_salt('bf', 10))) on conflict (id) do update set code_hash = excluded.code_hash;`
 
 `next dev` `.env.development.local` faylini o‘qiydi (Git'ga kirmaydi):
 
@@ -46,8 +45,6 @@ Lokal seed hisoblari (faqat lokal; parol `supabase/seed.sql` da, cloud akkauntla
 | Mijoz egasi (SAFI) | `safi@client.local` |
 | Mijoz xodimi (SAFI) | `safi.employee@client.local` |
 | Mijoz egasi (WeDrink) | `wedrink@client.local` |
-
-**DEV QUICK LOGIN.** `npm run dev` + lokal Supabase bo‘lsa, `/login` sahifasida Tizim egasi va Admin tugmalari chiqadi: bir bosishda oddiy Supabase parol orqali kiradi. Production build'da bu blok (va test parol) umuman yo‘q.
 
 **Kira olmasangiz.** `npm run dev` oldidan `scripts/dev-check.mjs` qaysi Supabase'ga ulanganini va u javob berayotganini yozadi. Eng ko‘p sabab:
 
@@ -107,6 +104,6 @@ Settings → Environment Variables (Production va Preview):
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (yoki `…_ANON_KEY`) | public |
 | `NEXT_PUBLIC_SITE_URL` | public (masalan `https://admin.sunmedia.uz`) |
 | `SUPABASE_SECRET_KEY` (yoki `SUPABASE_SERVICE_ROLE_KEY`) | **faqat server** — `NEXT_PUBLIC_` prefiksisiz |
-| `SITE_GATE_SECRET` | ixtiyoriy, faqat server — footer kod-cookie imzosi (bo'lmasa server kalitidan olinadi) |
+| `SITE_GATE_SECRET` | ixtiyoriy, faqat server — urinishlar limiti uchun IP va login kalitlari (HMAC) siri (bo'lmasa server kalitidan olinadi) |
 
 Supabase → Auth → URL Configuration: Site URL = admin domeni; Redirect URLs ga `https://<admin-domen>/auth/callback`, `sunmedia://auth/callback`, `sunmedia://reset-password` qo‘shing.

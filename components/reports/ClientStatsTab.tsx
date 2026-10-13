@@ -27,7 +27,7 @@ export async function ClientStatsTab({ clientId, month, canEnter, canAddAccounts
   const supabase = await createClient();
   const { data: accounts, error } = await supabase
     .from('social_accounts')
-    .select('id, platform, handle, url, metrics:social_metrics(period_start, followers_start, followers_end, reach, views, profile_visits, likes, comments, shares, saves, source, updated_at)')
+    .select('id, platform, handle, url, metrics:social_metrics(period_start, followers_start, followers_end, reach, views, profile_visits, likes, comments, shares, saves, reels_count, posts_count, stories_count, ad_spend, ad_currency, leads, status, source, updated_at, published_at)')
     .eq('client_id', clientId)
     .is('deleted_at', null)
     .order('platform');
@@ -41,7 +41,12 @@ export async function ClientStatsTab({ clientId, month, canEnter, canAddAccounts
           <Link href={`${base}&month=${shiftMonth(active, -1)}`} className="rounded-xl border border-line px-3 py-2 text-sm hover:bg-surface-2">
             ← {monthLabel(shiftMonth(active, -1))}
           </Link>
-          <p className="text-lg font-semibold">{monthLabel(active)}</p>
+          <div className="text-center">
+            <p className="text-lg font-semibold">{monthLabel(active)}</p>
+            <Link href={`/kabinet?brend=${clientId}&oy=${active.slice(0, 7)}`} className="text-[13px] text-accent hover:underline">
+              Hamkor kabinetida ko‘rish ↗
+            </Link>
+          </div>
           {active < current ? (
             <Link href={`${base}&month=${shiftMonth(active, 1)}`} className="rounded-xl border border-line px-3 py-2 text-sm hover:bg-surface-2">
               {monthLabel(shiftMonth(active, 1))} →
@@ -68,28 +73,24 @@ export async function ClientStatsTab({ clientId, month, canEnter, canAddAccounts
                       </a>
                     ) : null}
                   </div>
-                  {m ? <Badge tone="success">Kiritilgan</Badge> : <Badge tone="warning">Kiritilmagan</Badge>}
+                  {!m ? (
+                    <Badge tone="warning">Kiritilmagan</Badge>
+                  ) : m.status === 'published' ? (
+                    <Badge tone="success" dot>
+                      {m.source === 'api' ? 'Sinxronlangan · hamkor ko‘radi' : 'Nashr qilingan · hamkor ko‘radi'}
+                    </Badge>
+                  ) : (
+                    <Badge tone="neutral" dot>
+                      Qoralama · hamkorga ko‘rinmaydi
+                    </Badge>
+                  )}
                 </div>
                 <SocialMonthForm
                   key={`${a.id}:${active}`}
                   clientId={clientId}
                   accountId={a.id}
                   month={active}
-                  values={
-                    m
-                      ? {
-                          followers_start: m.followers_start,
-                          followers_end: m.followers_end,
-                          reach: m.reach,
-                          views: m.views,
-                          profile_visits: m.profile_visits,
-                          likes: m.likes,
-                          comments: m.comments,
-                          shares: m.shares,
-                          saves: m.saves,
-                        }
-                      : null
-                  }
+                  values={m}
                   editable={canEnter}
                 />
               </Card>
@@ -101,7 +102,10 @@ export async function ClientStatsTab({ clientId, month, canEnter, canAddAccounts
         <Card className="h-fit">
           <SectionTitle>Akkaunt qo‘shish</SectionTitle>
           <AddSocialAccountForm clientId={clientId} />
-          <p className="mt-4 text-[13px] text-muted">Raqamlar platformaning o‘z statistikasidan olinadi. SMM menejer har oy yakunida kiritadi.</p>
+          <p className="mt-4 text-[13px] text-muted">
+            Raqamlar platformaning o‘z statistikasidan olinadi va har oy yakunida kiritiladi. Bir akkaunt uchun bir oyga bitta yozuv — takroriy hisob
+            bo‘lmaydi.
+          </p>
         </Card>
       ) : null}
     </div>

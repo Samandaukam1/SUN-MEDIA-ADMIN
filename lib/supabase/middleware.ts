@@ -2,7 +2,6 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { getPublicEnv } from '@/lib/env';
-import { GATE_COOKIE, gateSecret, verifyGateToken } from '@/lib/site/gate-token';
 import type { Database } from '@/types/database';
 
 /** Pages anyone may open without signing in (auth return links, the "no access" notice). */
@@ -19,8 +18,9 @@ export function isSitePath(path: string): boolean {
 }
 
 /**
- * Refreshes the auth cookie on every request. The domain is the public site; the panel's login only opens
- * after the footer code (sm_gate cookie). Anonymous visitors to panel pages land on the site, not on a login form.
+ * Refreshes the auth cookie on every request. The domain is the public site; staff and partners sign in from the
+ * sign-in window in its footer. Anonymous visitors to private pages (and the old /login address) land on the site
+ * with that window already open.
  */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -50,15 +50,18 @@ export async function updateSession(request: NextRequest) {
     response.cookies.getAll().forEach((cookie) => out.cookies.set(cookie));
     return out;
   };
-  const gateOpen = () => verifyGateToken(request.cookies.get(GATE_COOKIE)?.value, gateSecret());
 
   if (under(path, '/login')) {
     if (signedIn) return redirect('/panel');
-    return (await gateOpen()) ? response : redirect('/');
+    const next = request.nextUrl.searchParams.get('next');
+    return redirect('/', `?kirish=xodim${next ? `&next=${encodeURIComponent(next)}` : ''}`);
   }
   if (!signedIn && !OPEN_PATHS.some((p) => under(path, p))) {
-    if (await gateOpen()) return redirect('/login', `?next=${encodeURIComponent(path + request.nextUrl.search)}`);
-    return redirect('/');
+    // Back to the site with the matching footer sign-in already open.
+    const next = encodeURIComponent(path + request.nextUrl.search);
+    return redirect('/', `?kirish=${under(path, '/kabinet') ? 'hamkor' : 'xodim'}&next=${next}`);
   }
+  // Signed-in pages are personal: never stored by the browser or a shared cache.
+  response.headers.set('Cache-Control', 'private, no-store, max-age=0');
   return response;
 }

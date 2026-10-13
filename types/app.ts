@@ -23,6 +23,8 @@ export const myContextSchema = z.object({
   clients: z
     .array(z.object({ id: z.string(), name: z.string(), code: z.string(), role: z.string(), role_name: z.string(), permissions: z.array(z.string()) }))
     .default([]),
+  /** An admin-issued password (new login or reset) not yet replaced by the person. */
+  temporary_password: z.boolean().nullable().optional(),
 });
 
 export type MyContext = z.infer<typeof myContextSchema>;

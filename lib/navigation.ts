@@ -81,7 +81,6 @@ const SECTIONS: NavSection[] = [
       { href: '/site/testimonials', label: 'Fikrlar', permission: 'site.manage' },
       { href: '/site/highlights', label: 'Raqamlar', permission: 'site.manage' },
       { href: '/site/process', label: 'Jarayon, FAQ', permission: 'site.manage' },
-      { href: '/site/security', label: 'Kirish kodi', permission: 'site.manage' },
     ],
   },
   {

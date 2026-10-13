@@ -74,7 +74,7 @@ const GROUPS: { title: string; note?: string; fields: Field[] }[] = [
     title: 'Footer va qidiruv tizimlari',
     fields: [
       { key: 'footer_note', label: 'Footerdagi qisqa matn', max: 200 },
-      { key: 'gate_label', label: 'Xodimlar kirishi yozuvi (footer)', max: 40, required: true, hint: 'Bosilganda 6 xonali kod so‘raladi.' },
+      { key: 'gate_label', label: 'Xodimlar kirishi yozuvi (footer)', max: 40, required: true, hint: 'Bosilganda xodimlar uchun login oynasi ochiladi. Yonida “Hamkorlar uchun” turadi.' },
       { key: 'seo_title', label: 'Sayt sarlavhasi (Google)', max: 80 },
       { key: 'seo_description', label: 'Sayt tavsifi (Google)', max: 200, area: true, rows: 2 },
     ],

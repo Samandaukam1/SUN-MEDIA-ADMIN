@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 import { Logo } from '@/components/brand/Logo';
 import { formatPhone, type SiteSettings } from '@/lib/site/types';
-import { GateTrigger } from './GateDialog';
+import { CabinetEntrances } from './CabinetLogin';
 import { SiteIcon } from './SiteIcon';
 
 export function socialLinks(settings: SiteSettings) {
@@ -126,7 +126,7 @@ export function SiteFooter({ settings, nav }: { settings: SiteSettings; nav: { h
 
       <div className="relative mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 border-t border-white/[0.06] px-5 py-6 text-[12px] text-[#6e6e76] sm:flex-row sm:px-8">
         <p>© {year} SUN MEDIA. Barcha huquqlar himoyalangan.</p>
-        <GateTrigger label={settings.gate_label} />
+        <CabinetEntrances staffLabel={settings.gate_label || 'Xodimlar uchun'} />
       </div>
     </footer>
   );

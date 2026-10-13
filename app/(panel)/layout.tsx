@@ -9,8 +9,10 @@ import { navigationFor } from '@/lib/navigation';
 
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
   const context = await requireStaff();
-  // Web = large management for the system owner and admins; employees work in the mobile app.
-  if (!canUsePanel(context)) redirect('/no-access?reason=mobile');
+  // An admin-issued password is replaced before anything else opens.
+  if (context.temporary_password) redirect('/parol');
+  // Web panel = management (system owner, admins, Rahbar); other staff have their own cabinet.
+  if (!canUsePanel(context)) redirect('/xodim');
   const sections = navigationFor(context);
   const create: CreateItem[] = [
     can(context, 'content.manage') ? { href: '/work/content/new', label: 'Yangi kontent', icon: 'film' as const, hint: 'Reels, post, stories…' } : null,

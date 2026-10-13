@@ -2,24 +2,12 @@ import 'server-only';
 
 import { randomInt } from 'node:crypto';
 
+import { generateTemporaryPassword as generatePassword } from '@/lib/password-policy';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-// Ambiguous characters (0/O, 1/l/I) are left out so a password can be dictated over the phone.
-const UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-const LOWER = 'abcdefghijkmnpqrstuvwxyz';
-const DIGITS = '23456789';
-const SYMBOLS = '!@#$%&*?';
-
-const pick = (set: string) => set[randomInt(set.length)];
-
-/**
- * Temporary password like "X9fa-K82p!": upper, digits, lower, a dash and a symbol (10 chars, ~50 bits).
- * Generated with the CSPRNG, shown to the admin once and never stored by the application.
- */
+/** A new temporary password from the CSPRNG; shown to the admin once and never stored by the application. */
 export function generateTemporaryPassword(): string {
-  const first = [pick(UPPER), pick(DIGITS), pick(LOWER), pick(LOWER)].join('');
-  const second = [pick(UPPER), pick(DIGITS), pick(DIGITS), pick(LOWER), pick(SYMBOLS)].join('');
-  return `${first}-${second}`;
+  return generatePassword(randomInt);
 }
 
 /**

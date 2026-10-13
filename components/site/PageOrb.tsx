@@ -124,45 +124,104 @@ function Plans() {
   );
 }
 
-/** Biz haqimizda: the SUN — rays turning, the team circling around it. */
+/** Biz haqimizda: a camera lens — the iris opening onto light, the focus ring turning, recording. */
 function About() {
-  const rays = Array.from({ length: 12 }, (_, i) => i);
+  const still = useReducedMotion();
+  const blades = Array.from({ length: 6 }, (_, i) => i * 60);
+  // Inner edge of each blade from the centre: closed (small hexagon) → open → closed.
+  const open = [96 - 70 - 12, 96 - 70 - 30, 96 - 70 - 12];
+  const ticks = Array.from({ length: 36 }, (_, i) => i);
   return (
     <>
-      <Spin seconds={36} className="absolute inset-0">
+      <svg viewBox="0 0 200 200" className="absolute inset-0 size-full">
+        <defs>
+          <radialGradient id="orb-lens-light" cx="50%" cy="46%" r="50%">
+            <stop offset="0" stopColor="#f2ff9e" />
+            <stop offset="0.35" stopColor={LIME} />
+            <stop offset="1" stopColor="#1b2203" />
+          </radialGradient>
+          <clipPath id="orb-lens-clip">
+            <circle cx="100" cy="100" r="50" />
+          </clipPath>
+        </defs>
+        {/* barrel */}
+        <circle cx="100" cy="100" r="74" fill="#0f0f12" stroke="rgb(255 255 255 / 0.14)" />
+        <circle cx="100" cy="100" r="56" fill="#08080a" stroke="rgb(255 255 255 / 0.2)" strokeWidth="2" />
+        {/* light behind the iris */}
+        <circle cx="100" cy="100" r="50" fill="url(#orb-lens-light)" />
+        {/* iris */}
+        <g clipPath="url(#orb-lens-clip)">
+          <motion.g
+            style={{ transformOrigin: '100px 100px' }}
+            animate={still ? undefined : { rotate: [0, -22, 0] }}
+            transition={loop(5, { ease: 'easeInOut' })}
+          >
+            {blades.map((deg) => (
+              <g key={deg} transform={`rotate(${deg} 100 100)`}>
+                <motion.rect
+                  x={64}
+                  width={84}
+                  height={70}
+                  rx={3}
+                  fill="#1c1c21"
+                  stroke="#34343b"
+                  strokeWidth={1}
+                  initial={{ y: open[0] }}
+                  animate={still ? { y: open[1] } : { y: open }}
+                  transition={still ? { duration: 0 } : loop(5, { ease: 'easeInOut' })}
+                />
+              </g>
+            ))}
+          </motion.g>
+        </g>
+        {/* glass reflections */}
+        <ellipse cx="84" cy="80" rx="12" ry="7" fill="rgb(255 255 255 / 0.22)" transform="rotate(-30 84 80)" />
+        <circle cx="118" cy="120" r="3" fill="rgb(255 255 255 / 0.25)" />
+      </svg>
+      {/* focus ring */}
+      <Spin seconds={40} className="absolute inset-0">
         <svg viewBox="0 0 200 200" className="size-full">
-          {rays.map((i) => {
-            const a = (i / rays.length) * Math.PI * 2;
-            const r1 = 34;
-            const r2 = i % 2 ? 50 : 58;
+          {ticks.map((i) => {
+            const a = (i / ticks.length) * Math.PI * 2;
+            const r1 = i % 3 ? 66 : 63;
             return (
               <line
                 key={i}
                 x1={(100 + r1 * Math.cos(a)).toFixed(2)}
                 y1={(100 + r1 * Math.sin(a)).toFixed(2)}
-                x2={(100 + r2 * Math.cos(a)).toFixed(2)}
-                y2={(100 + r2 * Math.sin(a)).toFixed(2)}
-                stroke={LIME}
-                strokeOpacity={i % 2 ? 0.45 : 0.9}
-                strokeWidth={3}
-                strokeLinecap="round"
+                x2={(100 + 71 * Math.cos(a)).toFixed(2)}
+                y2={(100 + 71 * Math.sin(a)).toFixed(2)}
+                stroke={i % 9 ? 'rgb(255 255 255 / 0.28)' : LIME}
+                strokeWidth={i % 3 ? 1 : 1.8}
               />
             );
           })}
         </svg>
       </Spin>
-      {[
-        { px: 150, seconds: 14, dot: 'size-3 bg-white' },
-        { px: 184, seconds: 22, dot: 'size-2.5 bg-[#d4fc18]' },
-        { px: 120, seconds: 10, dot: 'size-2 bg-white/70' },
-      ].map((o, i) => (
-        <div key={o.px} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ width: o.px, height: o.px }}>
-          <Spin seconds={o.seconds} reverse={i === 1} className="relative size-full rounded-full border border-white/[0.06]">
-            <span className={`absolute -top-1 left-1/2 -translate-x-1/2 rounded-full shadow-[0_0_12px_rgb(255_255_255/0.6)] ${o.dot}`} />
-          </Spin>
-        </div>
-      ))}
-      <div className="absolute top-1/2 left-1/2 size-14 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle_at_35%_30%,#f2ff9e,#d4fc18_55%,#9cbf0c)] shadow-[0_0_50px_rgb(212_252_24/0.6)]" />
+      {/* viewfinder corners */}
+      <motion.svg
+        viewBox="0 0 200 200"
+        className="absolute inset-0 size-full"
+        animate={still ? undefined : { scale: [1, 0.96, 1] }}
+        transition={loop(5, { ease: 'easeInOut' })}
+      >
+        {[
+          'M30 52 V30 H52',
+          'M148 30 H170 V52',
+          'M170 148 V170 H148',
+          'M52 170 H30 V148',
+        ].map((d) => (
+          <path key={d} d={d} fill="none" stroke="rgb(255 255 255 / 0.75)" strokeWidth="3" strokeLinecap="round" />
+        ))}
+      </motion.svg>
+      <div className="absolute top-[16%] left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/50 px-2 py-0.5">
+        <motion.span
+          className="size-2 rounded-full bg-[#d4fc18] shadow-[0_0_8px_#d4fc18]"
+          animate={still ? undefined : { opacity: [1, 0.2, 1] }}
+          transition={loop(1.4, { ease: 'easeInOut' })}
+        />
+        <span className="text-[9px] font-bold tracking-[0.18em] text-white">REC</span>
+      </div>
     </>
   );
 }

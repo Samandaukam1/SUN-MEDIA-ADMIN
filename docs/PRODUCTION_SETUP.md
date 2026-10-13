@@ -157,8 +157,9 @@ Next.js server kerak, shuning uchun GitHub Pages emas.
   login oynasini ochadi: Email (login) + parol (ko'rsatish/yashirish), xatolar aniq. Tizim bitta (Supabase Auth).
 - Qaysi kabinet ochilishini **serverdagi akkaunt** belgilaydi (tugma, URL yoki brauzer emas): Tizim egasi va boshqaruv
   (`dashboard.view` / `employees.manage` / `clients.manage`) → `/panel`; boshqa xodimlar → `/xodim`; hamkor akkauntlari
-  → `/kabinet`. Masalan SAFI “Xodimlar uchun” orqali kirsa ham `/kabinet` ochiladi. Kirmagan odam yopiq sahifaga
-  borsa, saytga mos oyna ochiq holda qaytadi. Bloklangan / to'xtatilgan / rolsiz akkaunt kira olmaydi.
+  → `/kabinet`. Masalan SAFI “Xodimlar uchun” orqali kirsa ham `/kabinet` ochiladi. Domen ochilganda hamma uchun sayt
+  chiqadi; login oynasi **faqat** footerdagi ikki tugma bosilganda ochiladi. Kirmagan odam yopiq sahifaga (yoki eski
+  `/login` manziliga) borsa, oddiy bosh sahifaga qaytadi. Bloklangan / to'xtatilgan / rolsiz akkaunt kira olmaydi.
 - **Vaqtinchalik parol** (admin yaratgan yoki tiklagan): birinchi kirishda `/parol` majburiy — joriy parol + yangi parol
   (kamida 10 belgi, harf va raqam, login'siz). Shundan keyin `mark_password_changed` belgilanadi.
 - **Parolni tiklash**: Panel → Jamoa (xodim) yoki Mijoz → Loginlar (hamkor) → “Parolni tiklash” — yangi kuchli

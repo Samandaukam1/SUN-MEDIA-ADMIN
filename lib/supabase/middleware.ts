@@ -18,9 +18,8 @@ export function isSitePath(path: string): boolean {
 }
 
 /**
- * Refreshes the auth cookie on every request. The domain is the public site; staff and partners sign in from the
- * sign-in window in its footer. Anonymous visitors to private pages (and the old /login address) land on the site
- * with that window already open.
+ * Refreshes the auth cookie on every request. The domain is the public site for everyone; staff and partners sign in
+ * only through the footer buttons. Anonymous visitors to private pages (and the old /login address) land on the home page.
  */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -51,16 +50,9 @@ export async function updateSession(request: NextRequest) {
     return out;
   };
 
-  if (under(path, '/login')) {
-    if (signedIn) return redirect('/panel');
-    const next = request.nextUrl.searchParams.get('next');
-    return redirect('/', `?kirish=xodim${next ? `&next=${encodeURIComponent(next)}` : ''}`);
-  }
-  if (!signedIn && !OPEN_PATHS.some((p) => under(path, p))) {
-    // Back to the site with the matching footer sign-in already open.
-    const next = encodeURIComponent(path + request.nextUrl.search);
-    return redirect('/', `?kirish=${under(path, '/kabinet') ? 'hamkor' : 'xodim'}&next=${next}`);
-  }
+  if (under(path, '/login')) return redirect(signedIn ? '/panel' : '/');
+  // Not signed in: the site's home page, as for every visitor. The sign-in window opens only from the footer buttons.
+  if (!signedIn && !OPEN_PATHS.some((p) => under(path, p))) return redirect('/');
   // Signed-in pages are personal: never stored by the browser or a shared cache.
   response.headers.set('Cache-Control', 'private, no-store, max-age=0');
   return response;

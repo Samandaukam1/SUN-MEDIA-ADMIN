@@ -16,23 +16,11 @@ const COPY: Record<Audience, { icon: string; title: string; text: string }> = {
 const EASE = [0.22, 1, 0.36, 1] as const;
 
 /**
- * The two footer entrances. Both open the same sign-in; which cabinet opens is decided by the server from the
- * account itself. `?kirish=xodim|hamkor` (sent by the server for private pages) opens the window on arrival.
+ * The two footer entrances — the only way the sign-in window opens. Both open the same sign-in; which cabinet opens
+ * is decided by the server from the account itself.
  */
 export function CabinetEntrances({ staffLabel }: { staffLabel: string }) {
   const [audience, setAudience] = useState<Audience | null>(null);
-  const [next, setNext] = useState<string | null>(null);
-
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    const wanted = url.searchParams.get('kirish');
-    if (wanted !== 'xodim' && wanted !== 'hamkor') return;
-    setNext(url.searchParams.get('next'));
-    setAudience(wanted === 'xodim' ? 'staff' : 'partner');
-    url.searchParams.delete('kirish');
-    url.searchParams.delete('next');
-    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
-  }, []);
 
   const button = 'text-[11px] tracking-[0.08em] text-[#6e6e76] uppercase transition-colors hover:text-[#d4fc18]';
   return (
@@ -46,21 +34,14 @@ export function CabinetEntrances({ staffLabel }: { staffLabel: string }) {
           Hamkorlar uchun
         </button>
       </div>
-      <CabinetDialog
-        audience={audience}
-        next={next}
-        onClose={() => {
-          setAudience(null);
-          setNext(null);
-        }}
-      />
+      <CabinetDialog audience={audience} onClose={() => setAudience(null)} />
     </>
   );
 }
 
 type Session = { name: string; to: string; area: string };
 
-function CabinetDialog({ audience, next, onClose }: { audience: Audience | null; next: string | null; onClose: () => void }) {
+function CabinetDialog({ audience, onClose }: { audience: Audience | null; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [view, setView] = useState<'checking' | 'form' | Session>('checking');
   const [leaving, startLeaving] = useTransition();
@@ -134,7 +115,7 @@ function CabinetDialog({ audience, next, onClose }: { audience: Audience | null;
                 <span className="sr-only">Tekshirilmoqda…</span>
               </div>
             ) : view === 'form' ? (
-              <LoginForm key={formKey} next={next} />
+              <LoginForm key={formKey} />
             ) : (
               <div className="mt-7 space-y-4">
                 <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3.5 text-center">
@@ -168,7 +149,7 @@ function CabinetDialog({ audience, next, onClose }: { audience: Audience | null;
   );
 }
 
-function LoginForm({ next }: { next: string | null }) {
+function LoginForm() {
   const [state, action, pending] = useActionState<CabinetLoginState, FormData>(cabinetSignIn, { status: 'idle' });
   const [show, setShow] = useState(false);
   const [wait, setWait] = useState(0);
@@ -203,7 +184,6 @@ function LoginForm({ next }: { next: string | null }) {
 
   return (
     <form action={action} className="mt-7 space-y-4" noValidate>
-      {next ? <input type="hidden" name="next" value={next} /> : null}
       <div>
         <label htmlFor={ids.email} className="mb-1.5 block text-[13px] font-medium text-[#d9d9de]">
           Email (login)

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { Fragment, useState, useTransition } from 'react';
 
 import { SiteIcon } from '@/components/site/SiteIcon';
 import { Badge } from '@/components/ui/Badge';
@@ -23,6 +23,9 @@ type Option = { id: string; name: string };
 export type ClientPreset = { name: string; logoUrl: string | null };
 
 const str = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v));
+
+/** Lists whose rows have their own page on the site. */
+const PUBLIC_PAGE: Partial<Record<SiteCollectionKey, string>> = { partners: '/hamkorlar', cases: '/keyslar' };
 
 /** Add / edit / hide / reorder / delete the rows of one "Sayt" list. */
 export function CollectionEditor({
@@ -153,6 +156,18 @@ export function CollectionEditor({
                   {row.is_published ? <Badge tone="success" dot>Faol</Badge> : <Badge dot>Nofaol</Badge>}
                 </div>
                 <div className="flex shrink-0 gap-1">
+                  {PUBLIC_PAGE[collection] && row.slug && row.is_published ? (
+                    <a
+                      href={`${PUBLIC_PAGE[collection]}/${str(row.slug)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Saytdagi sahifasini ochish"
+                      title="Saytdagi sahifasi"
+                      className="grid size-10 place-items-center rounded-xl text-muted hover:bg-surface-2 hover:text-ink"
+                    >
+                      <Icon name="externalLink" size={16} />
+                    </a>
+                  ) : null}
                   <Button variant="ghost" disabled={pending} onClick={() => act(() => setSiteItemPublished(collection, row.id, !row.is_published))}>
                     <Icon name={row.is_published ? 'eyeOff' : 'eye'} size={16} />
                     <span className="hidden lg:inline">{row.is_published ? 'Nofaol qilish' : 'Faollashtirish'}</span>
@@ -202,9 +217,16 @@ export function CollectionEditor({
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2">
               {config.fields.map((f) => (
-                <div key={f.key} className={f.half ? '' : 'sm:col-span-2'}>
-                  <FieldEditor field={f} value={editing.values[f.key]} onChange={(v) => set(f.key, v)} error={errors[f.key]} folder={config.folder} partners={partners} />
-                </div>
+                <Fragment key={f.key}>
+                  {f.section ? (
+                    <h3 className="mt-2 border-t border-line pt-5 text-[11px] font-semibold tracking-[0.08em] text-subtle uppercase first:mt-0 first:border-0 first:pt-0 sm:col-span-2">
+                      {f.section}
+                    </h3>
+                  ) : null}
+                  <div className={f.half ? '' : 'sm:col-span-2'}>
+                    <FieldEditor field={f} value={editing.values[f.key]} onChange={(v) => set(f.key, v)} error={errors[f.key]} folder={config.folder} partners={partners} />
+                  </div>
+                </Fragment>
               ))}
             </div>
             <div className="flex justify-end gap-3 border-t border-line pt-5">
@@ -378,6 +400,74 @@ function FieldEditor({
             {items.length < (f.items ?? 8) ? (
               <Button type="button" variant="secondary" onClick={() => onChange([...items, ''])} icon={<Icon name="plus" size={15} />}>
                 Qator qo‘shish
+              </Button>
+            ) : null}
+          </div>
+          {error ? <p className="text-[13px] text-danger">{error}</p> : f.hint ? <p className="text-[13px] text-subtle">{f.hint}</p> : null}
+        </div>
+      );
+    }
+    case 'timeline': {
+      const rows = Array.isArray(value) ? (value as { period: string; title: string; text: string }[]) : [];
+      const update = (i: number, key: 'period' | 'title' | 'text', v: string) => onChange(rows.map((r, j) => (j === i ? { ...r, [key]: v } : r)));
+      const move = (i: number, dir: -1 | 1) => {
+        const j = i + dir;
+        if (j < 0 || j >= rows.length) return;
+        const next = [...rows];
+        [next[i], next[j]] = [next[j], next[i]];
+        onChange(next);
+      };
+      return (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[13px] font-medium text-muted">{f.label}</span>
+          <div className="space-y-2">
+            {rows.map((r, i) => (
+              <div key={i} className="rounded-xl border border-line bg-surface p-3">
+                <div className="grid gap-2 sm:grid-cols-[140px_1fr]">
+                  <input
+                    value={r.period}
+                    maxLength={40}
+                    placeholder="2024 · bahor"
+                    onChange={(e) => update(i, 'period', e.target.value)}
+                    aria-label={`${i + 1}-bosqich davri`}
+                    className="h-10 rounded-lg border border-line bg-surface px-3 text-sm font-semibold outline-none focus:border-accent"
+                  />
+                  <input
+                    value={r.title}
+                    maxLength={80}
+                    placeholder="Hamkorlik boshlandi"
+                    onChange={(e) => update(i, 'title', e.target.value)}
+                    aria-label={`${i + 1}-bosqich nomi`}
+                    className="h-10 rounded-lg border border-line bg-surface px-3 text-sm outline-none focus:border-accent"
+                  />
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <textarea
+                    value={r.text}
+                    maxLength={400}
+                    rows={2}
+                    placeholder="Nima qilindi, qanday natija bo‘ldi"
+                    onChange={(e) => update(i, 'text', e.target.value)}
+                    aria-label={`${i + 1}-bosqich matni`}
+                    className="min-w-0 flex-1 resize-y rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                  />
+                  <div className="flex flex-col">
+                    <Button type="button" variant="ghost" aria-label="Yuqoriga" disabled={i === 0} onClick={() => move(i, -1)}>
+                      <Icon name="chevronDown" size={15} className="rotate-180" />
+                    </Button>
+                    <Button type="button" variant="ghost" aria-label="Pastga" disabled={i === rows.length - 1} onClick={() => move(i, 1)}>
+                      <Icon name="chevronDown" size={15} />
+                    </Button>
+                  </div>
+                  <Button type="button" variant="ghost" aria-label="Bosqichni o‘chirish" className="text-danger" onClick={() => onChange(rows.filter((_, j) => j !== i))}>
+                    <Icon name="x" size={15} />
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {rows.length < (f.items ?? 12) ? (
+              <Button type="button" variant="secondary" onClick={() => onChange([...rows, { period: '', title: '', text: '' }])} icon={<Icon name="plus" size={15} />}>
+                Bosqich qo‘shish
               </Button>
             ) : null}
           </div>

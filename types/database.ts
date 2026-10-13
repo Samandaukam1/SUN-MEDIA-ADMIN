@@ -5341,44 +5341,65 @@ export type Database = {
       }
       site_partners: {
         Row: {
+          cover_url: string | null
           created_at: string
           description: string
+          gallery: string[]
           highlight: string
           id: string
           industry: string
           is_published: boolean
           logo_url: string | null
           name: string
+          results: Json
+          services: string[]
           since_year: number | null
+          slug: string
           sort_order: number
+          story: string
+          timeline: Json
           updated_at: string
           website_url: string | null
         }
         Insert: {
+          cover_url?: string | null
           created_at?: string
           description?: string
+          gallery?: string[]
           highlight?: string
           id?: string
           industry?: string
           is_published?: boolean
           logo_url?: string | null
           name: string
+          results?: Json
+          services?: string[]
           since_year?: number | null
+          slug: string
           sort_order?: number
+          story?: string
+          timeline?: Json
           updated_at?: string
           website_url?: string | null
         }
         Update: {
+          cover_url?: string | null
           created_at?: string
           description?: string
+          gallery?: string[]
           highlight?: string
           id?: string
           industry?: string
           is_published?: boolean
           logo_url?: string | null
           name?: string
+          results?: Json
+          services?: string[]
           since_year?: number | null
+          slug?: string
           sort_order?: number
+          story?: string
+          timeline?: Json
           updated_at?: string
           website_url?: string | null
         }

@@ -3,7 +3,20 @@
  * server-side validation. Field keys are the table's column names. No server-only imports — the editor uses it too.
  */
 
-export type SiteFieldType = 'text' | 'textarea' | 'url' | 'image' | 'gallery' | 'list' | 'results' | 'icon' | 'partner' | 'boolean' | 'year' | 'slug';
+export type SiteFieldType =
+  | 'text'
+  | 'textarea'
+  | 'url'
+  | 'image'
+  | 'gallery'
+  | 'list'
+  | 'results'
+  | 'timeline'
+  | 'icon'
+  | 'partner'
+  | 'boolean'
+  | 'year'
+  | 'slug';
 
 export type SiteField = {
   key: string;
@@ -16,6 +29,8 @@ export type SiteField = {
   placeholder?: string;
   rows?: number;
   half?: boolean;
+  /** Starts a titled group in the editor (e.g. "Hamkor sahifasi"). */
+  section?: string;
 };
 
 export type SiteCollectionKey = 'services' | 'cases' | 'partners' | 'testimonials' | 'stats' | 'benefits' | 'steps' | 'faqs';
@@ -96,13 +111,27 @@ export const SITE_COLLECTIONS: Record<SiteCollectionKey, SiteCollection> = {
     thumb: 'logo_url',
     folder: 'partners',
     fields: [
-      { key: 'name', label: 'Brend nomi', type: 'text', required: true, max: 80 },
+      { key: 'name', label: 'Brend nomi', type: 'text', required: true, max: 80, section: 'Karta va pufak' },
       { key: 'logo_url', label: 'Logotip', type: 'image', hint: 'PNG, JPG, WEBP yoki SVG (SVG xavfsiz rasmga aylantiriladi). Shaffof fon eng yaxshisi, fonli rasm ham to‘g‘ri chiqadi.' },
       { key: 'since_year', label: 'Hamkorlik boshlangan yil', type: 'year', half: true },
       { key: 'industry', label: 'Soha yoki hamkorlik yo‘nalishi', type: 'text', max: 60, placeholder: 'SMM, Reels, brending…', half: true },
       { key: 'highlight', label: 'Erishilgan natija (qisqa)', type: 'text', max: 80, placeholder: 'Instagram auditoriyasi 3 barobar' },
       { key: 'description', label: 'Hamkorlik haqida', type: 'textarea', max: 500, rows: 3 },
       { key: 'website_url', label: 'Sayt yoki ijtimoiy tarmoq havolasi', type: 'url', placeholder: 'https://instagram.com/…' },
+      {
+        key: 'slug',
+        label: 'Sahifa manzili',
+        type: 'slug',
+        max: 80,
+        hint: 'Bo‘sh qolsa nomdan yasaladi: /hamkorlar/…',
+        section: 'Hamkor sahifasi (kartani bosganda ochiladi)',
+      },
+      { key: 'cover_url', label: 'Muqova rasmi (syomkadan)', type: 'image', hint: 'Gorizontal rasm — sahifaning yuqorisida katta chiqadi.' },
+      { key: 'story', label: 'Hamkorlik haqida (to‘liq matn)', type: 'textarea', max: 6000, rows: 7, hint: 'Bo‘sh qator bilan xatboshilarga ajrating.' },
+      { key: 'services', label: 'Nimalar qildik', type: 'list', items: 12, max: 80, hint: 'Masalan: SMM boshqaruvi, Reels syomka, target reklama.' },
+      { key: 'results', label: 'Natijalar (raqamlarda)', type: 'results', items: 6, hint: 'Masalan: “+70%” — “Savdo hajmi”.' },
+      { key: 'timeline', label: 'Hamkorlik tarixi', type: 'timeline', items: 12, hint: 'Qachon nima qilinganini bosqichma-bosqich yozing.' },
+      { key: 'gallery', label: 'Syomkadan rasmlar', type: 'gallery', items: 24 },
     ],
   },
   testimonials: {
@@ -199,7 +228,7 @@ export function blankItem(collection: SiteCollection): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const f of collection.fields) {
     out[f.key] =
-      f.type === 'list' || f.type === 'gallery' || f.type === 'results'
+      f.type === 'list' || f.type === 'gallery' || f.type === 'results' || f.type === 'timeline'
         ? []
         : f.type === 'boolean'
           ? false

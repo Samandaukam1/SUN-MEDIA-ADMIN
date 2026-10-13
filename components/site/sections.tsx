@@ -337,7 +337,7 @@ export function ProcessSteps({ steps, heading }: { steps: SiteStep[]; heading: R
 /* --------------------------------------------------------------------------------------------- */
 
 /** A partner's logo in its own colours (contain, never cropped); the name if there is no logo or it fails to load. */
-function PartnerLogo({ partner }: { partner: Pick<SitePartner, 'name' | 'logoUrl'> }) {
+export function PartnerLogo({ partner }: { partner: Pick<SitePartner, 'name' | 'logoUrl'> }) {
   const name = <span className="font-display s-silver text-[18px] font-semibold tracking-[-0.02em]">{partner.name}</span>;
   if (!partner.logoUrl) return name;
   return (
@@ -357,17 +357,29 @@ export function PartnerMarquee({ partners, title }: { partners: SitePartner[]; t
       {title ? <p className="mb-8 text-center text-[12px] font-semibold tracking-[0.18em] text-[#6e6e76] uppercase">{title}</p> : null}
       <div className="s-marquee-wrap s-fade-edges overflow-hidden">
         <div className="s-marquee gap-4" style={{ ['--s-marquee-duration' as string]: `${Math.max(30, items.length * 5)}s` }}>
-          {row.map((p, i) => (
-            <div key={`${p.id}-${i}`} className="lg group flex h-24 w-56 shrink-0 items-center justify-center rounded-3xl px-7 py-4">
-              <PartnerLogo partner={p} />
-            </div>
-          ))}
+          {row.map((p, i) => {
+            // Only the first copy of each partner is reachable by keyboard / screen readers.
+            const first = i < partners.length;
+            return (
+              <Link
+                key={`${p.id}-${i}`}
+                href={`/hamkorlar/${p.slug}`}
+                aria-hidden={first ? undefined : true}
+                tabIndex={first ? undefined : -1}
+                aria-label={first ? `${p.name} — hamkorlik haqida` : undefined}
+                className="lg group flex h-24 w-56 shrink-0 items-center justify-center rounded-3xl px-7 py-4 transition-transform duration-500 hover:-translate-y-0.5"
+              >
+                <PartnerLogo partner={p} />
+              </Link>
+            );
+          })}
         </div>
       </div>
     </section>
   );
 }
 
+/** Partner cards; each opens the partner's own page with the whole story of the work. */
 export function PartnerCards({ partners }: { partners: SitePartner[] }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -375,41 +387,61 @@ export function PartnerCards({ partners }: { partners: SitePartner[] }) {
         const years = partnershipYears(p.sinceYear);
         return (
           <Reveal key={p.id} delay={(i % 3) * 0.07}>
-            <GlassCard as="article" className="group flex h-full flex-col rounded-[30px] p-6 sm:p-7">
-              <div className="flex h-24 items-center justify-center rounded-[22px] border border-white/[0.07] bg-white/[0.03] px-6 py-4">
-                <PartnerLogo partner={p} />
-              </div>
-              <div className="mt-6 flex flex-wrap items-center gap-2">
-                <h3 className="font-display mr-auto text-[19px] font-medium tracking-[-0.02em] text-white">{p.name}</h3>
-                {p.sinceYear ? (
-                  <span className="rounded-full border border-[#d4fc18]/30 bg-[#d4fc18]/10 px-3 py-1 text-[12px] font-semibold text-[#d4fc18] tabular">
-                    {p.sinceYear}-yildan{years ? ` · ${years} yil` : ''}
-                  </span>
+            <Link href={`/hamkorlar/${p.slug}`} className="group block h-full" aria-label={`${p.name} — hamkorlik haqida batafsil`}>
+              <GlassCard as="article" className="flex h-full flex-col rounded-[30px] p-6 transition-transform duration-700 group-hover:-translate-y-1 sm:p-7">
+                <div className="flex h-24 items-center justify-center rounded-[22px] border border-white/[0.07] bg-white/[0.03] px-6 py-4">
+                  <PartnerLogo partner={p} />
+                </div>
+                <div className="mt-6 flex flex-wrap items-center gap-2">
+                  <h3 className="font-display mr-auto text-[19px] font-medium tracking-[-0.02em] text-white">{p.name}</h3>
+                  {p.sinceYear ? (
+                    <span className="rounded-full border border-[#d4fc18]/30 bg-[#d4fc18]/10 px-3 py-1 text-[12px] font-semibold text-[#d4fc18] tabular">
+                      {p.sinceYear}-yildan{years ? ` · ${years} yil` : ''}
+                    </span>
+                  ) : null}
+                </div>
+                {p.industry ? <p className="mt-1 text-[13px] text-[#8e8e96]">{p.industry}</p> : null}
+                {p.highlight ? (
+                  <p className="mt-5 flex items-start gap-3 rounded-2xl border border-[#d4fc18]/15 bg-[#d4fc18]/[0.07] px-4 py-3 text-[14.5px] font-semibold text-[#e4f68f]">
+                    <SiteIcon name="chart" size={18} className="mt-0.5 shrink-0 text-[#d4fc18]" strokeWidth={2} />
+                    {p.highlight}
+                  </p>
                 ) : null}
-              </div>
-              {p.industry ? <p className="mt-1 text-[13px] text-[#8e8e96]">{p.industry}</p> : null}
-              {p.highlight ? (
-                <p className="mt-5 flex items-start gap-3 rounded-2xl border border-[#d4fc18]/15 bg-[#d4fc18]/[0.07] px-4 py-3 text-[14.5px] font-semibold text-[#e4f68f]">
-                  <SiteIcon name="chart" size={18} className="mt-0.5 shrink-0 text-[#d4fc18]" strokeWidth={2} />
-                  {p.highlight}
-                </p>
-              ) : null}
-              {p.description ? <p className="mt-4 text-[14.5px] leading-relaxed text-[#a8a8ac]">{p.description}</p> : null}
-              {p.websiteUrl ? (
-                <a
-                  href={p.websiteUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-auto inline-flex items-center gap-2 pt-6 text-[13.5px] font-medium text-white transition-colors hover:text-[#d4fc18]"
-                >
-                  Saytga o‘tish <SiteIcon name="arrowUpRight" size={15} strokeWidth={2} />
-                </a>
-              ) : null}
-            </GlassCard>
+                {p.description ? <p className="mt-4 line-clamp-3 text-[14.5px] leading-relaxed text-[#a8a8ac]">{p.description}</p> : null}
+                <span className="mt-auto flex items-center justify-between gap-3 pt-6 text-[14px] font-medium text-white">
+                  Hamkorlik haqida batafsil
+                  <span className="grid size-10 place-items-center rounded-full bg-white/[0.07] transition-all duration-500 group-hover:-rotate-45 group-hover:bg-[#d4fc18] group-hover:text-[#0b0b0c]">
+                    <SiteIcon name="arrowRight" size={16} strokeWidth={2} />
+                  </span>
+                </span>
+              </GlassCard>
+            </Link>
           </Reveal>
         );
       })}
     </div>
+  );
+}
+
+/** "Hamkorlik tarixi": when, what and how it went — a vertical line that draws itself while scrolling. */
+export function PartnerTimeline({ items }: { items: SitePartner['timeline'] }) {
+  return (
+    <ol className="relative">
+      <div className="absolute top-2 bottom-2 left-[11px] w-px bg-white/[0.08]" aria-hidden />
+      <ScrollLine vertical className="absolute top-2 bottom-2 left-[11px] w-px" />
+      {items.map((item, i) => (
+        <Reveal as="li" key={`${item.title}-${i}`} className="relative grid grid-cols-[24px_1fr] gap-5 pb-10 last:pb-0 sm:gap-7">
+          <span className="relative z-10 mt-1.5 grid size-6 place-items-center rounded-full border border-[#d4fc18]/50 bg-[#0b0b0c]">
+            <span className="size-2 rounded-full bg-[#d4fc18] shadow-[0_0_12px_#d4fc18]" />
+          </span>
+          <div>
+            {item.period ? <p className="text-[12px] font-semibold tracking-[0.14em] text-[#d4fc18] uppercase">{item.period}</p> : null}
+            <h3 className="font-display mt-1.5 text-[20px] font-medium tracking-[-0.02em] text-white sm:text-[22px]">{item.title}</h3>
+            {item.text ? <p className="mt-2 max-w-2xl text-[15px] leading-relaxed whitespace-pre-line text-[#a8a8ac]">{item.text}</p> : null}
+          </div>
+        </Reveal>
+      ))}
+    </ol>
   );
 }
 

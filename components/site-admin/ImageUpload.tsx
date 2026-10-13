@@ -195,9 +195,10 @@ export function GalleryUpload({
       </span>
       <div className="flex flex-wrap gap-3 rounded-xl border border-line bg-surface p-3">
         {value.map((url, i) => (
-          <div key={url} className="group relative size-20 overflow-hidden rounded-lg border border-line bg-surface-2">
+          <div key={url} className="group relative size-24 overflow-hidden rounded-lg border border-line bg-surface-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={url} alt="" className="size-full object-cover" />
+            <span className="absolute top-1 left-1 rounded-md bg-black/60 px-1.5 text-[11px] font-semibold text-white tabular">{i + 1}</span>
             <button
               type="button"
               aria-label="Olib tashlash"
@@ -206,6 +207,34 @@ export function GalleryUpload({
             >
               <Icon name="x" size={13} />
             </button>
+            <div className="absolute inset-x-1 bottom-1 flex justify-between opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+              <button
+                type="button"
+                aria-label="Chapga surish"
+                disabled={i === 0}
+                onClick={() => {
+                  const next = [...value];
+                  [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                  onChange(next);
+                }}
+                className="grid size-6 place-items-center rounded-full bg-black/70 text-white disabled:opacity-30"
+              >
+                <Icon name="chevronLeft" size={13} />
+              </button>
+              <button
+                type="button"
+                aria-label="O‘ngga surish"
+                disabled={i === value.length - 1}
+                onClick={() => {
+                  const next = [...value];
+                  [next[i + 1], next[i]] = [next[i], next[i + 1]];
+                  onChange(next);
+                }}
+                className="grid size-6 place-items-center rounded-full bg-black/70 text-white disabled:opacity-30"
+              >
+                <Icon name="chevronRight" size={13} />
+              </button>
+            </div>
           </div>
         ))}
         {value.length < max ? (
@@ -215,7 +244,7 @@ export function GalleryUpload({
               type="button"
               disabled={busy}
               onClick={() => input.current?.click()}
-              className="grid size-20 place-items-center rounded-lg border border-dashed border-line-strong text-muted hover:text-ink disabled:opacity-60"
+              className="grid size-24 place-items-center rounded-lg border border-dashed border-line-strong text-muted hover:text-ink disabled:opacity-60"
             >
               {busy ? <span className="size-5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Icon name="plus" />}
             </button>

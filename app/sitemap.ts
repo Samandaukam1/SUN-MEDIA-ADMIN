@@ -15,5 +15,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     .map((p) => ({ url: `${site}${p.path === '/' ? '' : p.path}`, lastModified: updated, priority: p.key === 'home' ? 1 : 0.8 }));
   const casesOpen = content.pages.some((p) => p.key === 'cases' && p.is_published);
   const cases = casesOpen ? content.cases.map((c) => ({ url: `${site}/keyslar/${c.slug}`, lastModified: updated, priority: 0.6 })) : [];
-  return [...pages, ...cases];
+  const partnersOpen = content.pages.some((p) => p.key === 'partners' && p.is_published);
+  const partners = partnersOpen ? content.partners.map((p) => ({ url: `${site}/hamkorlar/${p.slug}`, lastModified: updated, priority: 0.6 })) : [];
+  return [...pages, ...cases, ...partners];
 }

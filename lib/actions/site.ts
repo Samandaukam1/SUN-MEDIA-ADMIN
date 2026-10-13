@@ -83,6 +83,21 @@ function fieldSchema(f: SiteField) {
             )
             .max(f.items ?? 6, { message: `${f.items ?? 6} tagacha natija` }),
         );
+    case 'timeline':
+      return z
+        .array(z.object({ period: z.string().trim(), title: z.string().trim(), text: z.string().trim() }))
+        .transform((rows) => rows.filter((r) => r.period || r.title || r.text))
+        .pipe(
+          z
+            .array(
+              z.object({
+                period: z.string().max(40, { message: 'Davr 40 belgigacha' }),
+                title: z.string().min(1, { message: 'Bosqich nomini yozing' }).max(80, { message: 'Nomi 80 belgigacha' }),
+                text: z.string().max(400, { message: 'Matn 400 belgigacha' }),
+              }),
+            )
+            .max(f.items ?? 12, { message: `${f.items ?? 12} tagacha bosqich` }),
+        );
     case 'icon':
       return z.enum(SITE_ICON_KEYS as [string, ...string[]]).catch('spark');
     case 'partner':
@@ -123,10 +138,10 @@ async function removeImages(urls: string[]) {
 
 type Row = Record<string, unknown> & { id: string };
 
-async function uniqueSlug(base: string, id: string | null): Promise<string> {
+async function uniqueSlug(table: 'site_cases' | 'site_partners', base: string, id: string | null): Promise<string> {
   const supabase = await createClient();
-  const root = base || `keys-${Date.now().toString(36)}`;
-  const { data } = await supabase.from('site_cases').select('id, slug').like('slug', `${root}%`);
+  const root = base || `${table === 'site_cases' ? 'keys' : 'hamkor'}-${Date.now().toString(36)}`;
+  const { data } = await supabase.from(table).select('id, slug').like('slug', `${root}%`);
   const taken = new Set((data ?? []).filter((r) => r.id !== id).map((r) => r.slug));
   if (!taken.has(root)) return root;
   for (let n = 2; n < 1000; n++) {
@@ -143,7 +158,8 @@ export async function saveSiteItem(collection: string, id: string | null, values
   const parsed = collectionSchema(collection).safeParse(values);
   if (!parsed.success) return { status: 'error', message: 'Maydonlarni tekshiring.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
   const data: Record<string, unknown> = { ...parsed.data };
-  if (collection === 'cases') data.slug = await uniqueSlug((data.slug as string) || slugify(String(data.title)), id);
+  if (collection === 'cases') data.slug = await uniqueSlug('site_cases', (data.slug as string) || slugify(String(data.title)), id);
+  if (collection === 'partners') data.slug = await uniqueSlug('site_partners', (data.slug as string) || slugify(String(data.name)), id);
 
   const supabase = await createClient();
   // The generated types are per table; `data` was validated against this table's own columns above.

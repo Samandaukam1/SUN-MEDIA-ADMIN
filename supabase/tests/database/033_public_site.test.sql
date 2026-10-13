@@ -78,7 +78,7 @@ select pg_temp.login('admin');
 select isnt((select hero_title from public.site_settings where id), 'Buzilgan', 'editor changes to the site were ignored by RLS');
 update public.site_settings set hero_title = 'Yangi *sarlavha*' where id;
 select is((select hero_title from public.site_settings where id), 'Yangi *sarlavha*', 'admin edits site texts');
-select lives_ok($$insert into public.site_partners (name, since_year) values ('Hamkor', 2021)$$, 'admin adds a partner');
+select lives_ok($$insert into public.site_partners (slug, name, since_year) values ('hamkor', 'Hamkor', 2021)$$, 'admin adds a partner');
 select throws_ok($$update public.site_pages set is_published = false where key = 'home'$$, '23514', null, 'the landing page cannot be switched off');
 select ok((public.site_gate_status()->>'configured')::boolean, 'admin sees the gate is configured');
 select throws_ok($$select public.site_gate_set_code('123987')$$, '42501', null, 'admin cannot change the gate code');

@@ -93,6 +93,7 @@ export const siteContentSchema = z.object({
   partners: z.array(
     z.object({
       id: z.string(),
+      slug: z.string(),
       name: z.string(),
       logoUrl: nullableText,
       sinceYear: z.number().nullable(),
@@ -100,6 +101,12 @@ export const siteContentSchema = z.object({
       highlight: z.string(),
       description: z.string(),
       websiteUrl: nullableText,
+      coverUrl: nullableText.default(null),
+      story: z.string().default(''),
+      services: z.array(z.string()).default([]),
+      results: z.array(z.object({ value: z.string(), label: z.string() })).default([]),
+      timeline: z.array(z.object({ period: z.string(), title: z.string(), text: z.string() })).default([]),
+      gallery: z.array(z.string()).default([]),
     }),
   ),
   cases: z.array(

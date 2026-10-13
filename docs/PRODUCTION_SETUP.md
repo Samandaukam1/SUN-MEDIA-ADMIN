@@ -143,6 +143,11 @@ Next.js server kerak, shuning uchun GitHub Pages emas.
   chetdan qaytadi. Mantiq `lib/site/bubbles.ts` da (testlar: `tests/bubbles.test.mjs`), chizish
   `components/site/hero/PartnerBubbles.tsx` da. Hamkor qo'shish/o'chirish/faol-nofaol — **Panel → Sayt → Hamkorlar**; pufaklar va
   "Hamkorlar" sahifasi bitta ro'yxatdan ishlaydi. SVG logotip brauzerda WebP'ga aylantiriladi; `site/` papkasiga `.svg` yozilmaydi.
+- **Hamkor sahifasi** (`/hamkorlar/<manzil>`, masalan `/hamkorlar/safi`): hamkor kartasi yoki logotip lentasi bosilganda
+  ochiladi — logotip, hamkorlik yili, natijalar, "Hamkorlik haqida", "Nimalar qildik", hamkorlik tarixi, syomkadan rasmlar
+  (katta ko'rinishda ochiladi), shu hamkor bilan keyslar va uning fikri. Hammasi Panel → Sayt → Hamkorlar → hamkorni
+  tahrirlash → "Hamkor sahifasi" qismida (24 tagacha rasm, tartibini o'zgartirish mumkin). Migratsiya:
+  `20261015100000_partner_pages.sql` (mavjud hamkorlarga manzil nomidan yasaladi).
 - **Tariflar**: `/tariflar` sahifasi, bosh sahifa bloki va menyudagi "Tariflar". Boshqaruv — **Panel → Sayt → Tariflar**: nom,
   tavsif, narx ("aniq", "dan boshlab" yoki "Kelishiladi"), valyuta (UZS/USD/EUR), oylik yoki bir martalik, "Tavsiya etiladi"
   (bittasi), faol/yashirin, tartib va xizmatlar (nom, miqdor, izoh, tartib). Bu ro'yxat mijoz obunalaridagi ichki tariflardan

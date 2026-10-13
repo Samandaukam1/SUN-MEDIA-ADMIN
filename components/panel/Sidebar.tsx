@@ -60,6 +60,9 @@ export function Sidebar({ sections, create, user }: Props) {
           <p className="truncate text-sm font-medium text-sidebar-active">{user.name}</p>
           <p className="truncate text-xs">{user.role}</p>
         </div>
+        <Link href="/parol" title="Parolni almashtirish" aria-label="Parolni almashtirish" className="rounded-lg p-2 text-sidebar-text hover:bg-white/[0.06] hover:text-sidebar-active">
+          <Icon name="key" size={17} />
+        </Link>
         <form action="/auth/signout" method="post">
           <button type="submit" title="Chiqish" aria-label="Chiqish" className="rounded-lg p-2 text-sidebar-text hover:bg-white/[0.06] hover:text-sidebar-active">
             <Icon name="logOut" size={17} />

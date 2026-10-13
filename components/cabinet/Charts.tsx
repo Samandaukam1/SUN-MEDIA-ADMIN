@@ -9,6 +9,12 @@ export type ChartSeries = { key: string; label: string; color: string; values: (
 type Unit = 'number' | 'uzs' | 'usd';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
+const SHORT_MONTHS = ['yan', 'fev', 'mar', 'apr', 'may', 'iyn', 'iyl', 'avg', 'sen', 'okt', 'noy', 'dek'];
+
+/** "2026-10-13" → "13 okt" (daily charts); month starts keep their month names. */
+function dayName(date: string): string {
+  return `${Number(date.slice(8, 10))} ${SHORT_MONTHS[Number(date.slice(5, 7)) - 1]}`;
+}
 
 function show(value: number | null, unit: Unit): string {
   if (value === null) return 'Ma’lumot kiritilmagan';
@@ -30,14 +36,14 @@ function Legend({ series }: { series: ChartSeries[] }) {
   );
 }
 
-function Tooltip({ month, series, index, unit, align }: { month: string; series: ChartSeries[]; index: number; unit: Unit; align: 'left' | 'center' | 'right' }) {
+function Tooltip({ month, series, index, unit, align, days = false }: { month: string; series: ChartSeries[]; index: number; unit: Unit; align: 'left' | 'center' | 'right'; days?: boolean }) {
   const position = align === 'left' ? 'left-0' : align === 'right' ? 'right-0' : 'left-1/2 -translate-x-1/2';
   return (
     <div
       role="tooltip"
       className={`pointer-events-none absolute bottom-full z-10 mb-2 w-max max-w-[220px] rounded-2xl border border-white/10 bg-[#111113]/95 px-3.5 py-2.5 text-left shadow-[0_20px_40px_-12px_rgb(0_0_0/0.8)] backdrop-blur ${position}`}
     >
-      <p className="mb-1 text-[12px] font-semibold text-white">{monthName(month)}</p>
+      <p className="mb-1 text-[12px] font-semibold text-white">{days ? dayName(month) : monthName(month)}</p>
       {series.map((s) => (
         <p key={s.key} className="flex items-center gap-2 text-[12px] text-[#a8a8ac]">
           <span className="size-2 shrink-0 rounded-full" style={{ background: s.color }} />
@@ -50,11 +56,25 @@ function Tooltip({ month, series, index, unit, align }: { month: string; series:
 }
 
 /** Monthly bars (grouped, or stacked for parts of one whole). A month nobody entered is an empty outline, not a 0. */
-export function MonthlyBars({ months, series, unit = 'number', stacked = false }: { months: string[]; series: ChartSeries[]; unit?: Unit; stacked?: boolean }) {
+export function MonthlyBars({
+  months,
+  series,
+  unit = 'number',
+  stacked = false,
+  dayLabels = false,
+}: {
+  months: string[];
+  series: ChartSeries[];
+  unit?: Unit;
+  stacked?: boolean;
+  /** The points are days ("2026-10-13"), not months. */
+  dayLabels?: boolean;
+}) {
   const [active, setActive] = useState<number | null>(null);
   const totals = months.map((_, i) => series.reduce((sum, s) => sum + (s.values[i] ?? 0), 0));
   const max = Math.max(1, ...(stacked ? totals : series.flatMap((s) => s.values.map((v) => v ?? 0))));
   const many = months.length > 8;
+  const step = months.length > 16 ? Math.ceil(months.length / 8) : many ? 2 : 1;
 
   return (
     <div className="space-y-4">
@@ -73,7 +93,7 @@ export function MonthlyBars({ months, series, unit = 'number', stacked = false }
               onFocus={() => setActive(i)}
               onBlur={() => setActive(null)}
               onClick={() => setActive(active === i ? null : i)}
-              aria-label={`${monthName(month)}: ${series.map((s) => `${s.label} ${show(s.values[i], unit)}`).join(', ')}`}
+              aria-label={`${dayLabels ? dayName(month) : monthName(month)}: ${series.map((s) => `${s.label} ${show(s.values[i], unit)}`).join(', ')}`}
               className="relative flex h-full min-w-0 flex-1 items-end justify-center gap-[3px] rounded-t-lg outline-none"
             >
               {empty ? (
@@ -107,15 +127,20 @@ export function MonthlyBars({ months, series, unit = 'number', stacked = false }
                   />
                 ))
               )}
-              {active === i ? <Tooltip month={month} series={series} index={i} unit={unit} align={i === 0 ? 'left' : i === months.length - 1 ? 'right' : 'center'} /> : null}
+              {active === i ? (
+                <Tooltip month={month} series={series} index={i} unit={unit} days={dayLabels} align={i === 0 ? 'left' : i === months.length - 1 ? 'right' : 'center'} />
+              ) : null}
             </button>
           );
         })}
       </div>
       <div className="flex gap-1.5 sm:gap-3">
         {months.map((month, i) => (
-          <span key={month} className={`min-w-0 flex-1 text-center text-[11px] text-[#6e6e76] ${many && i % 2 ? 'max-sm:invisible' : ''}`}>
-            {monthShort(month)}
+          <span
+            key={month}
+            className={`min-w-0 flex-1 text-center text-[11px] text-[#6e6e76] ${dayLabels ? (i % step ? 'invisible' : '') : many && i % 2 ? 'max-sm:invisible' : ''}`}
+          >
+            {dayLabels ? Number(month.slice(8, 10)) : monthShort(month)}
           </span>
         ))}
       </div>

@@ -43,7 +43,7 @@ export async function ClientStatsTab({ clientId, month, canEnter, canAddAccounts
           </Link>
           <div className="text-center">
             <p className="text-lg font-semibold">{monthLabel(active)}</p>
-            <Link href={`/kabinet?brend=${clientId}&oy=${active.slice(0, 7)}`} className="text-[13px] text-accent hover:underline">
+            <Link href={`/kabinet/natijalar?brend=${clientId}&oy=${active.slice(0, 7)}`} className="text-[13px] text-accent hover:underline">
               Hamkor kabinetida ko‘rish ↗
             </Link>
           </div>

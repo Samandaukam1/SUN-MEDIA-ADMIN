@@ -170,11 +170,16 @@ Next.js server kerak, shuning uchun GitHub Pages emas.
   Login va IP bazaga faqat HMAC holida yoziladi. Supabase Auth'ning o'z limitlari ham amal qiladi.
 - **Chiqish** shu brauzer sessiyasini tugatadi (boshqa qurilmalar qoladi) va keshni tozalaydi; yopiq sahifalar
   `Cache-Control: private, no-store`.
-- **Hamkor kabineti** (`/kabinet`): faqat o'z brendi (`client_members` orqali; `?brend=` faqat o'z a'zoligi ichida
-  tanlaydi), `get_partner_cabinet` RPC — faqat **nashr qilingan** statistika va hisobotlar. Davr filtri (oy / 3 / 6 / 12
-  oy / ixtiyoriy), platforma filtri, kartalar va grafiklar bir xil ma'lumotdan; foiz faqat nomi yozilgan oldingi davr
-  bilan. Kiritilmagan qiymat — “Ma'lumot kiritilmagan” (haqiqiy 0 — 0). Qo'lda kiritilgan raqamlar “qo'lda kiritilgan”
-  deb, Instagram API raqamlari “avtomatik sinxronlangan” deb belgilanadi. Fayllar va PDF — RLS + 2 daqiqalik link.
+- **Hamkor kabineti** (`/kabinet`) — faqat o'z brendi (`client_members`; `?brend=` faqat o'z a'zoligi ichida), bo'limlar:
+  **Umumiy** (tarif va qolgan kunlar, bu oy chiqqan kontent va syomkalar, o'sish grafigi, keyingi tashriflar, so'nggi
+  lidlar, chat, jamoa — `get_client_home`), **Natijalar** (`get_partner_cabinet`: faqat nashr qilingan statistika, davr
+  va platforma filtri, foiz faqat nomi yozilgan oldingi davr bilan, “Ma'lumot kiritilmagan”), **Lidlar** (SUN MEDIA
+  yetkazgan Meta lidlari va yuborilgan haftalik/oylik lid hisobotlari — `get_client_leads`, `crm_reports`),
+  **Reja** (keyingi syomkalar = tashriflar, post rejasi, o'tgan tashriflar — `get_calendar_events`), **Tarif** (joriy
+  tarif, shu oy bajarilishi, boshqa tariflar, “tarifni oshirish” so'rovi — `get_client_plan`, `plan_upgrade_requests`),
+  **Hisobotlar** (nashr qilingan oylik hisobotlar, fayllar, PDF), **Chat** (brendning SUN MEDIA bilan umumiy chati —
+  mobil ilovadagi xona; real vaqt `room:<id>`, fayl biriktirish). Hammasi foydalanuvchining o'z sessiyasi va mavjud
+  RLS/RPC orqali; SUN MEDIA xodimi panel orqali faqat o'qish rejimida ko'radi. O'yinlar kabinetda yo'q.
 - **Statistika kiritish** (Rahbar, Admin, SMM — `analytics.manage`): Mijoz → Statistika → oy → platforma akkaunti:
   auditoriya, faollik, Reels/post/Stories, reklama xarajati (so'm/USD), lidlar (CPL avtomatik). “Qoralama saqlash” —
   hamkorga ko'rinmaydi; “Nashr qilish” — ko'rinadi. Bir akkaunt uchun bir oyga bitta yozuv; ustma-ust davr bazada rad etiladi.

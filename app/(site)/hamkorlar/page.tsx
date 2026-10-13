@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 
 import { ApplyButton } from '@/components/site/ApplyButton';
-import { Container, CtaSection, NextSteps, PageHero, PaperSection, PartnerCards, SectionHeading, StatsGrid, Testimonials } from '@/components/site/sections';
+import { Container, CtaSection, NextSteps, PageHero, PartnerCards, SectionHeading, StatsGrid, Testimonials } from '@/components/site/sections';
 import { getSiteContent, isPublished, pageMetadata, pageOf, sectionOf } from '@/lib/site/content';
 
 export const revalidate = 600;
@@ -24,11 +24,11 @@ export default async function PartnersPage() {
         </section>
       ) : null}
       {c.partners.length ? (
-        <PaperSection>
+        <section className="pb-4">
           <Container>
             <PartnerCards partners={c.partners} />
           </Container>
-        </PaperSection>
+        </section>
       ) : (
         <Container>
           <div className="lg flex flex-col items-center rounded-[36px] px-6 py-20 text-center">

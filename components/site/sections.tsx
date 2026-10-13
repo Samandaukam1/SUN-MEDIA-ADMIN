@@ -20,6 +20,7 @@ import { CountUp, GlassCard, Reveal, ScrollLine, SplitWords } from './motion';
 import { SocialRow } from './SiteFooter';
 import { SiteIcon } from './SiteIcon';
 import { CaseCard } from './CaseCard';
+import { PartnerLogoImage } from './PartnerLogoImage';
 import { initialsOf, SiteImage } from './SiteImage';
 
 export function Container({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -335,28 +336,14 @@ export function ProcessSteps({ steps, heading }: { steps: SiteStep[]; heading: R
 
 /* --------------------------------------------------------------------------------------------- */
 
-function PartnerLogo({ partner, tone }: { partner: Pick<SitePartner, 'name' | 'logoUrl'>; tone: 'dark' | 'light' }) {
-  if (partner.logoUrl) {
-    return (
-      <div className="relative h-full w-full">
-        <SiteImage
-          src={partner.logoUrl}
-          alt={partner.name}
-          sizes="240px"
-          fallback={
-            <span className={`absolute inset-0 grid place-items-center font-display text-[18px] font-semibold tracking-[-0.02em] ${tone === 'dark' ? 's-silver' : 'text-[#0b0b0c]'}`}>
-              {partner.name}
-            </span>
-          }
-          className={`object-contain transition-all duration-700 ${
-            tone === 'dark' ? 'opacity-75 brightness-0 invert group-hover:opacity-100' : 'grayscale group-hover:grayscale-0'
-          }`}
-        />
-      </div>
-    );
-  }
+/** A partner's logo in its own colours (contain, never cropped); the name if there is no logo or it fails to load. */
+function PartnerLogo({ partner }: { partner: Pick<SitePartner, 'name' | 'logoUrl'> }) {
+  const name = <span className="font-display s-silver text-[18px] font-semibold tracking-[-0.02em]">{partner.name}</span>;
+  if (!partner.logoUrl) return name;
   return (
-    <span className={`font-display text-[20px] font-semibold tracking-[-0.02em] ${tone === 'dark' ? 's-silver' : 'text-[#0b0b0c]'}`}>{partner.name}</span>
+    <div className="relative h-full w-full">
+      <PartnerLogoImage src={partner.logoUrl} alt={partner.name} sizes="240px" fallback={<span className="absolute inset-0 grid place-items-center">{name}</span>} />
+    </div>
   );
 }
 
@@ -371,8 +358,8 @@ export function PartnerMarquee({ partners, title }: { partners: SitePartner[]; t
       <div className="s-marquee-wrap s-fade-edges overflow-hidden">
         <div className="s-marquee gap-4" style={{ ['--s-marquee-duration' as string]: `${Math.max(30, items.length * 5)}s` }}>
           {row.map((p, i) => (
-            <div key={`${p.id}-${i}`} className="lg group flex h-24 w-56 shrink-0 items-center justify-center rounded-3xl px-8 py-6">
-              <PartnerLogo partner={p} tone="dark" />
+            <div key={`${p.id}-${i}`} className="lg group flex h-24 w-56 shrink-0 items-center justify-center rounded-3xl px-7 py-4">
+              <PartnerLogo partner={p} />
             </div>
           ))}
         </div>
@@ -388,51 +375,41 @@ export function PartnerCards({ partners }: { partners: SitePartner[] }) {
         const years = partnershipYears(p.sinceYear);
         return (
           <Reveal key={p.id} delay={(i % 3) * 0.07}>
-            <article className="lg-light group flex h-full flex-col rounded-[30px] p-6 transition-transform duration-700 hover:-translate-y-1 sm:p-7">
-              <div className="flex h-20 items-center justify-center rounded-[22px] border border-black/[0.06] bg-white px-6">
-                <PartnerLogo partner={p} tone="light" />
+            <GlassCard as="article" className="group flex h-full flex-col rounded-[30px] p-6 sm:p-7">
+              <div className="flex h-24 items-center justify-center rounded-[22px] border border-white/[0.07] bg-white/[0.03] px-6 py-4">
+                <PartnerLogo partner={p} />
               </div>
               <div className="mt-6 flex flex-wrap items-center gap-2">
-                <h3 className="font-display mr-auto text-[19px] font-medium tracking-[-0.02em] text-[#0b0b0c]">{p.name}</h3>
+                <h3 className="font-display mr-auto text-[19px] font-medium tracking-[-0.02em] text-white">{p.name}</h3>
                 {p.sinceYear ? (
-                  <span className="rounded-full bg-[#0b0b0c] px-3 py-1 text-[12px] font-semibold text-[#d4fc18] tabular">
+                  <span className="rounded-full border border-[#d4fc18]/30 bg-[#d4fc18]/10 px-3 py-1 text-[12px] font-semibold text-[#d4fc18] tabular">
                     {p.sinceYear}-yildan{years ? ` · ${years} yil` : ''}
                   </span>
                 ) : null}
               </div>
-              {p.industry ? <p className="mt-1 text-[13px] text-[#71717a]">{p.industry}</p> : null}
+              {p.industry ? <p className="mt-1 text-[13px] text-[#8e8e96]">{p.industry}</p> : null}
               {p.highlight ? (
-                <p className="mt-5 flex items-start gap-3 rounded-2xl bg-[#d4fc18]/30 px-4 py-3 text-[14.5px] font-semibold text-[#0b0b0c]">
-                  <SiteIcon name="chart" size={18} className="mt-0.5 shrink-0" strokeWidth={2} />
+                <p className="mt-5 flex items-start gap-3 rounded-2xl border border-[#d4fc18]/15 bg-[#d4fc18]/[0.07] px-4 py-3 text-[14.5px] font-semibold text-[#e4f68f]">
+                  <SiteIcon name="chart" size={18} className="mt-0.5 shrink-0 text-[#d4fc18]" strokeWidth={2} />
                   {p.highlight}
                 </p>
               ) : null}
-              {p.description ? <p className="mt-4 text-[14.5px] leading-relaxed text-[#52525b]">{p.description}</p> : null}
+              {p.description ? <p className="mt-4 text-[14.5px] leading-relaxed text-[#a8a8ac]">{p.description}</p> : null}
               {p.websiteUrl ? (
                 <a
                   href={p.websiteUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-auto inline-flex items-center gap-2 pt-6 text-[13.5px] font-medium text-[#0b0b0c] hover:underline"
+                  className="mt-auto inline-flex items-center gap-2 pt-6 text-[13.5px] font-medium text-white transition-colors hover:text-[#d4fc18]"
                 >
                   Saytga o‘tish <SiteIcon name="arrowUpRight" size={15} strokeWidth={2} />
                 </a>
               ) : null}
-            </article>
+            </GlassCard>
           </Reveal>
         );
       })}
     </div>
-  );
-}
-
-/** The silver "paper" band (like the white under the black box on the logo). */
-export function PaperSection({ children, id }: { children: ReactNode; id?: string }) {
-  return (
-    <section id={id} className="relative mx-2 overflow-hidden rounded-[36px] bg-[linear-gradient(180deg,#f4f4f5,#e9e9ec)] py-20 text-[#0b0b0c] sm:mx-4 sm:rounded-[48px] sm:py-28">
-      <div className="pointer-events-none absolute -top-32 left-1/2 h-64 w-[700px] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse,rgb(212_252_24/0.35),transparent_65%)]" />
-      <div className="relative">{children}</div>
-    </section>
   );
 }
 
@@ -465,7 +442,7 @@ export function Testimonials({ testimonials }: { testimonials: SiteTestimonial[]
                 </div>
                 {t.partner?.logoUrl ? (
                   <div className="relative h-8 w-20 shrink-0">
-                    <SiteImage src={t.partner.logoUrl} alt={t.partner.name} sizes="80px" className="object-contain opacity-70 brightness-0 invert" />
+                    <SiteImage src={t.partner.logoUrl} alt={t.partner.name} sizes="80px" className="object-contain opacity-85" />
                   </div>
                 ) : null}
               </div>

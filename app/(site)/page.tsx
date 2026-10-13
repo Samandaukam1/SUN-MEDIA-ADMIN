@@ -8,7 +8,6 @@ import {
   CasesGrid,
   Container,
   CtaSection,
-  PaperSection,
   PartnerCards,
   PartnerMarquee,
   ProcessSteps,
@@ -33,8 +32,8 @@ function Band({ children, id }: { children: ReactNode; id?: string }) {
 }
 
 function block(section: SiteSection, c: SiteContent): ReactNode {
-  const heading = (action?: ReactNode, tone: 'dark' | 'light' = 'dark') => (
-    <SectionHeading eyebrow={section.eyebrow || undefined} title={section.title} subtitle={section.subtitle || undefined} action={action} tone={tone} />
+  const heading = (action?: ReactNode) => (
+    <SectionHeading eyebrow={section.eyebrow || undefined} title={section.title} subtitle={section.subtitle || undefined} action={action} />
   );
   switch (section.key) {
     case 'marquee':
@@ -79,12 +78,10 @@ function block(section: SiteSection, c: SiteContent): ReactNode {
       ) : null;
     case 'partners':
       return c.partners.length ? (
-        <PaperSection>
-          <Container>
-            {heading(isPublished(c, 'partners') ? <TextLink href="/hamkorlar" tone="light">Barcha hamkorlar</TextLink> : undefined, 'light')}
-            <PartnerCards partners={c.partners.slice(0, 6)} />
-          </Container>
-        </PaperSection>
+        <Band id="hamkorlar">
+          {heading(isPublished(c, 'partners') ? <TextLink href="/hamkorlar">Barcha hamkorlar</TextLink> : undefined)}
+          <PartnerCards partners={c.partners.slice(0, 6)} />
+        </Band>
       ) : null;
     case 'plans':
       return c.plans.length && isPublished(c, 'plans') ? (

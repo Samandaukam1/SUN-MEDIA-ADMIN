@@ -66,14 +66,14 @@ function Partners({ logos }: { logos: string[] }) {
         {nodes.map((logo, i) => {
           const deg = (i / n) * 360;
           return (
-            <div key={i} className="absolute top-1/2 left-1/2 h-px w-[29%] origin-left" style={{ transform: `rotate(${deg}deg)` }}>
+            <div key={i} className="absolute top-1/2 left-1/2 h-px w-[33%] origin-left" style={{ transform: `rotate(${deg}deg)` }}>
               <div className="absolute inset-0 bg-gradient-to-r from-[#d4fc18]/50 to-white/10" />
               <motion.span
                 className="absolute top-1/2 -mt-[3px] size-1.5 rounded-full bg-[#d4fc18] shadow-[0_0_10px_#d4fc18]"
                 animate={still ? undefined : { left: ['0%', '100%'], opacity: [0, 1, 0] }}
                 transition={loop(2.4, { delay: i * 0.45, ease: 'easeInOut' })}
               />
-              <div className="absolute top-1/2 right-0 size-11 translate-x-1/2 -translate-y-1/2" style={{ transform: `translate(50%, -50%) rotate(${-deg}deg)` }}>
+              <div className="absolute top-1/2 right-0 size-11" style={{ transform: `translate(50%, -50%) rotate(${-deg}deg)` }}>
                 <Spin seconds={40} reverse className="grid size-full place-items-center overflow-hidden rounded-full border border-white/20 bg-[#ececef] p-1.5 shadow-[0_6px_18px_rgb(0_0_0/0.4)]">
                   {logo ? (
                     // eslint-disable-next-line @next/next/no-img-element

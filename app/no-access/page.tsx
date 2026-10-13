@@ -13,7 +13,7 @@ export default async function NoAccessPage({ searchParams }: { searchParams: Pro
   const isStaff = context?.kind === 'staff' && context.status === 'active';
   const [title, text] =
     reason === 'permission'
-      ? ['Bu bo‘lim sizga yopiq', 'Rolingizda bu sahifa uchun ruxsat yo‘q. Kerak bo‘lsa, Admin bilan bog‘laning.']
+      ? ['Bu bo‘lim sizga yopiq', 'Rolingizda bu sahifa uchun ruxsat yo‘q. Kerak bo‘lsa, Tizim egasi (yoki Admin) bilan bog‘laning.']
       : reason === 'mobile'
         ? ['Ishingiz mobil ilovada', 'Web panel Tizim egasi va Adminlar uchun. Vazifa, syomka va xabarlaringiz SUN MEDIA mobil ilovasida.']
         : isClient

@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { EmployeeForm } from '@/components/accounts/AddEmployeeDialog';
 import { PageHeader } from '@/components/panel/PageHeader';
 import { Card } from '@/components/ui/Card';
-import { requirePermission } from '@/lib/auth';
+import { isSystemOwner, requirePermission } from '@/lib/auth';
 import { loadEmployeeFormOptions } from '@/lib/team-options';
 
 export const metadata: Metadata = { title: 'Xodim qo‘shish' };
@@ -20,7 +20,7 @@ export default async function NewEmployeePage() {
         description="Ism, lavozim, rol va ruxsatlar. Oxirida login va vaqtinchalik parolni nusxalab xodimga berasiz."
       />
       <Card className="max-w-3xl">
-        <EmployeeForm {...options} />
+        <EmployeeForm {...options} canCreateRole={isSystemOwner(context)} />
       </Card>
     </div>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useRef, useState } from 'react';
+import { useActionState, useRef, useState, useTransition } from 'react';
 
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { cn } from '@/components/ui/cn';
@@ -8,6 +8,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Checkbox, SelectInput, TextInput } from '@/components/ui/Inputs';
 import { Notice } from '@/components/ui/Notice';
 import { SubmitButton } from '@/components/ui/SubmitButton';
+import { createRoleAction } from '@/lib/actions/access';
 import { createEmployeeAccount } from '@/lib/actions/accounts';
 import { idle, type CredentialsState } from '@/lib/actions/state';
 import { EMPLOYMENT_TYPE, PERMISSION_LABEL } from '@/lib/labels';
@@ -23,6 +24,8 @@ type Props = {
   /** What each role already includes (shown ticked and locked). */
   rolePermissions: Record<string, string[]>;
   loginDomain: string;
+  /** Tizim egasi: may type a new role here; it starts with the selected role's permissions. */
+  canCreateRole?: boolean;
 };
 
 const STEPS = ['Asosiy ma’lumot', 'Lavozim', 'Login va ruxsat', 'Tasdiqlash'] as const;
@@ -33,7 +36,12 @@ const FIELD_STEP: Record<string, number> = { first_name: 0, last_name: 0, phone:
  * Jamoa → Xodim qo‘shish: four short steps, then the login and temporary password to hand over.
  * The Auth login is created on the server; the password is shown once and never stored.
  */
-export function EmployeeForm({ roles, clients, permissions, rolePermissions, loginDomain }: Props) {
+export function EmployeeForm({ roles: initialRoles, clients, permissions, rolePermissions: initialRolePermissions, loginDomain, canCreateRole = false }: Props) {
+  const [roles, setRoles] = useState(initialRoles);
+  const [rolePermissions, setRolePermissions] = useState(initialRolePermissions);
+  const [newRole, setNewRole] = useState<string | null>(null);
+  const [newRoleError, setNewRoleError] = useState<string | null>(null);
+  const [creatingRole, startCreatingRole] = useTransition();
   const [state, action] = useActionState<CredentialsState, FormData>(async (prev: CredentialsState, data: FormData) => {
     const next = await createEmployeeAccount(prev, data);
     if (next.status === 'error' && next.fieldErrors) {
@@ -151,6 +159,48 @@ export function EmployeeForm({ roles, clients, permissions, rolePermissions, log
             </option>
           ))}
         </SelectInput>
+        {canCreateRole ? (
+          newRole === null ? (
+            <button type="button" onClick={() => setNewRole('')} className="-mt-2 text-[13px] font-medium text-accent hover:underline">
+              + Yangi rol (nomini o‘zingiz yozasiz)
+            </button>
+          ) : (
+            <div className="-mt-2 rounded-xl border border-line bg-surface-2 p-3">
+              <label htmlFor="employee-new-role" className="text-[13px] font-medium text-muted">
+                {role ? `Yangi rol nomi — ruxsatlari “${role.label}” rolidan olinadi` : 'Avval asos qilib olinadigan rolni tanlang, so‘ng yangi nom yozing'}
+              </label>
+              <div className="mt-1.5 flex gap-2">
+                <input
+                  id="employee-new-role"
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value)}
+                  maxLength={80}
+                  placeholder="Masalan: Targetolog"
+                  className="h-10 min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 text-[15px] outline-none focus:border-accent"
+                />
+                <button
+                  type="button"
+                  disabled={creatingRole || !newRole.trim() || !roleKey || roleKey === 'system_owner'}
+                  onClick={() =>
+                    startCreatingRole(async () => {
+                      const res = await createRoleAction(newRole, roleKey);
+                      if (res.status === 'error') return setNewRoleError(res.message);
+                      setRoles([...roles, { value: res.key, label: res.name, description: `Asos: ${role?.label ?? ''}` }]);
+                      setRolePermissions({ ...rolePermissions, [res.key]: rolePermissions[roleKey] ?? [] });
+                      setRoleKey(res.key);
+                      setNewRole(null);
+                      setNewRoleError(null);
+                    })
+                  }
+                  className="h-10 rounded-xl bg-accent px-4 text-sm font-medium text-accent-fg disabled:opacity-50"
+                >
+                  {creatingRole ? 'Yaratilmoqda…' : 'Yaratish'}
+                </button>
+              </div>
+              {newRoleError ? <p className="mt-2 text-[13px] text-danger">{newRoleError}</p> : null}
+            </div>
+          )
+        ) : null}
         {clients.length > 0 ? (
           <fieldset>
             <legend className="mb-2 text-[13px] font-medium text-muted">Qaysi mijozlar bilan ishlaydi</legend>

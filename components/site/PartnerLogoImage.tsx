@@ -3,6 +3,8 @@
 import Image from 'next/image';
 import { useState, type ReactNode } from 'react';
 
+import { logoNeedsLightPlate } from '@/lib/site/logo-look';
+
 /**
  * A partner logo in its own colours on the dark site. A logo that is dark and has a transparent background
  * would vanish on black, so it gets a light plate behind it; every other logo stays as it is.
@@ -16,25 +18,7 @@ function needsPlate(img: HTMLImageElement): boolean {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return false;
   ctx.drawImage(img, 0, 0, n, n);
-  const data = ctx.getImageData(0, 0, n, n).data;
-  let clearEdge = 0;
-  let edge = 0;
-  let value = 0;
-  let weight = 0;
-  for (let y = 0; y < n; y++) {
-    for (let x = 0; x < n; x++) {
-      const i = (y * n + x) * 4;
-      const a = data[i + 3] / 255;
-      if (x === 0 || y === 0 || x === n - 1 || y === n - 1) {
-        edge++;
-        if (a < 0.6) clearEdge++;
-      }
-      value += (Math.max(data[i], data[i + 1], data[i + 2]) / 255) * a;
-      weight += a;
-    }
-  }
-  const transparent = clearEdge / edge > 0.5;
-  return transparent && weight > 0 && value / weight < 0.45;
+  return logoNeedsLightPlate(ctx.getImageData(0, 0, n, n).data, n);
 }
 
 /**

@@ -52,3 +52,31 @@ test('*asterisks* mark the lime words of a title; partnership years count from t
   assert.equal(partnershipYears(2021, new Date('2026-10-13')), 5);
   assert.equal(partnershipYears(null), null);
 });
+
+test('a light plate only behind logos that would vanish on black', async () => {
+  const { logoNeedsLightPlate } = await import('../lib/site/logo-look.ts');
+  const n = 40;
+  // Transparent border, then a body of one colour, optionally with a bright ring or lettering.
+  const logo = (body, extra = () => null) => {
+    const data = new Uint8ClampedArray(n * n * 4);
+    for (let y = 0; y < n; y++)
+      for (let x = 0; x < n; x++) {
+        const i = (y * n + x) * 4;
+        const d = Math.hypot(x - n / 2, y - n / 2);
+        if (d > n / 2 - 2) continue; // transparent outside the disc
+        const c = extra(x, y, d) ?? body;
+        data.set([...c, 255], i);
+      }
+    return data;
+  };
+  const navy = [12, 21, 34];
+  assert.equal(logoNeedsLightPlate(logo(navy), n), true, 'a plain navy disc needs a plate');
+  assert.equal(logoNeedsLightPlate(logo([0, 0, 0], (x, y) => (y === 20 && x > 15 && x < 25 ? [40, 40, 40] : null)), n), true, 'black lettering needs a plate');
+  // Travel Hub: navy body with an orange ring and white lettering — reads on black as it is.
+  const travelHub = logo(navy, (x, y, d) => (d > n / 2 - 5 ? [253, 156, 16] : y > 22 && y < 27 && x > 8 && x < 32 ? [255, 255, 255] : null));
+  assert.equal(logoNeedsLightPlate(travelHub, n), false, 'a dark logo with a bright ring and lettering keeps no plate');
+  assert.equal(logoNeedsLightPlate(logo([120, 200, 60]), n), false, 'a green badge needs none');
+  const opaque = new Uint8ClampedArray(n * n * 4).fill(255);
+  for (let i = 0; i < opaque.length; i += 4) opaque.set([10, 10, 10], i);
+  assert.equal(logoNeedsLightPlate(opaque, n), false, 'a logo on its own (opaque) background is drawn as it is');
+});

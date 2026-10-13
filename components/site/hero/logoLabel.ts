@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+import { logoNeedsLightPlate } from '@/lib/site/logo-look';
+
 /*
  * A partner logo turned into the label that sits on the inner wall of its bubble. The logo keeps its
  * proportions and colours (contain, never cropped or stretched):
@@ -30,9 +32,9 @@ function loadImage(url: string, timeoutMs = 15000): Promise<HTMLImageElement> {
   });
 }
 
-type Look = { transparent: boolean; brightness: number; corner: string };
+type Look = { transparent: boolean; needsPlate: boolean; corner: string };
 
-/** Samples a thumbnail: does the image have a transparent border, how bright is the visible part, which colour is its corner. */
+/** Samples a thumbnail: does the image have a transparent border, would it vanish on black, which colour is its corner. */
 function inspect(img: HTMLImageElement): Look {
   const n = 48;
   const c = document.createElement('canvas');
@@ -43,23 +45,16 @@ function inspect(img: HTMLImageElement): Look {
   const data = ctx.getImageData(0, 0, n, n).data;
   let edgeClear = 0;
   let edgeCount = 0;
-  let value = 0;
-  let weight = 0;
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
-      const i = (y * n + x) * 4;
-      const a = data[i + 3] / 255;
       if (x === 0 || y === 0 || x === n - 1 || y === n - 1) {
         edgeCount++;
-        if (a < 0.6) edgeClear++;
+        if (data[(y * n + x) * 4 + 3] / 255 < 0.6) edgeClear++;
       }
-      // Brightest channel: a saturated orange reads well on black, a navy or black logo does not.
-      value += (Math.max(data[i], data[i + 1], data[i + 2]) / 255) * a;
-      weight += a;
     }
   }
   const corner = `rgb(${data[0]}, ${data[1]}, ${data[2]})`;
-  return { transparent: edgeClear / edgeCount > 0.5, brightness: weight > 0 ? value / weight : 1, corner };
+  return { transparent: edgeClear / edgeCount > 0.5, needsPlate: logoNeedsLightPlate(data, n), corner };
 }
 
 function contain(w: number, h: number, box: number) {
@@ -109,7 +104,7 @@ function draw(img: HTMLImageElement | null, name: string): HTMLCanvasElement {
 
   const look = inspect(img);
   if (look.transparent) {
-    if (look.brightness < 0.45) lightDisc(ctx);
+    if (look.needsPlate) lightDisc(ctx);
     const { w, h } = contain(img.naturalWidth, img.naturalHeight, DISC * 1.46);
     ctx.drawImage(img, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
   } else {

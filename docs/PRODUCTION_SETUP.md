@@ -200,6 +200,18 @@ Next.js server kerak, shuning uchun GitHub Pages emas.
 - Rahbar (`owner` roli) endi `analytics.manage` va `reports.manage` ga ham ega; rollar/xodimlarni boshqara olmaydi,
   Tizim egasiga tegolmaydi (bazadagi rank va himoya qoidalari).
 
+## 4c. Mijoz tahlili (AI) — kalit kerak
+
+- Panel → **Mijoz tahlili** (`/tahlil`): faqat Tizim egasi va Admin (`prospects.manage`). Yangi mijozga 15 ta savol
+  (variant yoki o'z so'zlari), AI tahlili (mos tarif, ehtiyoj, xavf, birinchi oy rejasi, mijozga aytiladigan taklif) va
+  Instagram tahlili (raqamlar + 6 tagacha skrinshot; engagement va nakrutka belgilari kod bilan hisoblanadi).
+- **Inson qadami:** Vercel'dagi ikkala loyihaga (`sun-media-admin` — sunmediagroup.uz, `sunmedia-admin`) Production
+  muhitiga `ANTHROPIC_API_KEY` qo'shing (Secret, `NEXT_PUBLIC_` prefiksisiz) va qayta deploy qiling. Ixtiyoriy:
+  `AI_MODEL` (standart `claude-sonnet-5-5`). Kalit qo'shilmaguncha sahifada “AI ulanmagan” yozuvi chiqadi, savollar va
+  hisob-kitob ishlayveradi.
+- Instagram raqamlari qo'lda kiritiladi va skrinshot qo'shiladi: Meta ulanmagan, boshqa profillarni o'qish uchun rasmiy
+  API yo'q. Skrinshotlar yopiq `prospects` bucket'ida saqlanadi.
+
 ## 5. Tizim egasi (System Owner)
 
 Tizim egasi: **`anisjonitp@gmail.com`** (Anisjon) — egasining tasdig'i bilan 2026-10-01 da berildi. Vaqtinchalik parol

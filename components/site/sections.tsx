@@ -337,12 +337,12 @@ export function ProcessSteps({ steps, heading }: { steps: SiteStep[]; heading: R
 /* --------------------------------------------------------------------------------------------- */
 
 /** A partner's logo in its own colours (contain, never cropped); the name if there is no logo or it fails to load. */
-export function PartnerLogo({ partner }: { partner: Pick<SitePartner, 'name' | 'logoUrl'> }) {
+export function PartnerLogo({ partner, muted = false }: { partner: Pick<SitePartner, 'name' | 'logoUrl'>; muted?: boolean }) {
   const name = <span className="font-display s-silver text-[18px] font-semibold tracking-[-0.02em]">{partner.name}</span>;
   if (!partner.logoUrl) return name;
   return (
     <div className="relative h-full w-full">
-      <PartnerLogoImage src={partner.logoUrl} alt={partner.name} sizes="240px" fallback={<span className="absolute inset-0 grid place-items-center">{name}</span>} />
+      <PartnerLogoImage src={partner.logoUrl} alt={partner.name} sizes="240px" muted={muted} fallback={<span className="absolute inset-0 grid place-items-center">{name}</span>} />
     </div>
   );
 }
@@ -390,7 +390,7 @@ export function PartnerCards({ partners }: { partners: SitePartner[] }) {
             <Link href={`/hamkorlar/${p.slug}`} className="group block h-full" aria-label={`${p.name} — hamkorlik haqida batafsil`}>
               <GlassCard as="article" className="flex h-full flex-col rounded-[30px] p-6 transition-transform duration-700 group-hover:-translate-y-1 sm:p-7">
                 <div className="flex h-24 items-center justify-center rounded-[22px] border border-white/[0.07] bg-white/[0.03] px-6 py-4">
-                  <PartnerLogo partner={p} />
+                  <PartnerLogo partner={p} muted />
                 </div>
                 <div className="mt-6 flex flex-wrap items-center gap-2">
                   <h3 className="font-display mr-auto text-[19px] font-medium tracking-[-0.02em] text-white">{p.name}</h3>

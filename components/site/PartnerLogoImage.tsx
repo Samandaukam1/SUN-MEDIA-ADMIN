@@ -37,7 +37,11 @@ function needsPlate(img: HTMLImageElement): boolean {
   return transparent && weight > 0 && value / weight < 0.45;
 }
 
-export function PartnerLogoImage({ src, alt, sizes, fallback }: { src: string; alt: string; sizes: string; fallback: ReactNode }) {
+/**
+ * `muted`: on a computer with a mouse the logo rests in grey and turns to colour when the card is hovered or
+ * focused; phones and touch screens (no hover) always show colour.
+ */
+export function PartnerLogoImage({ src, alt, sizes, fallback, muted = false }: { src: string; alt: string; sizes: string; fallback: ReactNode; muted?: boolean }) {
   const [failed, setFailed] = useState(false);
   const [plate, setPlate] = useState(false);
   if (failed) return <>{fallback}</>;
@@ -49,7 +53,9 @@ export function PartnerLogoImage({ src, alt, sizes, fallback }: { src: string; a
         alt={alt}
         fill
         sizes={sizes}
-        className="object-contain opacity-95 transition-opacity duration-500 group-hover:opacity-100"
+        className={`object-contain opacity-95 transition-[filter,opacity] duration-500 group-hover:opacity-100 ${
+          muted ? '[@media(hover:hover)_and_(pointer:fine)]:grayscale group-hover:grayscale-0 group-focus-visible:grayscale-0' : ''
+        }`}
         onError={() => setFailed(true)}
         onLoad={(e) => {
           try {

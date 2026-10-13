@@ -33,7 +33,7 @@ export function HomeLogoField({
         )}
       </div>
       <div className="min-w-60 flex-1 space-y-2">
-        <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="block text-sm" required />
+        <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="block w-full max-w-full min-w-0 text-sm" required />
         <p className="text-[13px] font-medium">{variant === 'dark' ? 'Qorong‘u mavzu logosi' : 'Yorug‘ mavzu logosi'}</p>
         <p className="text-[13px] text-muted">Kvadrat, kamida 256×256 px. Ilovaning pastki menyusi markazida ko‘rinadi.</p>
       </div>

@@ -64,7 +64,7 @@ export async function ClientStatsTab({ clientId, month, canEnter, canAddAccounts
             const m = a.metrics.find((x) => x.period_start === active) ?? null;
             return (
               <Card key={a.id}>
-                <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="font-semibold">{`${lookup(PLATFORM_LABEL, a.platform, a.platform)} · @${a.handle}`}</p>
                     {a.url ? (

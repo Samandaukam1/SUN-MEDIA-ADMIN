@@ -44,7 +44,7 @@ type Column = string | { label: string; className?: string };
 export function Table({ columns, children }: { columns: Column[]; children: ReactNode }) {
   return (
     <Card className="overflow-x-auto p-0">
-      <table className="w-full text-left text-sm">
+      <table className="w-full min-w-[600px] text-left text-sm">
         <thead>
           <tr className="border-b border-line text-[11px] font-semibold tracking-[0.08em] text-subtle uppercase">
             {columns.map((c, i) => {

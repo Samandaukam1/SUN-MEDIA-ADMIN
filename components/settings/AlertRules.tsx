@@ -32,7 +32,7 @@ function describeOffset(minutes: number): string {
 export function AlertRules({ rules, editable }: { rules: AlertRule[]; editable: boolean }) {
   return (
     <div className="space-y-3">
-      <div className="overflow-hidden rounded-2xl border border-line">
+      <div className="overflow-x-auto rounded-2xl border border-line">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line bg-surface-2 text-left text-[11px] font-semibold tracking-[0.08em] text-subtle uppercase">

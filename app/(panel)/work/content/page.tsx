@@ -56,7 +56,7 @@ export default async function ContentListPage({ searchParams }: { searchParams: 
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <SearchBox placeholder="Kontent nomi" value={params.q} keep={{ stage: params.stage, client: params.client, due: params.due }} />
-        <form className="flex gap-3">
+        <form className="flex flex-wrap gap-3">
           {params.q ? <input type="hidden" name="q" value={params.q} /> : null}
           {params.stage ? <input type="hidden" name="stage" value={params.stage} /> : null}
           <select name="client" defaultValue={params.client ?? ''} className="h-10 rounded-xl border border-line bg-surface px-3 text-sm" aria-label="Mijoz">

@@ -98,8 +98,8 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       {people.length === 0 ? (
         <EmptyRow>{all.length === 0 ? 'Hali xodim qo‘shilmagan.' : 'Filtrga mos xodim topilmadi.'}</EmptyRow>
       ) : (
-        <Card className="p-0">
-          <table className="w-full text-left text-sm">
+        <Card className="overflow-x-auto p-0">
+          <table className="w-full min-w-[640px] text-left text-sm">
             <thead>
               <tr className="border-b border-line text-[11px] font-semibold tracking-[0.08em] text-subtle uppercase">
                 <th className="px-5 py-3">Xodim</th>

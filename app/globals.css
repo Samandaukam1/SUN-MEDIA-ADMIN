@@ -117,3 +117,11 @@ dialog::backdrop {
   background: rgb(9 9 11 / 0.5);
   backdrop-filter: blur(2px);
 }
+
+/* Panel on phones: grid children may shrink below their content, so a long name wraps instead of pushing the
+   page wider than the screen. In the base layer, so any explicit min-w-* utility still wins. */
+@layer base {
+  [data-panel] .grid > * {
+    min-width: 0;
+  }
+}

@@ -68,7 +68,7 @@ export function PlanForm({ services, clients, values, editable }: Props) {
         <section>
           <h2 className="mb-1 text-base font-semibold">Tarif tarkibi</h2>
           <p className="mb-4 text-sm text-muted">Belgilangan xizmatlar tarifga kiradi. Miqdor bo‘sh qolsa — cheklanmagan (xizmat sifatida).</p>
-          <div className="overflow-hidden rounded-2xl border border-line">
+          <div className="overflow-x-auto rounded-2xl border border-line">
             <table className="w-full text-sm">
               <thead className="bg-surface-2 text-left text-[12px] uppercase tracking-wide text-muted">
                 <tr>

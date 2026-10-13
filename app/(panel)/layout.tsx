@@ -1,9 +1,7 @@
 import { redirect } from 'next/navigation';
-import { Suspense } from 'react';
 
 import type { CreateItem } from '@/components/panel/CreateMenu';
-import { Sidebar } from '@/components/panel/Sidebar';
-import { TopBar } from '@/components/panel/TopBar';
+import { PanelShell } from '@/components/panel/PanelShell';
 import { can, canUsePanel, requireStaff } from '@/lib/auth';
 import { navigationFor } from '@/lib/navigation';
 
@@ -23,23 +21,17 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   ].filter((i) => i !== null);
 
   return (
-    <div className="flex h-dvh overflow-hidden">
-      <Sidebar
-        sections={sections}
-        create={create}
-        user={{
-          name: context.profile?.full_name || context.profile?.email || '—',
-          role: context.roles.map((r) => r.name).join(', '),
-          initials: initials(context.profile?.full_name ?? context.profile?.email ?? ''),
-        }}
-      />
-      <main className="flex-1 overflow-y-auto">
-        <Suspense>
-          <TopBar sections={sections} />
-        </Suspense>
-        <div className="mx-auto max-w-7xl px-8 py-8">{children}</div>
-      </main>
-    </div>
+    <PanelShell
+      sections={sections}
+      create={create}
+      user={{
+        name: context.profile?.full_name || context.profile?.email || '—',
+        role: context.roles.map((r) => r.name).join(', '),
+        initials: initials(context.profile?.full_name ?? context.profile?.email ?? ''),
+      }}
+    >
+      {children}
+    </PanelShell>
   );
 }
 

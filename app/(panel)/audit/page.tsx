@@ -172,17 +172,19 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
                       <span className="text-[12px] text-subtle group-open:hidden">{changes.length ? `${changes.length} maydon` : ''}</span>
                     </summary>
                     {changes.length ? (
-                      <table className="mt-3 w-full text-[13px]">
-                        <tbody className="divide-y divide-line">
-                          {changes.map((c) => (
-                            <tr key={c.key}>
-                              <td className="w-48 py-1.5 pr-3 font-mono text-muted">{c.key}</td>
-                              <td className="py-1.5 pr-3 text-danger line-through decoration-danger/40">{c.from}</td>
-                              <td className="py-1.5 text-success">{c.to}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <div className="mt-3 overflow-x-auto">
+                        <table className="w-full text-[13px]">
+                          <tbody className="divide-y divide-line">
+                            {changes.map((c) => (
+                              <tr key={c.key}>
+                                <td className="w-48 py-1.5 pr-3 font-mono text-muted">{c.key}</td>
+                                <td className="py-1.5 pr-3 text-danger line-through decoration-danger/40">{c.from}</td>
+                                <td className="py-1.5 text-success">{c.to}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     ) : (
                       <p className="mt-2 text-[13px] text-muted">{`${r.action} · ${r.entity_id ?? ''}`}</p>
                     )}

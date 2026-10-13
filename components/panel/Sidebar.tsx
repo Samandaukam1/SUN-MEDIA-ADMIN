@@ -9,22 +9,41 @@ import { cn } from '@/components/ui/cn';
 import { locate, type VisibleSection } from '@/lib/nav';
 import { CreateMenu, type CreateItem } from './CreateMenu';
 
-type Props = {
+export type SidebarProps = {
   sections: VisibleSection[];
   create: CreateItem[];
   user: { name: string; role: string; initials: string };
 };
 
-/** Six sections and one "+ Yaratish" — the pages of a section are tabs at the top, not more sidebar rows. */
-export function Sidebar({ sections, create, user }: Props) {
+/**
+ * Six sections and one "+ Yaratish" — the pages of a section are tabs at the top, not more sidebar rows.
+ * Desktop: always visible. Phones and tablets: a drawer opened from the top bar's menu button.
+ */
+export function Sidebar({ sections, create, user, open = false, onClose }: SidebarProps & { open?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
   const active = locate(sections, pathname)?.section.key;
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col bg-sidebar text-sidebar-text">
-      <div className="px-6 pt-7 pb-5">
+    <aside
+      id="panel-menu"
+      aria-label="Panel menyusi"
+      className={cn(
+        'fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-sidebar text-sidebar-text shadow-2xl transition-transform duration-300 ease-out',
+        'lg:static lg:z-auto lg:h-full lg:w-60 lg:max-w-none lg:shrink-0 lg:translate-x-0 lg:shadow-none lg:transition-none',
+        open ? 'translate-x-0' : '-translate-x-full',
+      )}
+    >
+      <div className="flex items-start justify-between px-6 pt-7 pb-5">
         <Link href="/panel" aria-label="SUN MEDIA — Bosh sahifa">
           <Logo width={128} onDark />
         </Link>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Menyuni yopish"
+          className="-mt-1 -mr-2 grid size-10 place-items-center rounded-xl text-sidebar-text hover:bg-white/[0.06] hover:text-sidebar-active lg:hidden"
+        >
+          <Icon name="x" size={20} />
+        </button>
       </div>
       {create.length ? (
         <div className="px-3 pb-5">

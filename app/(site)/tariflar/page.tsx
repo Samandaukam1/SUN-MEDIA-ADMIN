@@ -15,7 +15,7 @@ export default async function PlansPage() {
 
   return (
     <>
-      <PageHero eyebrow={page.nav_label} title={page.title} subtitle={page.subtitle} />
+      <PageHero eyebrow={page.nav_label} title={page.title} subtitle={page.subtitle} orb="plans" />
       <section className="pb-12">
         <Container>
           {c.plans.length ? (

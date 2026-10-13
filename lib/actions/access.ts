@@ -133,3 +133,52 @@ export async function toggleAlertRule(id: string, active: boolean): Promise<Acti
   revalidatePath('/settings');
   return { status: 'success' };
 }
+
+// ---------------------------------------------------------------------------
+// Role names (Tizim egasi only; the database checks the same)
+// ---------------------------------------------------------------------------
+
+const ROLE_ERRORS: Record<string, string> = {
+  'A role with this name already exists': 'Bunday nomli rol allaqachon bor.',
+  'Role is in use': 'Bu rol hali kimgadir berilgan. Avval ularning rolini almashtiring.',
+  'Built-in roles cannot be deleted': 'Asosiy rollarni o‘chirib bo‘lmaydi, faqat nomini o‘zgartirish mumkin.',
+  'Choose a SUN MEDIA staff role to start from': 'Asos qilib olinadigan rolni tanlang.',
+  'Role name must be 1–80 characters': 'Rol nomi 1–80 belgi bo‘lsin.',
+};
+const roleError = (error: { message?: string } | null) => (error?.message && ROLE_ERRORS[error.message]) || toUserMessage(error);
+
+function revalidateRoles() {
+  revalidatePath('/roles');
+  revalidatePath('/system/permissions');
+  revalidatePath('/team', 'layout');
+}
+
+export async function renameRoleAction(roleId: string, name: string): Promise<ActionState> {
+  await requireSystemOwner();
+  if (!z.uuid().safeParse(roleId).success) return { status: 'error', message: 'Rol topilmadi.' };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('rename_role', { p_role_id: roleId, p_name: String(name ?? '') });
+  if (error) return { status: 'error', message: roleError(error) };
+  revalidateRoles();
+  return { status: 'success', message: 'Rol nomi saqlandi.' };
+}
+
+/** A new role that starts with the permissions of `baseKey`; returns its key so a form can select it right away. */
+export async function createRoleAction(name: string, baseKey: string): Promise<{ status: 'success'; key: string; name: string } | { status: 'error'; message: string }> {
+  await requireSystemOwner();
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('create_custom_role', { p_name: String(name ?? ''), p_base_key: String(baseKey ?? '') });
+  if (error || !data) return { status: 'error', message: roleError(error) };
+  revalidateRoles();
+  return { status: 'success', key: data.key, name: data.name };
+}
+
+export async function deleteRoleAction(roleId: string): Promise<ActionState> {
+  await requireSystemOwner();
+  if (!z.uuid().safeParse(roleId).success) return { status: 'error', message: 'Rol topilmadi.' };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('delete_custom_role', { p_role_id: roleId });
+  if (error) return { status: 'error', message: roleError(error) };
+  revalidateRoles();
+  return { status: 'success', message: 'Rol o‘chirildi.' };
+}

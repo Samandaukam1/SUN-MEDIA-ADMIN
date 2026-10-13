@@ -18,7 +18,7 @@ export default async function AboutPage() {
 
   return (
     <>
-      <PageHero eyebrow={page.nav_label} title={page.title} subtitle={page.subtitle} />
+      <PageHero eyebrow={page.nav_label} title={page.title} subtitle={page.subtitle} orb="about" />
 
       {c.settings.about_title || paragraphs.length ? (
         <section className="pb-24">

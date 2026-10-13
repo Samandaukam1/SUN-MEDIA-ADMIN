@@ -15,7 +15,7 @@ export default async function PartnersPage() {
 
   return (
     <>
-      <PageHero eyebrow={page.nav_label} title={page.title} subtitle={page.subtitle} />
+      <PageHero eyebrow={page.nav_label} title={page.title} subtitle={page.subtitle} orb="partners" orbLogos={c.partners.filter((p) => p.logoUrl).map((p) => p.logoUrl!)} />
       {c.stats.length ? (
         <section className="pb-20">
           <Container>

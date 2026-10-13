@@ -193,6 +193,10 @@ Next.js server kerak, shuning uchun GitHub Pages emas.
   mijoz/xodimlarni tahrirlash, bloklash va parol tiklashda davom etadi, lekin o'zidan yuqori rangdagilarni (Rahbar,
   Tizim egasi) tahrirlay olmaydi. Tizim egasi hammaning (Rahbar ham) ismi, lavozimi, roli va ruxsatlarini boshqaradi;
   har kim o'z ismi va telefonini **Mening profilim** (`/profil`, yon menyudagi ism) orqali o'zgartiradi.
+- **Rollar nomi va yangi rollar** (Tizim egasi): Jamoa → Rollar va ruxsatlar → “Rollar nomi va yangi rollar”. Har qanday
+  rolning nomini o'z so'zingiz bilan yozasiz (ichki kalit o'zgarmaydi, montaj/syomka bog'lanishlari ishlayveradi); yangi rol
+  tanlangan rolning ruxsatlari bilan yaratiladi va jadvalda o'zgartiriladi; ishlatilmayotgan yangi rol o'chiriladi.
+  Xodim sahifasidagi “Rol va ruxsatlar”da ham “+ Yangi rol”. Lavozim — xodim profilidagi erkin matn.
 - Rahbar (`owner` roli) endi `analytics.manage` va `reports.manage` ga ham ega; rollar/xodimlarni boshqara olmaydi,
   Tizim egasiga tegolmaydi (bazadagi rank va himoya qoidalari).
 

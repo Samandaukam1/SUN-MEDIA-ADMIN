@@ -20,6 +20,7 @@ import { CountUp, GlassCard, Reveal, ScrollLine, SplitWords } from './motion';
 import { SocialRow } from './SiteFooter';
 import { SiteIcon } from './SiteIcon';
 import { CaseCard } from './CaseCard';
+import { PageOrb, type OrbTheme } from './PageOrb';
 import { PartnerLogoImage } from './PartnerLogoImage';
 import { initialsOf, SiteImage } from './SiteImage';
 
@@ -123,16 +124,35 @@ export function TextLink({ href, children, tone = 'dark' }: { href: string; chil
 
 /* --------------------------------------------------------------------------------------------- */
 
-export function PageHero({ eyebrow, title, subtitle, children }: { eyebrow: string; title: string; subtitle?: string; children?: ReactNode }) {
+export function PageHero({
+  eyebrow,
+  title,
+  subtitle,
+  orb,
+  orbLogos,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  subtitle?: string;
+  /** The scene inside the glass sphere: what this page is about. */
+  orb?: OrbTheme;
+  orbLogos?: string[];
+  children?: ReactNode;
+}) {
   return (
     <section className="relative overflow-hidden pt-36 pb-16 sm:pt-44 sm:pb-24">
       <div className="s-grid-lines pointer-events-none absolute inset-0" />
       <div className="pointer-events-none absolute -top-40 right-[-10%] size-[620px] rounded-full bg-[radial-gradient(circle,rgb(212_252_24/0.16),transparent_62%)] blur-2xl" />
-      <div aria-hidden className="s-hero-fallback pointer-events-none absolute top-28 right-[6%] hidden size-56 rounded-full lg:block">
-        <div className="absolute inset-0 rounded-full bg-[conic-gradient(from_200deg,#f4f4f5,#6e6e76,#d9d9de,#3a3a3e,#f4f4f5)] opacity-80 blur-[2px]" />
-        <div className="lg absolute inset-0 rounded-full" />
-        <div className="absolute inset-[18%] rounded-full bg-[radial-gradient(circle_at_30%_25%,rgb(255_255_255/0.6),transparent_45%)]" />
-      </div>
+      {orb ? (
+        <PageOrb theme={orb} logos={orbLogos} />
+      ) : (
+        <div aria-hidden className="s-hero-fallback pointer-events-none absolute top-28 right-[6%] hidden size-56 rounded-full lg:block">
+          <div className="absolute inset-0 rounded-full bg-[conic-gradient(from_200deg,#f4f4f5,#6e6e76,#d9d9de,#3a3a3e,#f4f4f5)] opacity-80 blur-[2px]" />
+          <div className="lg absolute inset-0 rounded-full" />
+          <div className="absolute inset-[18%] rounded-full bg-[radial-gradient(circle_at_30%_25%,rgb(255_255_255/0.6),transparent_45%)]" />
+        </div>
+      )}
       <Container className="relative">
         <Reveal className="mb-6">
           <Eyebrow>{eyebrow}</Eyebrow>

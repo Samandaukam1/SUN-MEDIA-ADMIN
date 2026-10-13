@@ -1,4 +1,5 @@
 import { RoleMatrix } from '@/components/roles/RoleMatrix';
+import { RoleNames } from '@/components/roles/RoleNames';
 import { SectionTitle } from '@/components/ui/Card';
 import { Notice } from '@/components/ui/Notice';
 import { createClient } from '@/lib/supabase/server';
@@ -9,10 +10,12 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function RolesView({ editable }: { editable: boolean }) {
   const supabase = await createClient();
-  const [rolesRes, permsRes, grantsRes] = await Promise.all([
+  const [rolesRes, permsRes, grantsRes, holdersRes, membersRes] = await Promise.all([
     supabase.from('roles').select('id, key, name, scope, rank, is_system').order('rank'),
     supabase.from('permissions').select('key, module, name, scope').order('module').order('key'),
     supabase.from('role_permissions').select('role_id, permission_key'),
+    editable ? supabase.from('user_roles').select('role_id') : Promise.resolve({ data: [] as { role_id: string }[] }),
+    editable ? supabase.from('client_members').select('role_id') : Promise.resolve({ data: [] as { role_id: string }[] }),
   ]);
   if (rolesRes.error) throw rolesRes.error;
   if (permsRes.error) throw permsRes.error;
@@ -22,8 +25,21 @@ export async function RolesView({ editable }: { editable: boolean }) {
   const staffRoles = rolesRes.data.filter((r) => r.scope === 'staff').map((r) => ({ id: r.id, key: r.key, name: r.name, locked: r.key === 'system_owner' }));
   const clientRoles = rolesRes.data.filter((r) => r.scope === 'client').map((r) => ({ id: r.id, key: r.key, name: r.name, locked: false }));
 
+  const holders = new Map<string, number>();
+  for (const h of [...(holdersRes.data ?? []), ...(membersRes.data ?? [])]) holders.set(h.role_id, (holders.get(h.role_id) ?? 0) + 1);
+  const named = (scope: string) =>
+    rolesRes.data
+      .filter((r) => r.scope === scope && r.key !== 'system_owner')
+      .map((r) => ({ id: r.id, key: r.key, name: r.name, isSystem: r.is_system, holders: holders.get(r.id) ?? 0 }));
+
   return (
     <div className="space-y-10">
+      {editable ? (
+        <section>
+          <SectionTitle>Rollar nomi va yangi rollar</SectionTitle>
+          <RoleNames staff={named('staff')} client={named('client')} />
+        </section>
+      ) : null}
       {!editable ? (
         <Notice tone="info" title="Faqat ko‘rish">
           Rollarning umumiy ruxsatlarini Tizim egasi o‘zgartiradi. Bitta xodimga qo‘shimcha ruxsat berish — xodim sahifasidagi “Rol va ruxsatlar” bo‘limida.

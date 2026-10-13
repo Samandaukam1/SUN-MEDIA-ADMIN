@@ -227,6 +227,7 @@ async function AccessPanel({ userId, currentRole, granted, context }: { userId: 
       granted={granted}
       rolePermissions={rolePermissions}
       canChangeRole={can(context, 'roles.manage')}
+      canCreateRole={isSystemOwner(context)}
     />
   );
 }

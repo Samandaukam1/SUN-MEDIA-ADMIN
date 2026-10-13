@@ -18,7 +18,7 @@ export default async function ContactPage() {
 
   return (
     <>
-      <PageHero eyebrow={page.nav_label} title={page.title} subtitle={page.subtitle} />
+      <PageHero eyebrow={page.nav_label} title={page.title} subtitle={page.subtitle} orb="contact" />
       <section id="ariza" className="scroll-mt-28 pb-24">
         <Container className={`grid gap-6 ${hasContacts ? 'lg:grid-cols-[0.85fr_1.15fr]' : ''}`}>
           {hasContacts ? (

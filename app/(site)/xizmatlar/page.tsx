@@ -16,7 +16,7 @@ export default async function ServicesPage() {
 
   return (
     <>
-      <PageHero eyebrow={page.nav_label} title={page.title} subtitle={page.subtitle} />
+      <PageHero eyebrow={page.nav_label} title={page.title} subtitle={page.subtitle} orb="services" />
       {c.services.length ? (
         <section className="pb-24">
           <Container>

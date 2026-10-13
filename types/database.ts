@@ -7225,6 +7225,26 @@ export type Database = {
         Returns: Json
       }
       configure_safi: { Args: { p_config: Json }; Returns: Json }
+      create_custom_role: {
+        Args: { p_base_key: string; p_name: string }
+        Returns: {
+          created_at: string
+          description: string | null
+          id: string
+          is_system: boolean
+          key: string
+          name: string
+          rank: number
+          scope: Database["public"]["Enums"]["user_kind"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "roles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_file_upload: {
         Args: {
           p_chat_room_id?: string
@@ -7278,6 +7298,7 @@ export type Database = {
         Args: { p_reason?: string; p_user_id: string }
         Returns: undefined
       }
+      delete_custom_role: { Args: { p_role_id: string }; Returns: undefined }
       deliver_leads: {
         Args: { p_client: string; p_lead_ids?: string[] }
         Returns: Json
@@ -7874,6 +7895,26 @@ export type Database = {
       }
       remove_file: { Args: { p_file_id: string }; Returns: undefined }
       remove_report_file: { Args: { p_file_id: string }; Returns: string }
+      rename_role: {
+        Args: { p_description?: string; p_name: string; p_role_id: string }
+        Returns: {
+          created_at: string
+          description: string | null
+          id: string
+          is_system: boolean
+          key: string
+          name: string
+          rank: number
+          scope: Database["public"]["Enums"]["user_kind"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "roles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       request_access: { Args: never; Returns: Json }
       request_pro_upgrade: { Args: { p_feature?: string }; Returns: undefined }
       request_sun_coin_purchase: { Args: { p_pack: string }; Returns: Json }

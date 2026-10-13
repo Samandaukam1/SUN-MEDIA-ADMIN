@@ -36,6 +36,7 @@ export function hasContent(content: SiteContent, key: SitePageKey): boolean {
   if (key === 'cases') return content.cases.length > 0;
   if (key === 'partners') return content.partners.length > 0;
   if (key === 'services') return content.services.length > 0;
+  // Tariflar stays in the menu even before prices are entered (the page shows a clear empty state).
   return true;
 }
 

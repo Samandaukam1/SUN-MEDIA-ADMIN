@@ -1,16 +1,18 @@
 'use client';
 
-import { Environment, Float, Lightformer, MeshTransmissionMaterial, PerformanceMonitor, RoundedBox } from '@react-three/drei';
+import { Environment, Float, Lightformer, PerformanceMonitor, RoundedBox } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 import geometry from '@/components/brand/logo-geometry.json';
+import { BubbleController, type BubblePartner } from '@/lib/site/bubbles';
+import { PartnerBubbles, type BubbleView } from './PartnerBubbles';
 
 /*
  * The SUN MEDIA logo in 3D, built from the same traced geometry as the 2D logo: a glossy black slab,
- * chrome SUN strokes with bevelled edges, brushed-silver MEDIA and the glowing lime "I". Liquid-glass
- * drops float around it and refract it; a light strip sweeps across the chrome.
+ * chrome SUN strokes with bevelled edges, brushed-silver MEDIA and the glowing lime "I". Partner logos float
+ * around it in glass bubbles (PartnerBubbles); a light strip sweeps across the chrome.
  */
 
 const UNIT = 0.01;
@@ -67,18 +69,29 @@ function useLogoGeometries() {
   }, []);
 }
 
-/** Soft radial glow behind the logo (also refracted by the glass). */
-function useGlowTexture() {
+const BACKDROP_SIZE = 40;
+const BACKDROP_Z = -6;
+
+/**
+ * The lime glow behind the logo, painted into an opaque backdrop in the background colour. Opaque, so the
+ * glass bubbles (which refract only solid things) show the glow through them instead of a dark disc.
+ */
+function useBackdropTexture() {
   return useMemo(() => {
-    const size = 256;
+    const size = 1024;
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d')!;
-    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    ctx.fillStyle = BG;
+    ctx.fillRect(0, 0, size, size);
+    // Same falloff as the earlier additive glow: lime added onto the background colour.
+    const radius = size * 0.068;
+    const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, radius);
     g.addColorStop(0, 'rgba(212,252,24,0.55)');
     g.addColorStop(0.35, 'rgba(212,252,24,0.16)');
     g.addColorStop(1, 'rgba(212,252,24,0)');
+    ctx.globalCompositeOperation = 'lighter';
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, size, size);
     const texture = new THREE.CanvasTexture(canvas);
@@ -87,17 +100,45 @@ function useGlowTexture() {
   }, []);
 }
 
-type Quality = { samples: number; resolution: number; sweep: boolean };
+function Backdrop({ logoScale }: { logoScale: (landscape: boolean, viewportWidth: number) => number }) {
+  const mesh = useRef<THREE.Mesh>(null);
+  const texture = useBackdropTexture();
+  const { viewport, size } = useThree();
+  useEffect(() => () => texture.dispose(), [texture]);
+  useFrame(() => {
+    const m = mesh.current;
+    if (!m) return;
+    const landscape = size.width >= 900;
+    const scroll = Math.min(1.5, window.scrollY / Math.max(1, window.innerHeight));
+    // Follow the logo's place on screen, projected back to the backdrop's depth.
+    const k = (8 - BACKDROP_Z) / 8;
+    const x = (landscape ? viewport.width * 0.235 : 0) * k;
+    const y = ((landscape ? 0.1 : viewport.height * 0.255) + scroll * 1.2) * k;
+    m.position.set(x, y, BACKDROP_Z);
+    m.scale.setScalar(BACKDROP_SIZE * (logoScale(landscape, viewport.width) / 0.515));
+  });
+  return (
+    <mesh ref={mesh} position={[0, 0, BACKDROP_Z]} scale={BACKDROP_SIZE}>
+      <planeGeometry />
+      <meshBasicMaterial map={texture} toneMapped={false} />
+    </mesh>
+  );
+}
+
+function logoScaleFor(landscape: boolean, viewportWidth: number) {
+  return landscape ? Math.min(0.86, (viewportWidth * 0.33) / LOGO_WIDTH) : Math.min(0.85, (viewportWidth * 0.74) / LOGO_WIDTH);
+}
+
+type Quality = { sweep: boolean; low: boolean };
 
 function Logo3D({ pointer, intro }: { pointer: React.RefObject<THREE.Vector2>; intro: React.RefObject<number> }) {
   const group = useRef<THREE.Group>(null);
   const halo = useRef<THREE.Group>(null);
   const { sun, media, accent, slab } = useLogoGeometries();
-  const glow = useGlowTexture();
   const { viewport, size } = useThree();
 
   const landscape = size.width >= 900;
-  const scale = landscape ? Math.min(0.86, (viewport.width * 0.33) / LOGO_WIDTH) : Math.min(0.85, (viewport.width * 0.74) / LOGO_WIDTH);
+  const scale = logoScaleFor(landscape, viewport.width);
   const anchorX = landscape ? viewport.width * 0.235 : 0;
   const anchorY = landscape ? 0.1 : viewport.height * 0.255;
 
@@ -126,11 +167,6 @@ function Logo3D({ pointer, intro }: { pointer: React.RefObject<THREE.Vector2>; i
 
   return (
     <group ref={group}>
-      <mesh position={[0, 0, -1.6]} scale={7}>
-        <planeGeometry />
-        <meshBasicMaterial map={glow} transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
-      </mesh>
-
       <group ref={halo} rotation={[1.15, 0.2, 0]}>
         <mesh>
           <torusGeometry args={[2.75, 0.009, 16, 220]} />
@@ -166,61 +202,6 @@ function Logo3D({ pointer, intro }: { pointer: React.RefObject<THREE.Vector2>; i
   );
 }
 
-function GlassDrops({ quality }: { quality: Quality }) {
-  const { viewport, size } = useThree();
-  const landscape = size.width >= 900;
-  const bg = useMemo(() => new THREE.Color(BG), []);
-  const material = (thickness: number) => (
-    <MeshTransmissionMaterial
-      samples={quality.samples}
-      resolution={quality.resolution}
-      thickness={thickness}
-      roughness={0}
-      transmission={1}
-      ior={1.25}
-      chromaticAberration={0.12}
-      anisotropy={0.15}
-      distortion={0.25}
-      distortionScale={0.4}
-      temporalDistortion={0.08}
-      clearcoat={1}
-      clearcoatRoughness={0}
-      envMapIntensity={2.2}
-      attenuationDistance={2.5}
-      attenuationColor="#f4f4f5"
-      backside
-      backsideThickness={0.2}
-      color="#ffffff"
-      background={bg}
-    />
-  );
-  const cx = landscape ? viewport.width * 0.235 : 0;
-  const cy = landscape ? 0.1 : viewport.height * 0.255;
-  const k = landscape ? 0.85 : 0.6;
-  return (
-    <>
-      <Float speed={1.3} rotationIntensity={0.4} floatIntensity={1}>
-        <mesh position={[cx + 1.2 * k, cy - 1.25 * k, 1.4]}>
-          <sphereGeometry args={[0.42 * k, 64, 64]} />
-          {material(0.9)}
-        </mesh>
-      </Float>
-      <Float speed={1.7} rotationIntensity={1.1} floatIntensity={1.3}>
-        <mesh position={[cx + 1.55 * k, cy + 1.2 * k, 0.9]} rotation={[0.2, 0.3, -0.9]}>
-          <capsuleGeometry args={[0.16 * k, 0.7 * k, 16, 48]} />
-          {material(0.45)}
-        </mesh>
-      </Float>
-      <Float speed={2.2} rotationIntensity={0.6} floatIntensity={1.6}>
-        <mesh position={[cx - 1.35 * k, cy - 1.15 * k, 1.6]}>
-          <sphereGeometry args={[0.17 * k, 48, 48]} />
-          {material(0.3)}
-        </mesh>
-      </Float>
-    </>
-  );
-}
-
 /** Studio lighting from light panels only (no HDR download); on capable devices a strip sweeps across. */
 function Studio({ sweep }: { sweep: boolean }) {
   const strip = useRef<THREE.Mesh>(null);
@@ -243,14 +224,17 @@ function Studio({ sweep }: { sweep: boolean }) {
   );
 }
 
-export default function HeroScene({ active, onReady }: { active: boolean; onReady: () => void }) {
+export default function HeroScene({ active, onReady, partners }: { active: boolean; onReady: () => void; partners: BubblePartner[] }) {
   const pointer = useRef(new THREE.Vector2());
   const intro = useRef(0);
   const coarse = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
-  const [quality, setQuality] = useState<Quality>(
-    coarse ? { samples: 3, resolution: 256, sweep: false } : { samples: 6, resolution: 512, sweep: true },
-  );
+  const [quality, setQuality] = useState<Quality>({ sweep: !coarse, low: false });
   const [dpr, setDpr] = useState(coarse ? 1.25 : 1.75);
+  const [calm, setCalm] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const [controller] = useState(() => new BubbleController({ capacity: 5, edgesForSlot: () => ['right'] }));
+  const buttons = useRef(new Map<number, HTMLButtonElement>());
+  const [views, setViews] = useState<BubbleView[]>([]);
+  const bubblePartners = useMemo(() => partners.filter((p) => p.logoUrl), [partners]);
 
   // The headline sits above the canvas, so the pointer is read from the window.
   useEffect(() => {
@@ -262,32 +246,64 @@ export default function HeroScene({ active, onReady }: { active: boolean; onRead
     return () => window.removeEventListener('pointermove', onMove);
   }, [coarse]);
 
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onChange = () => setCalm(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+
   return (
-    <Canvas
-      dpr={dpr}
-      frameloop={active ? 'always' : 'never'}
-      camera={{ position: [0, 0, 8], fov: 32 }}
-      gl={{ antialias: true, powerPreference: 'high-performance', alpha: false }}
-      onCreated={({ gl }) => {
-        gl.toneMappingExposure = 1.05;
-        requestAnimationFrame(onReady);
-      }}
-      style={{ touchAction: 'pan-y' }}
-    >
-      <color attach="background" args={[BG]} />
-      <PerformanceMonitor
-        onDecline={() => {
-          setDpr(1);
-          setQuality({ samples: 2, resolution: 192, sweep: false });
+    <div className="absolute inset-0">
+      <Canvas
+        aria-hidden
+        dpr={dpr}
+        frameloop={active ? 'always' : 'never'}
+        camera={{ position: [0, 0, 8], fov: 32 }}
+        gl={{ antialias: true, powerPreference: 'high-performance', alpha: false }}
+        onCreated={({ gl }) => {
+          gl.toneMappingExposure = 1.05;
+          requestAnimationFrame(onReady);
         }}
-      />
-      <ambientLight intensity={0.25} />
-      <directionalLight position={[3, 4, 5]} intensity={0.9} />
-      <Studio sweep={quality.sweep} />
-      <Float speed={1.1} rotationIntensity={0.12} floatIntensity={0.35}>
-        <Logo3D pointer={pointer} intro={intro} />
-      </Float>
-      <GlassDrops quality={quality} />
-    </Canvas>
+        style={{ touchAction: 'pan-y' }}
+      >
+        <color attach="background" args={[BG]} />
+        <PerformanceMonitor
+          onDecline={() => {
+            setDpr(1);
+            setQuality({ sweep: false, low: true });
+          }}
+        />
+        <ambientLight intensity={0.25} />
+        <directionalLight position={[3, 4, 5]} intensity={0.9} />
+        <Studio sweep={quality.sweep} />
+        <Backdrop logoScale={logoScaleFor} />
+        <Float speed={1.1} rotationIntensity={0.12} floatIntensity={0.35}>
+          <Logo3D pointer={pointer} intro={intro} />
+        </Float>
+        <PartnerBubbles controller={controller} partners={bubblePartners} calm={calm} low={quality.low} buttons={buttons} onViews={setViews} />
+      </Canvas>
+
+      {/* Each bubble is a real button: mouse, touch and keyboard (Tab + Enter) burst it. */}
+      <div className="pointer-events-none absolute inset-0" role="group" aria-label="Hamkorlarimiz logotiplari">
+        {views.map((v) => (
+          <button
+            key={v.key}
+            ref={(el) => {
+              if (el) buttons.current.set(v.key, el);
+              else buttons.current.delete(v.key);
+            }}
+            type="button"
+            aria-label={`${v.name} — pufakni yorish`}
+            aria-disabled={!v.interactive}
+            title={v.name}
+            onClick={() => controller.pop(v.key)}
+            className={`absolute top-0 left-0 size-0 cursor-pointer rounded-full bg-transparent outline-none focus-visible:shadow-[0_0_0_2px_#d4fc18,0_0_28px_rgb(212_252_24/0.45)] ${
+              v.interactive ? 'pointer-events-auto' : 'pointer-events-none'
+            }`}
+          />
+        ))}
+      </div>
+    </div>
   );
 }

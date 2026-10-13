@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { FaqList } from '@/components/site/FaqList';
+import { PlansGrid } from '@/components/site/PlansGrid';
 import { Hero } from '@/components/site/hero/Hero';
 import {
   BenefitsBento,
@@ -85,6 +86,13 @@ function block(section: SiteSection, c: SiteContent): ReactNode {
           </Container>
         </PaperSection>
       ) : null;
+    case 'plans':
+      return c.plans.length && isPublished(c, 'plans') ? (
+        <Band id="tariflar">
+          {heading(<TextLink href="/tariflar">Barcha tariflar</TextLink>)}
+          <PlansGrid plans={c.plans} />
+        </Band>
+      ) : null;
     case 'testimonials':
       return c.testimonials.length ? (
         <Band>
@@ -118,7 +126,11 @@ export default async function HomePage() {
 
   return (
     <>
-      <Hero settings={{ ...c.settings, secondary_cta_label: secondary?.label ?? c.settings.secondary_cta_label }} secondaryHref={secondary?.href ?? null} />
+      <Hero
+        settings={{ ...c.settings, secondary_cta_label: secondary?.label ?? c.settings.secondary_cta_label }}
+        secondaryHref={secondary?.href ?? null}
+        partners={c.partners.flatMap((p) => (p.logoUrl ? [{ id: p.id, name: p.name, logoUrl: p.logoUrl }] : []))}
+      />
       <ServiceMarquee words={c.services.map((s) => s.title)} />
       {sections.map((s) => (
         <div key={s.key}>{block(s, c)}</div>

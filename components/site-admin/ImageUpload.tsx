@@ -11,29 +11,65 @@ const TYPES: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg',
 const MAX_BYTES = 2 * 1024 * 1024;
 const BUCKET = 'branding';
 
-async function encode(bitmap: ImageBitmap, side: number, quality: number): Promise<Blob | null> {
-  const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
+async function encode(source: CanvasImageSource & { width: number; height: number }, side: number, quality: number): Promise<Blob | null> {
+  const scale = Math.min(1, side / Math.max(source.width, source.height));
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  canvas.width = Math.max(1, Math.round(source.width * scale));
+  canvas.height = Math.max(1, Math.round(source.height * scale));
+  canvas.getContext('2d')!.drawImage(source, 0, 0, canvas.width, canvas.height);
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
 }
 
 /**
+ * SVG is never stored: it is drawn into a bitmap (scripts, links and external references inside an SVG do not
+ * run when it is rendered as an image) and saved as WebP with its transparency. Storage refuses .svg under site/.
+ */
+async function rasterizeSvg(file: File, maxSide: number): Promise<HTMLCanvasElement> {
+  const text = await file.text();
+  const doc = new DOMParser().parseFromString(text, 'image/svg+xml');
+  const svg = doc.documentElement;
+  if (svg.nodeName.toLowerCase() !== 'svg' || doc.getElementsByTagName('parsererror').length) throw new Error('SVG faylni o‘qib bo‘lmadi.');
+  const box = (svg.getAttribute('viewBox') ?? '').split(/[\s,]+/).map(Number);
+  const w0 = parseFloat(svg.getAttribute('width') ?? '') || (box.length === 4 ? box[2] : 0) || 512;
+  const h0 = parseFloat(svg.getAttribute('height') ?? '') || (box.length === 4 ? box[3] : 0) || 512;
+  const k = maxSide / Math.max(w0, h0);
+  const width = Math.round(w0 * k);
+  const height = Math.round(h0 * k);
+  if (!svg.getAttribute('viewBox')) svg.setAttribute('viewBox', `0 0 ${w0} ${h0}`);
+  svg.setAttribute('width', String(width));
+  svg.setAttribute('height', String(height));
+  const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml' }));
+  try {
+    const img = new Image();
+    img.decoding = 'async';
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('SVG faylni chizib bo‘lmadi.'));
+      img.src = url;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+    return canvas;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/**
  * Photos are scaled down and re-encoded as WebP in the browser (logos keep transparency), stepping the size
- * and quality down until they fit; SVG goes as is.
+ * and quality down until they fit under 2 MB.
  */
 async function prepare(file: File, maxSide: number): Promise<{ blob: Blob; ext: string; type: string }> {
-  if (file.type === 'image/svg+xml') return { blob: file, ext: 'svg', type: file.type };
-  const bitmap = await createImageBitmap(file);
+  const source = file.type === 'image/svg+xml' ? await rasterizeSvg(file, Math.min(maxSide, 1600)) : await createImageBitmap(file);
   try {
     for (const [side, quality] of [[maxSide, 0.86], [maxSide, 0.78], [Math.round(maxSide * 0.75), 0.78], [Math.round(maxSide * 0.55), 0.72]] as const) {
-      const blob = await encode(bitmap, side, quality);
+      const blob = await encode(source, side, quality);
       if (blob && blob.size <= MAX_BYTES) return { blob, ext: 'webp', type: 'image/webp' };
     }
   } finally {
-    bitmap.close();
+    if ('close' in source) source.close();
   }
   throw new Error('Rasmni 2 MB gacha siqib bo‘lmadi. Kichikroq rasm tanlang.');
 }
@@ -46,7 +82,6 @@ export async function uploadSiteImage(file: File, folder: string, maxSide = 2400
   if (!TYPES[file.type]) throw new Error('PNG, JPG, WEBP yoki SVG yuklang.');
   if (file.size > 40 * 1024 * 1024) throw new Error('Fayl juda katta (40 MB gacha).');
   const { blob, ext, type } = await prepare(file, maxSide);
-  if (blob.size > MAX_BYTES) throw new Error('SVG fayl 2 MB dan katta.');
   const supabase = getBrowserClient();
   const path = `site/${folder}/${crypto.randomUUID()}.${ext}`;
   const { error } = await supabase.storage.from(BUCKET).upload(path, blob, { contentType: type, cacheControl: '31536000', upsert: false });

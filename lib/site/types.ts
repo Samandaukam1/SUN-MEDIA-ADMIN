@@ -3,6 +3,19 @@ import { z } from 'zod';
 /** What public.get_site_content() returns: the published site in one document. */
 const nullableText = z.string().nullable();
 
+export const SITE_CURRENCIES = ['UZS', 'USD', 'EUR'] as const;
+export type SiteCurrency = (typeof SITE_CURRENCIES)[number];
+
+/** 5000000 UZS → "5 000 000 so‘m"; 1200 USD → "$1 200". Digits never split; a long price may wrap before "so‘m". */
+export function formatPrice(price: number, currency: SiteCurrency): string {
+  const fixed = Number.isInteger(price) ? String(price) : price.toFixed(2);
+  const [whole, cents] = fixed.split('.');
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0') + (cents ? `,${cents}` : '');
+  if (currency === 'USD') return `$${grouped}`;
+  if (currency === 'EUR') return `€${grouped}`;
+  return `${grouped} so‘m`;
+}
+
 export const siteSettingsSchema = z.object({
   hero_eyebrow: z.string(),
   hero_title: z.string(),
@@ -39,10 +52,10 @@ export const siteSettingsSchema = z.object({
   updated_at: z.string(),
 });
 
-export const SITE_PAGE_KEYS = ['home', 'services', 'cases', 'partners', 'about', 'contact'] as const;
+export const SITE_PAGE_KEYS = ['home', 'services', 'cases', 'partners', 'plans', 'about', 'contact'] as const;
 export type SitePageKey = (typeof SITE_PAGE_KEYS)[number];
 
-export const SITE_SECTION_KEYS = ['marquee', 'stats', 'services', 'cases', 'benefits', 'process', 'partners', 'testimonials', 'faq', 'cta'] as const;
+export const SITE_SECTION_KEYS = ['marquee', 'stats', 'services', 'cases', 'benefits', 'process', 'partners', 'plans', 'testimonials', 'faq', 'cta'] as const;
 export type SiteSectionKey = (typeof SITE_SECTION_KEYS)[number];
 
 const pageSchema = z.object({
@@ -114,6 +127,21 @@ export const siteContentSchema = z.object({
   benefits: z.array(z.object({ id: z.string(), title: z.string(), description: z.string(), icon: z.string() })),
   steps: z.array(z.object({ id: z.string(), title: z.string(), description: z.string() })),
   faqs: z.array(z.object({ id: z.string(), question: z.string(), answer: z.string() })),
+  plans: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        description: z.string(),
+        price: z.coerce.number().nullable(),
+        currency: z.enum(SITE_CURRENCIES),
+        priceMode: z.enum(['fixed', 'from', 'negotiable']),
+        billingPeriod: z.enum(['monthly', 'one_time']),
+        isFeatured: z.boolean(),
+        items: z.array(z.object({ id: z.string(), name: z.string(), quantity: z.string(), note: z.string() })),
+      }),
+    )
+    .default([]),
 });
 
 export type SiteContent = z.infer<typeof siteContentSchema>;
@@ -128,6 +156,7 @@ export type SiteBenefit = SiteContent['benefits'][number];
 export type SiteStep = SiteContent['steps'][number];
 export type SiteFaq = SiteContent['faqs'][number];
 export type SiteStat = SiteContent['stats'][number];
+export type SitePlan = SiteContent['plans'][number];
 
 /** Icons the editor offers for services and benefits (drawn by components/site/SiteIcon). */
 export const SITE_ICONS = [

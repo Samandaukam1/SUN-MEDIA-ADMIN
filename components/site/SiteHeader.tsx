@@ -84,9 +84,9 @@ export function SiteHeader({ nav, ctaLabel, phone }: { nav: NavItem[]; ctaLabel:
           </nav>
 
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => openApplication()} className="s-btn s-btn-lime hidden h-11 px-5 text-[14px] sm:inline-flex">
+            <Link href="/hamkorlar" className="s-btn s-btn-lime hidden h-11 px-5 text-[14px] sm:inline-flex">
               {ctaLabel}
-            </button>
+            </Link>
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
@@ -138,15 +138,18 @@ export function SiteHeader({ nav, ctaLabel, phone }: { nav: NavItem[]; ctaLabel:
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.7, delay: 0.4, ease: EASE }}
             >
+              <Link href="/hamkorlar" onClick={() => setOpen(false)} className="s-btn s-btn-lime w-full">
+                {ctaLabel}
+              </Link>
               <button
                 type="button"
                 onClick={() => {
                   setOpen(false);
                   openApplication();
                 }}
-                className="s-btn s-btn-lime w-full"
+                className="s-btn s-btn-glass lg w-full"
               >
-                {ctaLabel}
+                Ariza qoldirish
               </button>
               {phone ? (
                 <a href={`tel:${phone}`} className="s-btn s-btn-glass lg w-full">

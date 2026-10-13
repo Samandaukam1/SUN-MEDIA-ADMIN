@@ -13,9 +13,15 @@ function CaseCover({ item, large }: { item: SiteCase; large?: boolean }) {
         alt={item.title}
         sizes={large ? '(min-width: 1024px) 1100px, 100vw' : '(min-width: 768px) 560px, 100vw'}
         className="object-cover transition-transform duration-[1.4s] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.06]"
+        fallback={<GeneratedCover item={item} />}
       />
     );
   }
+  return <GeneratedCover item={item} />;
+}
+
+/** A cover drawn from the partner's logo or initials when the case has no (or a missing) photo. */
+function GeneratedCover({ item }: { item: SiteCase }) {
   const name = item.partner?.name || item.clientName || item.title;
   return (
     <div className="absolute inset-0 bg-[radial-gradient(120%_90%_at_80%_10%,#2a2a2e,#0b0b0c_60%)]">

@@ -241,7 +241,7 @@ export function ApplicationForm({
               <fieldset className="flex flex-col gap-2.5">
                 <legend className="mb-2.5 text-[13px] font-medium text-[#a8a8ac]">Qaysi xizmat kerak?</legend>
                 <div className="flex flex-wrap gap-2">
-                  {[...services, 'Boshqa'].map((s) => {
+                  {[...(initialService && !services.includes(initialService) ? [initialService] : []), ...services, 'Boshqa'].map((s) => {
                     const on = service === s;
                     return (
                       <button

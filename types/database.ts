@@ -5384,6 +5384,92 @@ export type Database = {
         }
         Relationships: []
       }
+      site_plan_items: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          note: string
+          plan_id: string
+          quantity: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          note?: string
+          plan_id: string
+          quantity?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          note?: string
+          plan_id?: string
+          quantity?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_plan_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "site_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_plans: {
+        Row: {
+          billing_period: string
+          created_at: string
+          currency: string
+          description: string
+          id: string
+          is_featured: boolean
+          is_published: boolean
+          name: string
+          price: number | null
+          price_mode: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          billing_period?: string
+          created_at?: string
+          currency?: string
+          description?: string
+          id?: string
+          is_featured?: boolean
+          is_published?: boolean
+          name: string
+          price?: number | null
+          price_mode?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          billing_period?: string
+          created_at?: string
+          currency?: string
+          description?: string
+          id?: string
+          is_featured?: boolean
+          is_published?: boolean
+          name?: string
+          price?: number | null
+          price_mode?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       site_sections: {
         Row: {
           eyebrow: string
@@ -7849,6 +7935,7 @@ export type Database = {
         Args: { p_code: string; p_fingerprint: string }
         Returns: Json
       }
+      site_save_plan: { Args: { p_items: Json; p_plan: Json }; Returns: string }
       site_submit_application: {
         Args: {
           p_company: string

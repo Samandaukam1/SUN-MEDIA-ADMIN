@@ -21,7 +21,7 @@ const GROUPS: { title: string; note?: string; fields: Field[] }[] = [
       { key: 'hero_eyebrow', label: 'Kichik yozuv (sarlavha ustida)', max: 80, placeholder: 'SMM · Kontent · Reklama' },
       { key: 'hero_title', label: 'Sarlavha', max: 160, required: true, hint: 'Masalan: Brendingizni *ko‘rinadigan* qilamiz' },
       { key: 'hero_subtitle', label: 'Sarlavha osti matni', max: 400, area: true, rows: 3 },
-      { key: 'primary_cta_label', label: 'Asosiy tugma', max: 40, required: true, half: true },
+      { key: 'primary_cta_label', label: 'Asosiy tugma (menyu va bosh ekran)', max: 40, required: true, half: true, hint: 'Hamkorlar sahifasini ochadi' },
       { key: 'secondary_cta_label', label: 'Ikkinchi tugma (Keyslar)', max: 40, required: true, half: true },
     ],
   },

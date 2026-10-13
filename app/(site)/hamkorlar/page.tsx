@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 
 import { ApplyButton } from '@/components/site/ApplyButton';
-import { Container, CtaSection, PageHero, PaperSection, PartnerCards, SectionHeading, StatsGrid, Testimonials } from '@/components/site/sections';
+import { Container, CtaSection, NextSteps, PageHero, PaperSection, PartnerCards, SectionHeading, StatsGrid, Testimonials } from '@/components/site/sections';
 import { getSiteContent, isPublished, pageMetadata, pageOf, sectionOf } from '@/lib/site/content';
 
 export const revalidate = 600;
@@ -35,11 +35,17 @@ export default async function PartnersPage() {
             <p className="font-display s-silver text-[28px] font-medium tracking-[-0.03em] sm:text-[36px]">Hamkorlarimiz ro‘yxati tayyorlanmoqda</p>
             <p className="mt-4 max-w-md text-[16px] text-[#a8a8ac]">Brendingiz uchun nima qila olishimizni bilmoqchimisiz? Ariza qoldiring.</p>
             <div className="mt-8">
-              <ApplyButton label={c.settings.primary_cta_label} />
+              <ApplyButton label={c.settings.form_button_label} />
             </div>
           </div>
         </Container>
       )}
+      <NextSteps
+        links={[
+          isPublished(c, 'about') ? { href: '/biz-haqimizda', title: 'Biz haqimizda', text: 'Jamoa, jarayon va qadriyatlarimiz.' } : null,
+          isPublished(c, 'plans') ? { href: '/tariflar', title: 'Tariflar', text: 'Xizmatlar tarkibi va narxlari.' } : null,
+        ]}
+      />
       {c.testimonials.length ? (
         <section className="py-24 sm:py-32">
           <Container>

@@ -137,6 +137,21 @@ Next.js server kerak, shuning uchun GitHub Pages emas.
   chaqira olmaydi (016 xavfsizlik invarianti saqlangan).
 - Arizalar: **Panel → Sayt → Arizalar** (Yangi / Ko'rilgan / Arxiv). Yangi ariza `site.manage` egalariga bildirishnoma va
   mobil push yuboradi. CRM emas — oddiy ro‘yxat.
+- **Hamkorlar pufaklari** (bosh ekran): faol va logotipi bor hamkorlar SUN MEDIA 3D logotipi atrofidagi shisha pufaklarda
+  chiqadi — kompyuterda bir vaqtda 5 tagacha, telefonda 3 tagacha. Hamkorlar ko'p bo'lsa, har 15–25 soniyada bittasi chetga
+  chiqib, eng uzoq ko'rsatilmagan hamkor kirib keladi. Pufak bosilsa (yoki Tab + Enter) yoriladi va 2–4 soniyadan keyin
+  chetdan qaytadi. Mantiq `lib/site/bubbles.ts` da (testlar: `tests/bubbles.test.mjs`), chizish
+  `components/site/hero/PartnerBubbles.tsx` da. Hamkor qo'shish/o'chirish/faol-nofaol — **Panel → Sayt → Hamkorlar**; pufaklar va
+  "Hamkorlar" sahifasi bitta ro'yxatdan ishlaydi. SVG logotip brauzerda WebP'ga aylantiriladi; `site/` papkasiga `.svg` yozilmaydi.
+- **Tariflar**: `/tariflar` sahifasi, bosh sahifa bloki va menyudagi "Tariflar". Boshqaruv — **Panel → Sayt → Tariflar**: nom,
+  tavsif, narx ("aniq", "dan boshlab" yoki "Kelishiladi"), valyuta (UZS/USD/EUR), oylik yoki bir martalik, "Tavsiya etiladi"
+  (bittasi), faol/yashirin, tartib va xizmatlar (nom, miqdor, izoh, tartib). Bu ro'yxat mijoz obunalaridagi ichki tariflardan
+  (`plans`, Mijozlar → Tariflar) alohida — ular mobil ilova kvotalarini boshqaradi. Narx kiritilmaguncha sahifada "Tariflar tez
+  orada e'lon qilinadi" ko'rinadi.
+- Menyu va bosh ekrandagi asosiy tugma endi **"Hamkorlarimiz"** (`/hamkorlar` ga olib boradi); nomi Panel → Sayt → Matnlar →
+  "Asosiy tugma" da. "Ariza qoldirish" formasi Aloqa sahifasi, yakuniy blok va tarif kartalarida qoladi.
+- Migratsiya: `20261014100000_site_plans_partner_bubbles.sql` (qo'shimcha: `site_plans`, `site_plan_items`, `site_save_plan`,
+  `/tariflar` sahifasi va bloki, tugma nomi, `.svg` taqiqi).
 - Footerdagi "developed by Jaxongirmans IT Teams" banneri `https://t.me/jaxongirman` ga olib boradi
   (`public/credits/jaxongirmans-it-teams.png`).
 

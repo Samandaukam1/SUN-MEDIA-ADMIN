@@ -87,7 +87,8 @@ export const SITE_COLLECTIONS: Record<SiteCollectionKey, SiteCollection> = {
     key: 'partners',
     table: 'site_partners',
     title: 'Hamkorlar',
-    description: 'Logotip, hamkorlik boshlangan yil (sayt “2021-yildan · 4 yil” deb ko‘rsatadi) va erishilgan natija.',
+    description:
+      'Faol hamkorlar bosh sahifadagi 3D pufaklarda (bir vaqtda 5 tagacha, navbat bilan) va “Hamkorlar” sahifasida chiqadi. Logotip bir marta yuklanadi — ikkala joy ham shundan foydalanadi.',
     addLabel: 'Hamkor qo‘shish',
     emptyText: 'Hali hamkor yo‘q. “Mijozlardan to‘ldirish” bilan tez boshlang — “Hamkorlar” sahifasi shundan keyin menyuda chiqadi.',
     primary: 'name',
@@ -96,12 +97,12 @@ export const SITE_COLLECTIONS: Record<SiteCollectionKey, SiteCollection> = {
     folder: 'partners',
     fields: [
       { key: 'name', label: 'Brend nomi', type: 'text', required: true, max: 80 },
-      { key: 'logo_url', label: 'Logotip', type: 'image', hint: 'PNG/SVG, shaffof fonda yaxshi ko‘rinadi.' },
+      { key: 'logo_url', label: 'Logotip', type: 'image', hint: 'PNG, JPG, WEBP yoki SVG (SVG xavfsiz rasmga aylantiriladi). Shaffof fon eng yaxshisi, fonli rasm ham to‘g‘ri chiqadi.' },
       { key: 'since_year', label: 'Hamkorlik boshlangan yil', type: 'year', half: true },
-      { key: 'industry', label: 'Soha', type: 'text', max: 60, placeholder: 'Oziq-ovqat, ta’lim…', half: true },
+      { key: 'industry', label: 'Soha yoki hamkorlik yo‘nalishi', type: 'text', max: 60, placeholder: 'SMM, Reels, brending…', half: true },
       { key: 'highlight', label: 'Erishilgan natija (qisqa)', type: 'text', max: 80, placeholder: 'Instagram auditoriyasi 3 barobar' },
       { key: 'description', label: 'Hamkorlik haqida', type: 'textarea', max: 500, rows: 3 },
-      { key: 'website_url', label: 'Sayti yoki sahifasi', type: 'url', placeholder: 'https://…' },
+      { key: 'website_url', label: 'Sayt yoki ijtimoiy tarmoq havolasi', type: 'url', placeholder: 'https://instagram.com/…' },
     ],
   },
   testimonials: {

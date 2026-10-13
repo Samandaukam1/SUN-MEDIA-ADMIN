@@ -343,6 +343,11 @@ function PartnerLogo({ partner, tone }: { partner: Pick<SitePartner, 'name' | 'l
           src={partner.logoUrl}
           alt={partner.name}
           sizes="240px"
+          fallback={
+            <span className={`absolute inset-0 grid place-items-center font-display text-[18px] font-semibold tracking-[-0.02em] ${tone === 'dark' ? 's-silver' : 'text-[#0b0b0c]'}`}>
+              {partner.name}
+            </span>
+          }
           className={`object-contain transition-all duration-700 ${
             tone === 'dark' ? 'opacity-75 brightness-0 invert group-hover:opacity-100' : 'grayscale group-hover:grayscale-0'
           }`}
@@ -442,7 +447,17 @@ export function Testimonials({ testimonials }: { testimonials: SiteTestimonial[]
               <blockquote className="mt-5 text-[17px] leading-relaxed text-[#e4e4e7] sm:text-[18px]">{t.quote}</blockquote>
               <div className="mt-auto flex items-center gap-4 pt-8">
                 <span className="relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-white/[0.08] text-[14px] font-semibold text-white">
-                  {t.avatarUrl ? <SiteImage src={t.avatarUrl} alt={t.authorName} sizes="48px" className="object-cover" /> : initialsOf(t.authorName)}
+                  {t.avatarUrl ? (
+                    <SiteImage
+                      src={t.avatarUrl}
+                      alt={t.authorName}
+                      sizes="48px"
+                      className="object-cover"
+                      fallback={<span className="absolute inset-0 grid place-items-center">{initialsOf(t.authorName)}</span>}
+                    />
+                  ) : (
+                    initialsOf(t.authorName)
+                  )}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-white">{t.authorName}</p>
@@ -459,6 +474,31 @@ export function Testimonials({ testimonials }: { testimonials: SiteTestimonial[]
         ))}
       </ul>
     </div>
+  );
+}
+
+/** "Where to next" links after a page (e.g. partners → about, tariffs). */
+export function NextSteps({ links }: { links: ({ href: string; title: string; text: string } | null)[] }) {
+  const items = links.filter((l): l is { href: string; title: string; text: string } => l !== null);
+  if (!items.length) return null;
+  return (
+    <section className="pt-20 sm:pt-24">
+      <Container className={`grid gap-4 ${items.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+        {items.map((l, i) => (
+          <Reveal key={l.href} delay={i * 0.06}>
+            <Link href={l.href} className="lg group flex items-center justify-between gap-6 rounded-[28px] p-7 transition-colors duration-500 hover:bg-white/[0.04] sm:p-8">
+              <span>
+                <span className="font-display block text-[22px] font-medium tracking-[-0.02em] text-white">{l.title}</span>
+                <span className="mt-1.5 block text-[14.5px] text-[#a8a8ac]">{l.text}</span>
+              </span>
+              <span className="grid size-12 shrink-0 place-items-center rounded-full bg-white/[0.07] text-white transition-all duration-500 group-hover:-rotate-45 group-hover:bg-[#d4fc18] group-hover:text-[#0b0b0c]">
+                <SiteIcon name="arrowRight" size={18} strokeWidth={2} />
+              </span>
+            </Link>
+          </Reveal>
+        ))}
+      </Container>
+    </section>
   );
 }
 

@@ -150,12 +150,12 @@ export function CollectionEditor({
                 <div className="hidden shrink-0 items-center gap-2 sm:flex">
                   {row.is_featured ? <Badge tone="accent">Bosh sahifada</Badge> : null}
                   {collection === 'partners' && row.since_year ? <Badge>{str(row.since_year)}-yildan</Badge> : null}
-                  {row.is_published ? <Badge tone="success" dot>Saytda</Badge> : <Badge dot>Yashirin</Badge>}
+                  {row.is_published ? <Badge tone="success" dot>Faol</Badge> : <Badge dot>Nofaol</Badge>}
                 </div>
                 <div className="flex shrink-0 gap-1">
                   <Button variant="ghost" disabled={pending} onClick={() => act(() => setSiteItemPublished(collection, row.id, !row.is_published))}>
                     <Icon name={row.is_published ? 'eyeOff' : 'eye'} size={16} />
-                    <span className="hidden lg:inline">{row.is_published ? 'Yashirish' : 'Ko‘rsatish'}</span>
+                    <span className="hidden lg:inline">{row.is_published ? 'Nofaol qilish' : 'Faollashtirish'}</span>
                   </Button>
                   <Button variant="ghost" onClick={() => open(row)} aria-label="Tahrirlash">
                     <Icon name="edit" size={16} />

@@ -1,6 +1,8 @@
-import Image from 'next/image';
+import type { ReactNode } from 'react';
 
-/** Images from the site's storage; SVG logos skip the optimiser (it does not rasterise SVG). */
+import { SafeImage } from './SafeImage';
+
+/** Images from the site's storage, with a fallback instead of a broken picture. */
 export function SiteImage({
   src,
   alt,
@@ -10,6 +12,7 @@ export function SiteImage({
   fill = true,
   width,
   height,
+  fallback,
 }: {
   src: string;
   alt: string;
@@ -19,13 +22,9 @@ export function SiteImage({
   fill?: boolean;
   width?: number;
   height?: number;
+  fallback?: ReactNode;
 }) {
-  const svg = /\.svg(\?|$)/i.test(src);
-  return fill ? (
-    <Image src={src} alt={alt} fill sizes={sizes ?? '100vw'} className={className} priority={priority} unoptimized={svg} />
-  ) : (
-    <Image src={src} alt={alt} width={width ?? 400} height={height ?? 200} sizes={sizes} className={className} priority={priority} unoptimized={svg} />
-  );
+  return <SafeImage src={src} alt={alt} sizes={sizes} className={className} priority={priority} fill={fill} width={width} height={height} fallback={fallback} />;
 }
 
 export function initialsOf(name: string): string {

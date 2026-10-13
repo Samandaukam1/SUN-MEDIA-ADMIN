@@ -77,6 +77,7 @@ const SECTIONS: NavSection[] = [
       { href: '/site/services', label: 'Xizmatlar', permission: 'site.manage' },
       { href: '/site/cases', label: 'Keyslar', permission: 'site.manage' },
       { href: '/site/partners', label: 'Hamkorlar', permission: 'site.manage' },
+      { href: '/site/plans', label: 'Tariflar', permission: 'site.manage' },
       { href: '/site/testimonials', label: 'Fikrlar', permission: 'site.manage' },
       { href: '/site/highlights', label: 'Raqamlar', permission: 'site.manage' },
       { href: '/site/process', label: 'Jarayon, FAQ', permission: 'site.manage' },

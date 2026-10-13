@@ -24,6 +24,7 @@ export const SECTION_INFO: Record<SiteSection['key'], { label: string; source: s
   benefits: { label: 'Nega SUN MEDIA', source: 'Raqamlar va afzalliklar' },
   process: { label: 'Ish jarayoni', source: 'Jarayon va savollar' },
   partners: { label: 'Hamkorlar kartalari', source: 'Hamkorlar' },
+  plans: { label: 'Tariflar', source: 'Tariflar' },
   testimonials: { label: 'Fikrlar', source: 'Fikrlar' },
   faq: { label: 'Savol-javoblar', source: 'Jarayon va savollar' },
   cta: { label: 'Ariza formasi (yakuniy blok)', source: 'Matnlar va aloqa' },

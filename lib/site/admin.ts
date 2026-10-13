@@ -33,11 +33,11 @@ export async function clientPresets() {
 
 export async function siteCounts() {
   const supabase = await createClient();
-  const count = async (table: 'site_services' | 'site_cases' | 'site_partners' | 'site_testimonials' | 'site_stats' | 'site_benefits' | 'site_steps' | 'site_faqs') => {
+  const count = async (table: 'site_services' | 'site_cases' | 'site_partners' | 'site_testimonials' | 'site_stats' | 'site_benefits' | 'site_steps' | 'site_faqs' | 'site_plans') => {
     const { count: n } = await supabase.from(table).select('id', { count: 'exact', head: true }).eq('is_published', true);
     return n ?? 0;
   };
-  const [services, cases, partners, testimonials, stats, benefits, steps, faqs, fresh] = await Promise.all([
+  const [services, cases, partners, testimonials, stats, benefits, steps, faqs, plans, fresh] = await Promise.all([
     count('site_services'),
     count('site_cases'),
     count('site_partners'),
@@ -46,7 +46,8 @@ export async function siteCounts() {
     count('site_benefits'),
     count('site_steps'),
     count('site_faqs'),
+    count('site_plans'),
     supabase.from('site_applications').select('id', { count: 'exact', head: true }).eq('status', 'new').then((r) => r.count ?? 0),
   ]);
-  return { services, cases, partners, testimonials, stats, benefits, steps, faqs, newApplications: fresh };
+  return { services, cases, partners, testimonials, stats, benefits, steps, faqs, plans, newApplications: fresh };
 }

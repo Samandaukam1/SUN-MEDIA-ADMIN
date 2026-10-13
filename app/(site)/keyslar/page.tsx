@@ -25,7 +25,7 @@ export default async function CasesPage() {
               <p className="font-display s-silver text-[28px] font-medium tracking-[-0.03em] sm:text-[36px]">Keyslar tez orada shu yerda</p>
               <p className="mt-4 max-w-md text-[16px] text-[#a8a8ac]">Hozircha loyihalarimizni shaxsan ko‘rsatamiz — ariza qoldiring, namunalarni yuboramiz.</p>
               <div className="mt-8">
-                <ApplyButton label={c.settings.primary_cta_label} />
+                <ApplyButton label={c.settings.form_button_label} />
               </div>
             </div>
           )}

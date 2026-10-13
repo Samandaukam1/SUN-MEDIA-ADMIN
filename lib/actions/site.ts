@@ -403,3 +403,107 @@ export async function discardSiteUploads(urls: string[]): Promise<void> {
   if (!Array.isArray(urls) || !urls.length) return;
   await removeImages(urls.filter((u) => typeof u === 'string').slice(0, 20));
 }
+
+// ---------------------------------------------------------------------------
+// Tariffs ("Sayt › Tariflar")
+// ---------------------------------------------------------------------------
+
+const planItemSchema = z.object({
+  id: z.preprocess(blankToNull, z.uuid().nullable()).optional(),
+  name: z.string().trim().min(1, { message: 'Xizmat nomini yozing' }).max(120, { message: '120 belgigacha' }),
+  quantity: z.string().trim().max(40, { message: '40 belgigacha' }),
+  note: z.string().trim().max(160, { message: '160 belgigacha' }),
+});
+
+const planSchema = z
+  .object({
+    name: z.string().trim().min(1, { message: 'Tarif nomini yozing' }).max(80, { message: '80 belgigacha' }),
+    description: z.string().trim().max(400, { message: '400 belgigacha' }),
+    price_mode: z.enum(['fixed', 'from', 'negotiable']),
+    price: z.preprocess(
+      (v) => (typeof v === 'string' ? (v.replace(/[\s ,']/g, '') === '' ? null : Number(v.replace(/[\s ,']/g, ''))) : v),
+      z.number({ message: 'Narxni raqam bilan yozing' }).min(0, { message: 'Narx manfiy bo‘lmaydi' }).max(999_999_999_999, { message: 'Juda katta narx' }).nullable(),
+    ),
+    currency: z.enum(['UZS', 'USD', 'EUR']),
+    billing_period: z.enum(['monthly', 'one_time']),
+    is_featured: z.boolean(),
+    is_published: z.boolean(),
+  })
+  .refine((v) => v.price_mode === 'negotiable' || v.price !== null, { path: ['price'], message: 'Narxni kiriting yoki “Kelishiladi”ni tanlang' });
+
+export type PlanItemInput = { id?: string | null; name: string; quantity: string; note: string };
+
+export async function savePlan(id: string | null, values: Record<string, unknown>, items: PlanItemInput[]): Promise<ActionState> {
+  await requirePermission('site.manage');
+  const parsed = planSchema.safeParse(values);
+  const parsedItems = z.array(planItemSchema).max(30, { message: '30 tagacha xizmat' }).safeParse(items);
+  if (!parsed.success || !parsedItems.success) {
+    const fieldErrors: Record<string, string> = parsed.success ? {} : fieldErrorsFrom(parsed.error.issues);
+    if (!parsedItems.success) {
+      for (const issue of parsedItems.error.issues) {
+        const key = issue.path.length >= 2 ? `items.${String(issue.path[0])}.${String(issue.path[1])}` : 'items';
+        fieldErrors[key] ??= issue.message;
+      }
+    }
+    return { status: 'error', message: 'Maydonlarni tekshiring.', fieldErrors };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('site_save_plan', {
+    p_plan: { ...parsed.data, id, price: parsed.data.price_mode === 'negotiable' ? null : parsed.data.price },
+    p_items: parsedItems.data.map((item) => ({ id: item.id ?? null, name: item.name, quantity: item.quantity, note: item.note })),
+  });
+  if (error) return { status: 'error', message: toUserMessage(error) };
+  refreshSite('/site/plans');
+  return { status: 'success', message: id ? 'Tarif saqlandi. Saytda yangilandi.' : 'Tarif qo‘shildi.' };
+}
+
+export async function deletePlan(id: string): Promise<ActionState> {
+  await requirePermission('site.manage');
+  const supabase = await createClient();
+  const { error } = await supabase.from('site_plans').delete().eq('id', id);
+  if (error) return { status: 'error', message: toUserMessage(error) };
+  refreshSite('/site/plans');
+  return { status: 'success', message: 'Tarif o‘chirildi.' };
+}
+
+export async function setPlanPublished(id: string, published: boolean): Promise<ActionState> {
+  await requirePermission('site.manage');
+  const supabase = await createClient();
+  const { error } = await supabase.from('site_plans').update({ is_published: published }).eq('id', id);
+  if (error) return { status: 'error', message: toUserMessage(error) };
+  refreshSite('/site/plans');
+  return { status: 'success' };
+}
+
+/** Only one tariff carries "Tavsiya etiladi": marking one clears the others first. */
+export async function setPlanFeatured(id: string, featured: boolean): Promise<ActionState> {
+  await requirePermission('site.manage');
+  const supabase = await createClient();
+  if (featured) {
+    const { error: clear } = await supabase.from('site_plans').update({ is_featured: false }).eq('is_featured', true).neq('id', id);
+    if (clear) return { status: 'error', message: toUserMessage(clear) };
+  }
+  const { error } = await supabase.from('site_plans').update({ is_featured: featured }).eq('id', id);
+  if (error) return { status: 'error', message: toUserMessage(error) };
+  refreshSite('/site/plans');
+  return { status: 'success' };
+}
+
+export async function movePlan(id: string, direction: -1 | 1): Promise<ActionState> {
+  await requirePermission('site.manage');
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('site_plans').select('id, sort_order, created_at').order('sort_order').order('created_at');
+  if (error || !data) return { status: 'error', message: toUserMessage(error) };
+  const ids = data.map((r) => r.id);
+  const from = ids.indexOf(id);
+  const to = from + direction;
+  if (from < 0 || to < 0 || to >= ids.length) return { status: 'idle' };
+  [ids[from], ids[to]] = [ids[to], ids[from]];
+  for (const [index, rowId] of ids.entries()) {
+    if (data.find((r) => r.id === rowId)?.sort_order === index) continue;
+    const { error: e } = await supabase.from('site_plans').update({ sort_order: index }).eq('id', rowId);
+    if (e) return { status: 'error', message: toUserMessage(e) };
+  }
+  refreshSite('/site/plans');
+  return { status: 'success' };
+}

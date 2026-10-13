@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { Component, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { Logo } from '@/components/brand/Logo';
+import type { BubblePartner } from '@/lib/site/bubbles';
 
 const HeroScene = dynamic(() => import('./HeroScene'), { ssr: false });
 
@@ -34,7 +35,7 @@ function webglAvailable(): boolean {
  * The hero's 3D stage. Until three.js has loaded (and on devices without WebGL) the flat logo floats in its
  * place; the scene stops rendering whenever the hero is off screen.
  */
-export function HeroCanvas() {
+export function HeroCanvas({ partners }: { partners: BubblePartner[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const [supported, setSupported] = useState(false);
   const [ready, setReady] = useState(false);
@@ -58,8 +59,9 @@ export function HeroCanvas() {
   const showScene = supported && !failed;
 
   return (
-    <div ref={ref} className="absolute inset-0" aria-hidden>
+    <div ref={ref} className="absolute inset-0">
       <div
+        aria-hidden
         className={`pointer-events-none absolute inset-0 flex items-start justify-center pt-[13svh] transition-opacity duration-1000 lg:items-center lg:justify-end lg:pt-0 lg:pr-[7vw] ${
           ready ? 'opacity-0' : 'opacity-100'
         }`}
@@ -72,7 +74,7 @@ export function HeroCanvas() {
       {showScene ? (
         <div className={`absolute inset-0 transition-opacity duration-[1400ms] ${ready ? 'opacity-100' : 'opacity-0'}`}>
           <SceneBoundary onError={() => setFailed(true)}>
-            <HeroScene active={visible} onReady={() => setReady(true)} />
+            <HeroScene active={visible} onReady={() => setReady(true)} partners={partners} />
           </SceneBoundary>
         </div>
       ) : null}

@@ -305,7 +305,72 @@
     backdrop-filter: blur(10px) saturate(140%);
   }
 
+  /* ---------------------------------------------------------------------------
+   * Tariffs: a light running around the card edge, a shine over the button, drifting glow behind
+   * ------------------------------------------------------------------------- */
+  .s-aura {
+    position: absolute;
+    inset: -60%;
+    animation: s-spin 9s linear infinite;
+  }
+
+  .s-aura-lime {
+    background: conic-gradient(from 0deg, transparent 0deg, rgb(212 252 24 / 0.95) 40deg, transparent 95deg, transparent 180deg, rgb(244 244 245 / 0.55) 220deg, transparent 275deg);
+  }
+
+  .s-aura-silver {
+    background: conic-gradient(from 0deg, transparent 0deg, rgb(244 244 245 / 0.7) 45deg, transparent 100deg, transparent 180deg, rgb(212 252 24 / 0.35) 225deg, transparent 280deg);
+    animation-duration: 12s;
+  }
+
+  @keyframes s-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .s-btn-shine {
+    overflow: hidden;
+  }
+
+  .s-btn-shine::after {
+    content: '';
+    position: absolute;
+    inset: -2px auto -2px -40%;
+    width: 35%;
+    background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.55), transparent);
+    transform: skewX(-20deg) translateX(0);
+    animation: s-shine 4.5s var(--s-ease) infinite;
+    pointer-events: none;
+  }
+
+  @keyframes s-shine {
+    0%,
+    60% {
+      left: -40%;
+    }
+    100% {
+      left: 130%;
+    }
+  }
+
+  .s-drift {
+    animation: s-drift 16s ease-in-out infinite alternate;
+  }
+
+  @keyframes s-drift {
+    0% {
+      transform: translate3d(-6%, -4%, 0) scale(1);
+    }
+    100% {
+      transform: translate3d(8%, 6%, 0) scale(1.15);
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
+    .s-aura,
+    .s-btn-shine::after,
+    .s-drift,
     .s-marquee,
     .s-silver-sheen,
     .s-pulse-dot::after,

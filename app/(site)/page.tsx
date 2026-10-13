@@ -87,7 +87,7 @@ function block(section: SiteSection, c: SiteContent): ReactNode {
       return c.plans.length && isPublished(c, 'plans') ? (
         <Band id="tariflar">
           {heading(<TextLink href="/tariflar">Barcha tariflar</TextLink>)}
-          <PlansGrid plans={c.plans} />
+          <PlansGrid plans={c.plans} compare={false} />
         </Band>
       ) : null;
     case 'testimonials':

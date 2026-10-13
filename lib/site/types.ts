@@ -7,6 +7,12 @@ export const SITE_CURRENCIES = ['UZS', 'USD', 'EUR'] as const;
 export type SiteCurrency = (typeof SITE_CURRENCIES)[number];
 
 /** 5000000 UZS → "5 000 000 so‘m"; 1200 USD → "$1 200". Digits never split; a long price may wrap before "so‘m". */
+/** The leading number of a tariff quantity ("10 ta", "oyiga 8 ta"), or null. */
+export function quantityNumber(quantity: string | null | undefined): number | null {
+  const m = /(\d+(?:[.,]\d+)?)/.exec(quantity ?? '');
+  return m ? Number(m[1].replace(',', '.')) : null;
+}
+
 export function formatPrice(price: number, currency: SiteCurrency): string {
   const fixed = Number.isInteger(price) ? String(price) : price.toFixed(2);
   const [whole, cents] = fixed.split('.');

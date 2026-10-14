@@ -44,7 +44,7 @@ reset role;
 select pg_temp.om_login('rahbar');
 select is(public.get_my_context() ->> 'interface', 'management', 'the Rahbar uses the management app');
 select ok((public.get_my_context() -> 'permissions') ? 'tasks.manage', 'the Rahbar manages operations (tasks)');
-select ok(not ((public.get_my_context() -> 'permissions') ? 'attendance.manage'), 'attendance marking stays with the Admin');
+select ok((public.get_my_context() -> 'permissions') ? 'attendance.manage', 'the Rahbar corrects attendance and raises attendance alerts');
 select ok((public.get_my_context() -> 'permissions') ? 'chat.observe', 'the Rahbar reads client chats');
 reset role;
 

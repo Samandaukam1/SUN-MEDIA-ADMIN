@@ -173,6 +173,77 @@ export type Database = {
           },
         ]
       }
+      attendance_alerts: {
+        Row: {
+          attendance_id: string | null
+          created_at: string
+          id: string
+          note: string | null
+          reported_by: string | null
+          resolution: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          user_id: string
+          work_date: string
+        }
+        Insert: {
+          attendance_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          reported_by?: string | null
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          user_id: string
+          work_date: string
+        }
+        Update: {
+          attendance_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          reported_by?: string | null
+          resolution?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          user_id?: string
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_alerts_attendance_id_fkey"
+            columns: ["attendance_id"]
+            isOneToOne: false
+            referencedRelation: "attendance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_alerts_reported_by_fkey"
+            columns: ["reported_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_alerts_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_alerts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance_history: {
         Row: {
           attendance_id: string | null
@@ -311,6 +382,7 @@ export type Database = {
         Row: {
           is_admin: boolean
           joined_at: string
+          last_delivered_at: string | null
           last_read_at: string
           muted_until: string | null
           room_id: string
@@ -319,6 +391,7 @@ export type Database = {
         Insert: {
           is_admin?: boolean
           joined_at?: string
+          last_delivered_at?: string | null
           last_read_at?: string
           muted_until?: string | null
           room_id: string
@@ -327,6 +400,7 @@ export type Database = {
         Update: {
           is_admin?: boolean
           joined_at?: string
+          last_delivered_at?: string | null
           last_read_at?: string
           muted_until?: string | null
           room_id?: string
@@ -470,6 +544,66 @@ export type Database = {
             columns: ["version_id"]
             isOneToOne: false
             referencedRelation: "content_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_billing: {
+        Row: {
+          agreed_price: number | null
+          billing_period: string
+          client_id: string
+          created_at: string
+          currency: string
+          last_paid_on: string | null
+          next_payment_amount: number | null
+          next_payment_on: string | null
+          note: string | null
+          payment_status: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          agreed_price?: number | null
+          billing_period?: string
+          client_id: string
+          created_at?: string
+          currency?: string
+          last_paid_on?: string | null
+          next_payment_amount?: number | null
+          next_payment_on?: string | null
+          note?: string | null
+          payment_status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          agreed_price?: number | null
+          billing_period?: string
+          client_id?: string
+          created_at?: string
+          currency?: string
+          last_paid_on?: string | null
+          next_payment_amount?: number | null
+          next_payment_on?: string | null
+          note?: string | null
+          payment_status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_billing_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_billing_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1139,6 +1273,52 @@ export type Database = {
           },
         ]
       }
+      content_equipment: {
+        Row: {
+          content_id: string
+          created_at: string
+          equipment_id: string
+          prepared_at: string | null
+          prepared_by: string | null
+        }
+        Insert: {
+          content_id: string
+          created_at?: string
+          equipment_id: string
+          prepared_at?: string | null
+          prepared_by?: string | null
+        }
+        Update: {
+          content_id?: string
+          created_at?: string
+          equipment_id?: string
+          prepared_at?: string | null
+          prepared_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_equipment_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_equipment_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_equipment_prepared_by_fkey"
+            columns: ["prepared_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_items: {
         Row: {
           approved_at: string | null
@@ -1152,12 +1332,16 @@ export type Database = {
           deleted_at: string | null
           description: string | null
           due_at: string | null
+          equipment_ready_at: string | null
+          equipment_ready_by: string | null
           hashtags: string[]
           id: string
           is_client_visible: boolean
+          manager_note: string | null
           music_reference: string | null
           number: number
           plan_month: string
+          post_at: string | null
           priority: Database["public"]["Enums"]["priority_level"]
           project_id: string | null
           published_at: string | null
@@ -1169,6 +1353,7 @@ export type Database = {
           status_changed_at: string
           thumbnail_file_id: string | null
           title: string
+          topic: string | null
           updated_at: string
         }
         Insert: {
@@ -1183,12 +1368,16 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           due_at?: string | null
+          equipment_ready_at?: string | null
+          equipment_ready_by?: string | null
           hashtags?: string[]
           id?: string
           is_client_visible?: boolean
+          manager_note?: string | null
           music_reference?: string | null
           number?: number
           plan_month?: string
+          post_at?: string | null
           priority?: Database["public"]["Enums"]["priority_level"]
           project_id?: string | null
           published_at?: string | null
@@ -1200,6 +1389,7 @@ export type Database = {
           status_changed_at?: string
           thumbnail_file_id?: string | null
           title: string
+          topic?: string | null
           updated_at?: string
         }
         Update: {
@@ -1214,12 +1404,16 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           due_at?: string | null
+          equipment_ready_at?: string | null
+          equipment_ready_by?: string | null
           hashtags?: string[]
           id?: string
           is_client_visible?: boolean
+          manager_note?: string | null
           music_reference?: string | null
           number?: number
           plan_month?: string
+          post_at?: string | null
           priority?: Database["public"]["Enums"]["priority_level"]
           project_id?: string | null
           published_at?: string | null
@@ -1231,6 +1425,7 @@ export type Database = {
           status_changed_at?: string
           thumbnail_file_id?: string | null
           title?: string
+          topic?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1244,6 +1439,13 @@ export type Database = {
           {
             foreignKeyName: "content_items_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_items_equipment_ready_by_fkey"
+            columns: ["equipment_ready_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1778,6 +1980,81 @@ export type Database = {
           },
         ]
       }
+      employee_private: {
+        Row: {
+          birth_date: string | null
+          passport_number: string | null
+          passport_series: string | null
+          updated_at: string
+          updated_by: string | null
+          user_id: string
+        }
+        Insert: {
+          birth_date?: string | null
+          passport_number?: string | null
+          passport_series?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          user_id: string
+        }
+        Update: {
+          birth_date?: string | null
+          passport_number?: string | null
+          passport_series?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_private_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_private_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "employees"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      employee_skills: {
+        Row: {
+          created_at: string
+          skill_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          skill_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          skill_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_skills_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_skills_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           created_at: string
@@ -1829,6 +2106,44 @@ export type Database = {
             foreignKeyName: "employees_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipment: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipment_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -3117,6 +3432,39 @@ export type Database = {
           },
         ]
       }
+      message_reads: {
+        Row: {
+          message_id: string
+          read_at: string
+          user_id: string
+        }
+        Insert: {
+          message_id: string
+          read_at?: string
+          user_id: string
+        }
+        Update: {
+          message_id?: string
+          read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_reads_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           body: string
@@ -3660,6 +4008,7 @@ export type Database = {
           client_id: string | null
           created_at: string
           data: Json
+          dedupe_key: string | null
           entity_id: string | null
           entity_type: string | null
           id: string
@@ -3674,6 +4023,7 @@ export type Database = {
           client_id?: string | null
           created_at?: string
           data?: Json
+          dedupe_key?: string | null
           entity_id?: string | null
           entity_type?: string | null
           id?: string
@@ -3688,6 +4038,7 @@ export type Database = {
           client_id?: string | null
           created_at?: string
           data?: Json
+          dedupe_key?: string | null
           entity_id?: string | null
           entity_type?: string | null
           id?: string
@@ -5260,51 +5611,69 @@ export type Database = {
       }
       site_applications: {
         Row: {
+          budget_amount: number | null
+          budget_label: string | null
           company: string
           created_at: string
           fingerprint: string
+          first_name: string | null
           full_name: string
           handled_at: string | null
           handled_by: string | null
           id: string
+          instagram: string | null
+          last_name: string | null
           link_url: string | null
           message: string
           phone: string
           service: string
           source_path: string
           status: string
+          telegram: string | null
           user_agent: string
         }
         Insert: {
+          budget_amount?: number | null
+          budget_label?: string | null
           company?: string
           created_at?: string
           fingerprint: string
+          first_name?: string | null
           full_name: string
           handled_at?: string | null
           handled_by?: string | null
           id?: string
+          instagram?: string | null
+          last_name?: string | null
           link_url?: string | null
           message?: string
           phone: string
           service?: string
           source_path?: string
           status?: string
+          telegram?: string | null
           user_agent?: string
         }
         Update: {
+          budget_amount?: number | null
+          budget_label?: string | null
           company?: string
           created_at?: string
           fingerprint?: string
+          first_name?: string | null
           full_name?: string
           handled_at?: string | null
           handled_by?: string | null
           id?: string
+          instagram?: string | null
+          last_name?: string | null
           link_url?: string | null
           message?: string
           phone?: string
           service?: string
           source_path?: string
           status?: string
+          telegram?: string | null
           user_agent?: string
         }
         Relationships: [
@@ -5934,6 +6303,44 @@ export type Database = {
             columns: ["partner_id"]
             isOneToOne: false
             referencedRelation: "site_partners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      skills: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          position: number
+          updated_at: string
+          workflow_role: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          position?: number
+          updated_at?: string
+          workflow_role?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          position?: number
+          updated_at?: string
+          workflow_role?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skills_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -6865,6 +7272,7 @@ export type Database = {
           priority: Database["public"]["Enums"]["priority_level"]
           project_id: string | null
           shooting_id: string | null
+          stage: string | null
           started_at: string | null
           starts_at: string | null
           status: Database["public"]["Enums"]["task_status"]
@@ -6887,6 +7295,7 @@ export type Database = {
           priority?: Database["public"]["Enums"]["priority_level"]
           project_id?: string | null
           shooting_id?: string | null
+          stage?: string | null
           started_at?: string | null
           starts_at?: string | null
           status?: Database["public"]["Enums"]["task_status"]
@@ -6909,6 +7318,7 @@ export type Database = {
           priority?: Database["public"]["Enums"]["priority_level"]
           project_id?: string | null
           shooting_id?: string | null
+          stage?: string | null
           started_at?: string | null
           starts_at?: string | null
           status?: Database["public"]["Enums"]["task_status"]
@@ -7184,6 +7594,10 @@ export type Database = {
       }
     }
     Functions: {
+      add_content_equipment: {
+        Args: { p_content_id: string; p_name: string }
+        Returns: string
+      }
       add_report_file: {
         Args: { p_name: string; p_report_id: string; p_storage_path: string }
         Returns: {
@@ -7243,6 +7657,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      assign_editing: {
+        Args: {
+          p_content_id: string
+          p_due_at: string
+          p_editor_id: string
+          p_note?: string
+        }
+        Returns: string
+      }
       assign_plan: {
         Args: {
           p_client_id: string
@@ -7258,6 +7681,28 @@ export type Database = {
       change_staff_role: {
         Args: { p_role_key: string; p_user_id: string }
         Returns: undefined
+      }
+      check_in: {
+        Args: never
+        Returns: {
+          arrived_at: string | null
+          created_at: string
+          id: string
+          late_minutes: number
+          marked_at: string
+          marked_by: string | null
+          note: string | null
+          status: Database["public"]["Enums"]["attendance_status"]
+          updated_at: string
+          user_id: string
+          work_date: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "attendance"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       claim_push_deliveries: {
         Args: { p_limit?: number }
@@ -7323,6 +7768,8 @@ export type Database = {
         Returns: Json
       }
       configure_safi: { Args: { p_config: Json }; Returns: Json }
+      confirm_equipment: { Args: { p_content_id: string }; Returns: undefined }
+      create_content_task: { Args: { p: Json }; Returns: string }
       create_custom_role: {
         Args: { p_base_key: string; p_name: string }
         Returns: {
@@ -7834,6 +8281,7 @@ export type Database = {
         Args: { p_content_id: string; p_media_id: string }
         Returns: undefined
       }
+      mark_chat_delivered: { Args: { p_room_id?: string }; Returns: undefined }
       mark_chat_read: { Args: { p_room_id: string }; Returns: undefined }
       mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number }
       mark_password_changed: { Args: never; Returns: undefined }
@@ -8013,9 +8461,17 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      report_attendance_error: {
+        Args: { p_attendance_id: string; p_note?: string }
+        Returns: string
+      }
       request_access: { Args: never; Returns: Json }
       request_pro_upgrade: { Args: { p_feature?: string }; Returns: undefined }
       request_sun_coin_purchase: { Args: { p_pack: string }; Returns: Json }
+      resolve_attendance_alert: {
+        Args: { p_alert_id: string; p_dismiss?: boolean; p_resolution?: string }
+        Returns: undefined
+      }
       restore_lead: { Args: { p_lead_id: string }; Returns: undefined }
       review_content_version: {
         Args: {
@@ -8025,6 +8481,14 @@ export type Database = {
           p_version_id: string
         }
         Returns: Json
+      }
+      review_editing: {
+        Args: { p_approve: boolean; p_content_id: string; p_note?: string }
+        Returns: undefined
+      }
+      review_script: {
+        Args: { p_approve: boolean; p_content_id: string; p_note?: string }
+        Returns: undefined
       }
       save_content: {
         Args: { p_content_id: string; p_payload: Json }
@@ -8073,6 +8537,10 @@ export type Database = {
       }
       save_safi_cosmetic: { Args: { p_config: Json }; Returns: Json }
       save_safi_event: { Args: { p_config: Json }; Returns: Json }
+      save_script: {
+        Args: { p_content_id: string; p_script: string }
+        Returns: undefined
+      }
       save_shooting: {
         Args: { p_payload: Json; p_shooting_id: string }
         Returns: string
@@ -8155,12 +8623,16 @@ export type Database = {
           deleted_at: string | null
           description: string | null
           due_at: string | null
+          equipment_ready_at: string | null
+          equipment_ready_by: string | null
           hashtags: string[]
           id: string
           is_client_visible: boolean
+          manager_note: string | null
           music_reference: string | null
           number: number
           plan_month: string
+          post_at: string | null
           priority: Database["public"]["Enums"]["priority_level"]
           project_id: string | null
           published_at: string | null
@@ -8172,6 +8644,7 @@ export type Database = {
           status_changed_at: string
           thumbnail_file_id: string | null
           title: string
+          topic: string | null
           updated_at: string
         }
         SetofOptions: {
@@ -8180,6 +8653,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_equipment_prepared: {
+        Args: {
+          p_content_id: string
+          p_equipment_id: string
+          p_prepared: boolean
+        }
+        Returns: undefined
       }
       set_game_center_difficulty: {
         Args: { p_difficulty: string; p_game_key: string }
@@ -8212,6 +8693,26 @@ export type Database = {
       set_sun_coin_campaign_status: {
         Args: { p_campaign: string; p_status: string }
         Returns: Json
+      }
+      set_work_hours: {
+        Args: { p_end: string; p_start: string; p_user_id: string }
+        Returns: undefined
+      }
+      site_apply: {
+        Args: {
+          p_brand: string
+          p_budget_amount: number
+          p_budget_label: string
+          p_fingerprint: string
+          p_first_name: string
+          p_instagram: string
+          p_last_name: string
+          p_phone: string
+          p_source_path: string
+          p_telegram: string
+          p_user_agent: string
+        }
+        Returns: string
       }
       site_gate_set_code: { Args: { p_code: string }; Returns: undefined }
       site_gate_status: { Args: never; Returns: Json }
@@ -8271,6 +8772,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      submit_script: { Args: { p_content_id: string }; Returns: undefined }
       system_auth_events: {
         Args: { p_limit?: number }
         Returns: {

@@ -1,5 +1,5 @@
 -- Rahbar: writes to the client thread (labelled "Rahbar"), gives directives in team chats, manages tasks,
--- but does not mark attendance. Admins answer clients too; nobody else can give directives. Rolled back.
+-- and corrects attendance. Admins answer clients too; nobody else can give directives. Rolled back.
 begin;
 create extension if not exists pgtap with schema extensions;
 grant execute on all functions in schema extensions to authenticated, anon;
@@ -46,7 +46,7 @@ select is((public.send_message(pg_temp.team_room(), 'Ertaga 9:00 da syomka', nul
 select throws_ok($$select public.send_message(pg_temp.client_room(), 'x', null, '{}', true)$$, '42501', null, 'directives stay inside the team');
 select ok((public.get_my_context() -> 'permissions') ? 'tasks.manage', 'the Rahbar manages tasks');
 select ok((public.get_my_context() -> 'permissions') ? 'shootings.manage', 'and shootings');
-select ok(not ((public.get_my_context() -> 'permissions') ? 'attendance.manage'), 'but does not mark attendance');
+select ok((public.get_my_context() -> 'permissions') ? 'attendance.manage', 'and corrects attendance');
 reset role;
 
 -- Admin

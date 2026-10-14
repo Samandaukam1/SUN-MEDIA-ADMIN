@@ -2,8 +2,8 @@ import Link from 'next/link';
 
 import { Icon } from '@/components/ui/Icon';
 import { requireStaff } from '@/lib/auth';
-import { loadMessages, CHAT_PAGE } from '@/lib/cabinet/partner-data';
-import { loadClientConversations, loadColleagues, loadMyChats, loadRoom } from '@/lib/chat';
+import { loadClientConversations, loadColleagues, loadMyChats, loadRoom, loadRoomMessages, ROOM_PAGE } from '@/lib/chat';
+import { isOnline, lastSeenLabel } from '@/lib/presence';
 import { agencyDateKey, formatTime } from '@/lib/time';
 import { ChatRoom } from './ChatRoom';
 import { NewChat } from './NewChat';
@@ -75,10 +75,10 @@ export async function ChatWorkspace({ mode, xona, oldin }: { mode: 'team' | 'cli
   const before = oldin && !Number.isNaN(Date.parse(oldin)) ? oldin : null;
   const [room, messages, colleagues] = await Promise.all([
     selected ? loadRoom(selected, context.userId) : null,
-    selected ? loadMessages(selected, before) : [],
+    selected ? loadRoomMessages(selected, before) : [],
     mode === 'team' ? loadColleagues(context.userId) : [],
   ]);
-  const older = selected && messages.length === CHAT_PAGE ? `${base}?xona=${selected}&oldin=${encodeURIComponent(messages[0].created_at)}` : null;
+  const older = selected && messages.length === ROOM_PAGE ? `${base}?xona=${selected}&oldin=${encodeURIComponent(messages[0].created_at)}` : null;
 
   return (
     <div className="space-y-4">
@@ -146,8 +146,12 @@ export async function ChatWorkspace({ mode, xona, oldin }: { mode: 'team' | 'cli
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{room.title}</p>
                   <p className="truncate text-[12.5px] text-muted">
-                    {room.subtitle}
-                    {room.kind !== 'direct' ? ` · ${room.members.map((m) => m.name).slice(0, 6).join(', ')}${room.members.length > 6 ? '…' : ''}` : ''}
+                    {room.kind === 'direct'
+                      ? (() => {
+                          const peer = room.members.find((m) => m.id !== context.userId);
+                          return peer && isOnline(peer.lastSeen) ? <span className="font-medium text-success">● Online</span> : `Oxirgi faollik: ${lastSeenLabel(peer?.lastSeen)}`;
+                        })()
+                      : `${room.subtitle} · ${room.members.filter((m) => isOnline(m.lastSeen)).length} online · ${room.members.map((m) => m.name).slice(0, 5).join(', ')}${room.members.length > 5 ? '…' : ''}`}
                   </p>
                 </div>
                 {room.clientId ? (
@@ -160,6 +164,8 @@ export async function ChatWorkspace({ mode, xona, oldin }: { mode: 'team' | 'cli
                 <ChatRoom
                   roomId={room.id}
                   me={context.userId}
+                  members={room.members}
+                  direct={room.kind === 'direct'}
                   messages={messages}
                   olderHref={older}
                   readOnly={!room.isMember}

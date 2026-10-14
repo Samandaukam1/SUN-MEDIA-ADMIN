@@ -16,9 +16,10 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   const unread = unreadTotal(await loadMyChats().catch(() => []));
   const sections = navigationFor(context).map((s) => (s.key === 'chat' ? { ...s, badge: unread } : s));
   const create: CreateItem[] = [
+    // "+ Vazifa yaratish" is the main action: content, script, equipment, shooting, montaj and post in one task.
+    can(context, 'tasks.manage') ? { href: '/work/tasks/yaratish', label: 'Vazifa yaratish', icon: 'checkSquare' as const, hint: 'Kontent, ssenariy, syomka, montaj, post' } : null,
+    can(context, 'tasks.manage') ? { href: '/work/tasks/new', label: 'Oddiy vazifa', icon: 'checkSquare' as const, hint: 'Bitta ish: kimga va qachongacha' } : null,
     can(context, 'content.manage') ? { href: '/work/content/new', label: 'Yangi kontent', icon: 'film' as const, hint: 'Reels, post, stories…' } : null,
-    can(context, 'shootings.manage') ? { href: '/work/shootings/new', label: 'Yangi syomka', icon: 'video' as const, hint: 'Vaqt, joy va jamoa' } : null,
-    can(context, 'tasks.manage') ? { href: '/work/tasks/new', label: 'Yangi vazifa', icon: 'checkSquare' as const, hint: 'Kimga va qachongacha' } : null,
     can(context, 'clients.create') ? { href: '/clients?new=1', label: 'Yangi mijoz', icon: 'briefcase' as const, hint: 'Kompaniya va login' } : null,
     can(context, 'employees.create') ? { href: '/team/new', label: 'Yangi xodim', icon: 'users' as const, hint: 'Lavozim, login va parol' } : null,
   ].filter((i) => i !== null);
@@ -28,6 +29,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
       sections={sections}
       create={create}
       user={{
+        id: context.userId,
         name: context.profile?.full_name || context.profile?.email || '—',
         role: context.roles.map((r) => r.name).join(', '),
         initials: initials(context.profile?.full_name ?? context.profile?.email ?? ''),

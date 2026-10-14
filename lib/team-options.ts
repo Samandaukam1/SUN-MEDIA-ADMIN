@@ -12,12 +12,13 @@ export type Option = { value: string; label: string; description?: string };
  */
 export async function loadEmployeeFormOptions(context: StaffContext) {
   const supabase = await createClient();
-  const [rolesRes, clientsRes, domainRes, catalogueRes, grantsRes] = await Promise.all([
+  const [rolesRes, clientsRes, domainRes, catalogueRes, grantsRes, skillsRes] = await Promise.all([
     supabase.from('roles').select('id, key, name, rank, description').eq('scope', 'staff').order('rank'),
     supabase.from('clients').select('id, name, code, industry').is('deleted_at', null).eq('status', 'active').order('name'),
     supabase.from('app_settings').select('value').eq('key', 'accounts.login_domain').maybeSingle(),
     supabase.from('permissions').select('key').eq('scope', 'staff').order('key'),
     supabase.from('role_permissions').select('permission_key, role:roles!inner(key, scope)').eq('role.scope', 'staff'),
+    supabase.from('skills').select('id, name').order('position').order('name'),
   ]);
   if (rolesRes.error) throw rolesRes.error;
   const roles = rolesRes.data;
@@ -40,5 +41,6 @@ export async function loadEmployeeFormOptions(context: StaffContext) {
     permissions: owner ? (catalogueRes.data ?? []).map((p) => p.key) : context.permissions.filter((p) => !p.startsWith('client.')),
     rolePermissions,
     loginDomain: typeof domainRes.data?.value === 'string' ? domainRes.data.value : 'sunmedia.uz',
+    skills: (skillsRes.data ?? []).map((s) => ({ value: s.id, label: s.name })),
   };
 }

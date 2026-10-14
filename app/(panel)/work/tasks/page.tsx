@@ -55,7 +55,16 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
       <PageHeader
         title="Vazifalar"
         description="Kim nima qilyapti va qachongacha."
-        actions={can(context, 'tasks.manage') ? <ButtonLink href="/work/tasks/new" variant="primary">+ Vazifa</ButtonLink> : null}
+        actions={
+          can(context, 'tasks.manage') ? (
+            <>
+              <ButtonLink href="/work/tasks/new">Oddiy vazifa</ButtonLink>
+              <ButtonLink href="/work/tasks/yaratish" variant="primary">
+                + Vazifa yaratish
+              </ButtonLink>
+            </>
+          ) : null
+        }
       />
       {params.created ? (
         <div className="mb-4">

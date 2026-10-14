@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import {
+  type BudgetOption,
   accentRuns,
   formatPhone,
   partnershipYears,
@@ -15,7 +16,6 @@ import {
   type SiteTestimonial,
 } from '@/lib/site/types';
 import { ApplicationForm } from './ApplicationForm';
-import { ApplyButton } from './ApplyButton';
 import { CountUp, GlassCard, Reveal, ScrollLine, SplitWords } from './motion';
 import { SocialRow } from './SiteFooter';
 import { SiteIcon } from './SiteIcon';
@@ -231,50 +231,6 @@ export function ServicesGrid({ services }: { services: SiteService[] }) {
                 ))}
               </ul>
             ) : null}
-          </GlassCard>
-        </Reveal>
-      ))}
-    </div>
-  );
-}
-
-/** Services page: one wide row per service with its details and an order button. */
-export function ServiceRows({ services }: { services: SiteService[] }) {
-  return (
-    <div className="flex flex-col gap-5">
-      {services.map((s, i) => (
-        <Reveal key={s.id}>
-          <GlassCard as="article" tilt={false} className="grid gap-8 rounded-[34px] p-7 sm:p-10 lg:grid-cols-[1.1fr_1fr] lg:gap-14">
-            <div>
-              <div className="mb-8 flex items-center gap-4">
-                <span className="grid size-16 place-items-center rounded-[20px] bg-[#d4fc18] text-[#0b0b0c] shadow-[0_16px_40px_-10px_rgb(212_252_24/0.55)]">
-                  <SiteIcon name={s.icon} size={28} strokeWidth={1.7} />
-                </span>
-                <span className="font-display tabular text-[15px] text-[#55555c]">{String(i + 1).padStart(2, '0')}</span>
-              </div>
-              <h2 className="font-display s-silver text-[28px] leading-tight font-medium tracking-[-0.03em] sm:text-[36px]">{s.title}</h2>
-              <p className="mt-4 text-[16px] leading-relaxed text-[#a8a8ac] sm:text-[17px]">{s.summary}</p>
-              {s.details ? <p className="mt-4 text-[15px] leading-relaxed whitespace-pre-line text-[#8e8e96]">{s.details}</p> : null}
-            </div>
-            <div className="flex flex-col justify-between gap-8">
-              {s.bullets.length ? (
-                <ul className="grid gap-3">
-                  {s.bullets.map((b) => (
-                    <li key={b} className="flex items-center gap-4 rounded-2xl border border-white/[0.07] bg-white/[0.025] px-5 py-4 text-[15px] text-[#e4e4e7]">
-                      <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#d4fc18]/12 text-[#d4fc18]">
-                        <SiteIcon name="check" size={14} strokeWidth={2.4} />
-                      </span>
-                      {b}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <span />
-              )}
-              <div>
-                <ApplyButton label="Shu xizmatga ariza" service={s.title} variant="glass" />
-              </div>
-            </div>
           </GlassCard>
         </Reveal>
       ))}
@@ -597,13 +553,13 @@ export function ContactCards({ settings }: { settings: SiteSettings }) {
 
 export function CtaSection({
   settings,
-  services,
+  budgets,
   source,
   title,
   subtitle,
 }: {
   settings: SiteSettings;
-  services: string[];
+  budgets: BudgetOption[];
   source: string;
   title?: string;
   subtitle?: string;
@@ -667,7 +623,7 @@ export function CtaSection({
             </div>
             <Reveal delay={0.1}>
               <div className="rounded-[30px] border border-white/[0.07] bg-[#0b0b0c]/55 p-5 shadow-[inset_0_1px_0_rgb(255_255_255/0.06)] sm:p-8">
-                <ApplicationForm labels={settings} services={services} source={source} />
+                <ApplicationForm labels={settings} budgets={budgets} source={source} />
               </div>
             </Reveal>
           </div>

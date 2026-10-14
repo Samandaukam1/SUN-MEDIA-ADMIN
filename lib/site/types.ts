@@ -222,3 +222,16 @@ export function partnershipYears(sinceYear: number | null, now = new Date()): nu
   if (!sinceYear) return null;
   return Math.max(0, now.getFullYear() - sinceYear);
 }
+
+/** Budget choices on the application form: the published tariffs with a price (the visitor may also type a sum). */
+export type BudgetOption = { label: string; amount: number; plan: string };
+
+export function budgetOptions(plans: SitePlan[]): BudgetOption[] {
+  return plans
+    .filter((p) => p.priceMode !== 'negotiable' && p.price !== null && Number(p.price) > 0)
+    .map((p) => ({
+      plan: p.name,
+      amount: Number(p.price),
+      label: `${p.name} — ${p.priceMode === 'from' ? 'dan ' : ''}${formatPrice(Number(p.price), p.currency)}${p.billingPeriod === 'monthly' ? ' / oy' : ''}`,
+    }));
+}

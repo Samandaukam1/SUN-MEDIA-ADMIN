@@ -6,14 +6,18 @@ import { CabinetHeader } from '@/components/cabinet/CabinetHeader';
 import { Panel } from '@/components/cabinet/partner/parts';
 import { fileSize } from '@/components/cabinet/partner/parts';
 import { StatusPill } from '@/components/cabinet/StatusPill';
+import { ScriptEditor } from '@/components/cabinet/ScriptEditor';
 import { TaskComment, TaskStatusButtons, TaskUpload } from '@/components/cabinet/TaskControls';
+import { NotificationBell } from '@/components/live/NotificationBell';
+import { PresenceHeartbeat } from '@/components/live/PresenceHeartbeat';
 import { SiteIcon } from '@/components/site/SiteIcon';
 import { getSessionContext } from '@/lib/auth';
 import { homeFor } from '@/lib/cabinet/routing';
 import { assigneeActions } from '@/lib/cabinet/tasks';
-import { PRIORITY, TASK_TYPE } from '@/lib/labels';
+import { CONTENT_STATUS, CONTENT_TYPE, PRIORITY, TASK_TYPE, TEAM_ROLE_LABEL } from '@/lib/labels';
 import { createClient } from '@/lib/supabase/server';
 import { formatShortDateTime } from '@/lib/time';
+import { STAGE_LABEL, stageStatusLabel, type Stage } from '@/lib/workflow-shared';
 
 export const metadata: Metadata = { title: 'Vazifa' };
 
@@ -34,11 +38,11 @@ export default async function EmployeeTaskPage({ params }: { params: Promise<{ i
   const { data: task } = await supabase
     .from('tasks')
     .select(
-      `id, title, description, task_type, status, priority, starts_at, due_at, started_at, completed_at,
+      `id, title, description, task_type, stage, status, priority, starts_at, due_at, started_at, completed_at,
        client:clients(id, name),
        project:projects!tasks_project_id_client_id_fkey(id, name),
-       content:content_items!tasks_content_id_client_id_fkey(id, title),
-       shooting:shootings!tasks_shooting_id_client_id_fkey(id, title, starts_at),
+       content:content_items!tasks_content_id_client_id_fkey(id, title, topic, content_type, description, manager_note, script, post_at, status, equipment_ready_at),
+       shooting:shootings!tasks_shooting_id_client_id_fkey(id, title, starts_at, location_name),
        creator:profiles!tasks_created_by_fkey(${PERSON}),
        checklist:task_checklist_items(id, title, is_done, position),
        mine:task_assignments!inner(user_id)`,
@@ -49,7 +53,8 @@ export default async function EmployeeTaskPage({ params }: { params: Promise<{ i
     .maybeSingle();
   if (!task) notFound();
 
-  const [comments, files] = await Promise.all([
+  const stage = (task.stage as Stage | null) ?? null;
+  const [comments, files, myRoles, gear] = await Promise.all([
     supabase
       .from('task_comments')
       .select(`id, body, created_at, author:profiles!task_comments_author_id_fkey(${PERSON})`)
@@ -62,7 +67,16 @@ export default async function EmployeeTaskPage({ params }: { params: Promise<{ i
       .eq('status', 'uploaded')
       .is('deleted_at', null)
       .order('created_at', { ascending: false }),
+    task.content
+      ? supabase.from('content_assignments').select('role').eq('content_id', task.content.id).eq('user_id', context.userId)
+      : Promise.resolve({ data: [] as { role: string }[] }),
+    task.content && (stage === 'shooting' || stage === 'equipment')
+      ? supabase.from('content_equipment').select('prepared_at, item:equipment(name)').eq('content_id', task.content.id)
+      : Promise.resolve({ data: [] as { prepared_at: string | null; item: { name: string } | null }[] }),
   ]);
+  // The last word from someone else (e.g. why the script came back).
+  const reviewNote = [...(comments.data ?? [])].reverse().find((c) => c.author?.id !== context.userId)?.body ?? null;
+  const roles = (myRoles.data ?? []).map((r) => TEAM_ROLE_LABEL[r.role as keyof typeof TEAM_ROLE_LABEL] ?? r.role);
 
   const late = ['todo', 'in_progress', 'revision'].includes(task.status) && task.due_at && new Date(task.due_at).getTime() < Date.now();
   const checklist = [...(task.checklist ?? [])].sort((a, b) => a.position - b.position);
@@ -70,7 +84,13 @@ export default async function EmployeeTaskPage({ params }: { params: Promise<{ i
 
   return (
     <>
-      <CabinetHeader name={context.profile?.full_name || context.profile?.email || ''} role={role} home="/xodim" />
+      <PresenceHeartbeat />
+      <CabinetHeader
+        name={context.profile?.full_name || context.profile?.email || ''}
+        role={role}
+        home="/xodim"
+        extra={<NotificationBell userId={context.userId} area="staff" tone="dark" />}
+      />
       <main className="mx-auto max-w-4xl space-y-6 px-4 pt-8 pb-20 sm:px-8 sm:pt-10">
         <Link href="/xodim" className="inline-flex items-center gap-2 text-[13.5px] text-[#a8a8ac] hover:text-white">
           <SiteIcon name="arrowRight" size={15} className="rotate-180" /> Vazifalarim
@@ -78,17 +98,25 @@ export default async function EmployeeTaskPage({ params }: { params: Promise<{ i
 
         <Panel>
           <div className="flex flex-wrap items-center gap-2">
-            <StatusPill status={task.status} />
-            <span className="text-[12.5px] text-[#8e8e96]">{TASK_TYPE[task.task_type]}</span>
+            {stage ? (
+              <span className="inline-flex h-6 items-center rounded-full bg-white/[0.06] px-2.5 text-[11.5px] font-semibold text-[#d9d9de]">{stageStatusLabel(stage, task.status)}</span>
+            ) : (
+              <StatusPill status={task.status} />
+            )}
+            <span className="text-[12.5px] text-[#8e8e96]">{stage ? STAGE_LABEL[stage] : TASK_TYPE[task.task_type]}</span>
             <span className="text-[12.5px] text-[#8e8e96]">· {PRIORITY[task.priority].label} muhimlik</span>
           </div>
           <h1 className="font-display mt-4 text-[24px] leading-snug font-medium tracking-[-0.02em] break-words text-white sm:text-[30px]">{task.title}</h1>
           <dl className="mt-5 grid gap-x-6 gap-y-3 text-[13.5px] sm:grid-cols-2">
             {[
-              ['Mijoz', task.client?.name ?? 'Ichki vazifa'],
+              ['Mijoz', task.client?.name ?? (task.content ? null : 'Ichki vazifa')],
               ['Loyiha', task.project?.name],
-              ['Kontent', task.content?.title],
-              ['Syomka', task.shooting ? `${task.shooting.title} · ${formatShortDateTime(task.shooting.starts_at)}` : null],
+              ['Kontent', task.content ? `${task.content.title} · ${CONTENT_TYPE[task.content.content_type]}` : null],
+              ['Mavzu', task.content?.topic],
+              ['Bajarish bosqichi', task.content ? CONTENT_STATUS[task.content.status].label : null],
+              ['Rolingiz', roles.join(', ') || null],
+              ['Syomka', task.shooting ? `${formatShortDateTime(task.shooting.starts_at)}${task.shooting.location_name ? ` · ${task.shooting.location_name}` : ''}` : null],
+              ['Post', task.content?.post_at ? formatShortDateTime(task.content.post_at) : null],
               ['Muddat', task.due_at ? `${formatShortDateTime(task.due_at)}${late ? ' · kechikdi' : ''}` : 'Muddatsiz'],
               ['Topshirgan', task.creator?.full_name],
               task.completed_at ? ['Bajarildi', formatShortDateTime(task.completed_at)] : null,
@@ -102,8 +130,37 @@ export default async function EmployeeTaskPage({ params }: { params: Promise<{ i
               ))}
           </dl>
           {task.description ? <p className="mt-5 border-t border-white/[0.06] pt-5 text-[14.5px] leading-relaxed whitespace-pre-wrap text-[#d9d9de]">{task.description}</p> : null}
-          <TaskStatusButtons taskId={task.id} actions={assigneeActions(task.status)} />
+          {task.content?.manager_note ? (
+            <p className="mt-4 rounded-2xl bg-white/[0.04] px-4 py-3 text-[13.5px] leading-relaxed whitespace-pre-wrap text-[#d9d9de]">
+              <span className="font-semibold text-white">Rahbar izohi: </span>
+              {task.content.manager_note}
+            </p>
+          ) : null}
+          <TaskStatusButtons taskId={task.id} actions={assigneeActions(task.status, stage)} />
         </Panel>
+
+        {stage === 'script' && task.content ? (
+          <Panel title="Ssenariy" note="yozing, saqlang va Rahbarga yuboring">
+            <ScriptEditor contentId={task.content.id} initial={task.content.script ?? ''} status={task.status} reviewNote={task.status === 'revision' ? reviewNote : null} />
+          </Panel>
+        ) : task.content?.script && (stage === 'shooting' || stage === 'editing') ? (
+          <Panel title="Ssenariy">
+            <p className="font-mono text-[13.5px] leading-relaxed whitespace-pre-wrap text-[#d9d9de]">{task.content.script}</p>
+          </Panel>
+        ) : null}
+
+        {gear.data?.length ? (
+          <Panel title="Syomka jihozlari" note={task.content?.equipment_ready_at ? 'Admin tasdiqladi — tayyor' : 'Admin tayyorlamoqda'}>
+            <ul className="flex flex-wrap gap-2">
+              {gear.data.map((g, i) => (
+                <li key={i} className={`rounded-full px-3 py-1.5 text-[13px] ${g.prepared_at ? 'bg-emerald-400/12 text-emerald-300' : 'bg-white/[0.05] text-[#d9d9de]'}`}>
+                  {g.prepared_at ? '✓ ' : ''}
+                  {g.item?.name}
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        ) : null}
 
         {checklist.length ? (
           <Panel title="Bosqichlar" note={`${checklist.filter((c) => c.is_done).length} / ${checklist.length}`}>

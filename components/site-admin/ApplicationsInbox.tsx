@@ -24,6 +24,10 @@ export type Application = {
   link_url: string | null;
   service: string;
   message: string;
+  instagram: string | null;
+  telegram: string | null;
+  budget_amount: number | null;
+  budget_label: string | null;
   source_path: string;
   status: 'new' | 'seen' | 'archived';
   created_at: string;
@@ -64,10 +68,13 @@ export function ApplicationsInbox({ items }: { items: Application[] }) {
                   {STATUS[a.status].label}
                 </Badge>
                 {a.service ? <Badge tone="info">{a.service}</Badge> : null}
+                {a.budget_label || a.budget_amount ? (
+                  <Badge tone="accent">Byudjet: {a.budget_label || `${Number(a.budget_amount).toLocaleString('ru-RU')} so‘m`}</Badge>
+                ) : null}
               </div>
               <p className="mt-1 text-sm text-muted">
                 {formatShortDateTime(a.created_at)} · {a.source_path}
-                {a.company ? ` · ${a.company}` : ''}
+                {a.company ? ` · Brend: ${a.company}` : ''}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -96,7 +103,17 @@ export function ApplicationsInbox({ items }: { items: Application[] }) {
               <Icon name="phone" size={15} /> {formatPhone(a.phone)}
             </a>
             <CopyButton value={a.phone} label="Raqamni nusxalash" />
-            {a.link_url ? (
+            {a.instagram ? (
+              <a href={`https://instagram.com/${a.instagram}`} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface-2 px-3.5 text-sm hover:border-line-strong">
+                Instagram: <span className="font-semibold">@{a.instagram}</span>
+              </a>
+            ) : null}
+            {a.telegram ? (
+              <a href={`https://t.me/${a.telegram}`} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface-2 px-3.5 text-sm hover:border-line-strong">
+                Telegram: <span className="font-semibold">@{a.telegram}</span>
+              </a>
+            ) : null}
+            {a.link_url && !a.instagram && !a.telegram ? (
               <a
                 href={a.link_url}
                 target="_blank"

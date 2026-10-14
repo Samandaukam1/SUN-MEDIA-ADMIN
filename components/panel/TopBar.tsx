@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
+import { NotificationBell } from '@/components/live/NotificationBell';
 import { Icon } from '@/components/ui/Icon';
 import { cn } from '@/components/ui/cn';
 import { locate, type VisibleSection } from '@/lib/nav';
@@ -35,7 +36,7 @@ function SearchBox({ className, autoFocus }: { className?: string; autoFocus?: b
  * Where am I (section + its pages as tabs) and one search box for everything. On phones: a menu button for the
  * sidebar drawer, a search button that opens a full-width search row, and the tabs on their own scrollable row.
  */
-export function TopBar({ sections, onMenu, menuOpen = false }: { sections: VisibleSection[]; onMenu?: () => void; menuOpen?: boolean }) {
+export function TopBar({ sections, onMenu, menuOpen = false, userId }: { sections: VisibleSection[]; onMenu?: () => void; menuOpen?: boolean; userId: string }) {
   const pathname = usePathname();
   const here = locate(sections, pathname);
   const section = here?.section;
@@ -80,6 +81,7 @@ export function TopBar({ sections, onMenu, menuOpen = false }: { sections: Visib
           ) : null}
         </div>
         <SearchBox className="hidden w-72 shrink-0 md:block" />
+        <NotificationBell userId={userId} area="panel" />
         <button
           type="button"
           onClick={() => setSearching((v) => !v)}

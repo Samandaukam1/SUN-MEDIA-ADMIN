@@ -58,6 +58,9 @@ alter table public.site_applications
   add column budget_amount numeric(14, 2) check (budget_amount >= 0),
   add column budget_label text check (char_length(budget_label) <= 120);
 
+-- The Rahbar sees new applications on the panel's home page.
+create policy "leadership reads applications" on public.site_applications for select to authenticated using ((select private.is_leadership()));
+
 create function public.site_apply(
   p_first_name text,
   p_last_name text,
@@ -110,8 +113,9 @@ begin
     private.users_with_permission('site.manage') || private.leadership_ids(),
     'site.application',
     'Saytdan yangi ariza: ' || v_brand,
-    v_first || ' ' || v_last || ' · ' || v_phone || ' · byudjet ' || to_char(p_budget_amount, 'FM999G999G999G999') || ' so‘m',
-    jsonb_build_object('application_id', v_id, 'href', '/site/applications'),
+    v_first || ' ' || v_last || ' · ' || v_phone || ' · byudjet: '
+      || coalesce(nullif(btrim(coalesce(p_budget_label, '')), ''), to_char(p_budget_amount, 'FM999G999G999G999') || ' so‘m'),
+    jsonb_build_object('application_id', v_id, 'href', '/panel#arizalar'),
     'site_applications', v_id, null, 'high'
   );
   return v_id;

@@ -1,112 +1,76 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { AddClientDialog } from '@/components/clients/AddClientDialog';
 import { PageHeader } from '@/components/panel/PageHeader';
-import { EmptyRow } from '@/components/panel/Stat';
-import { Avatar } from '@/components/ui/Avatar';
-import { Badge } from '@/components/ui/Badge';
-import { Card } from '@/components/ui/Card';
-import { Icon } from '@/components/ui/Icon';
+import { ClientsBoard, type ClientRow } from '@/components/clients/ClientsBoard';
 import { can, requireStaff } from '@/lib/auth';
 import { CLIENT_STATUS, lookup } from '@/lib/labels';
 import { createClient } from '@/lib/supabase/server';
+import type { Billing } from '@/lib/billing';
+import { agencyDateKey } from '@/lib/time';
 
 export const metadata: Metadata = { title: 'Mijozlar' };
 
-export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; new?: string }> }) {
+export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ status?: string; new?: string }> }) {
   const context = await requireStaff();
   if (!can(context, 'clients.read_all') && !can(context, 'clients.manage')) redirect('/no-access?reason=permission');
   const params = await searchParams;
   const supabase = await createClient();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = agencyDateKey();
+  const finance = can(context, 'finance.read') || can(context, 'subscriptions.manage');
 
-  const { data, error } = await supabase
-    .from('clients')
-    .select(
-      `id, name, code, industry, logo_url, status,
-       members:client_members(user_id),
-       team:client_team_members(user_id),
-       subscriptions:client_subscriptions(status, starts_on, ends_on, plan:plans(name))`,
-    )
-    .is('deleted_at', null)
-    .order('name');
+  const [{ data, error }, billing] = await Promise.all([
+    supabase
+      .from('clients')
+      .select(
+        `id, name, code, industry, logo_url, status,
+         contacts:client_contacts(full_name, phone, is_primary, deleted_at),
+         members:client_members(role:roles(key), profile:profiles!client_members_user_id_fkey(full_name, phone)),
+         team:client_team_members(user_id, person:profiles!client_team_members_user_id_fkey(full_name)),
+         subscriptions:client_subscriptions(status, starts_on, ends_on, plan:plans(name)),
+         contents:content_items(count)`,
+      )
+      .is('deleted_at', null)
+      .order('name'),
+    // Money only for people with finance rights; the database returns nothing to anyone else.
+    finance ? supabase.from('client_billing').select('*') : Promise.resolve({ data: [] as Billing[] & { client_id: string }[] }),
+  ]);
   if (error) throw error;
+  const money = new Map(((billing.data ?? []) as (Billing & { client_id: string })[]).map((b) => [b.client_id, b]));
 
-  const q = params.q?.trim().toLowerCase() ?? '';
-  const clients = data
-    .filter((c) => !q || `${c.name} ${c.code} ${c.industry ?? ''}`.toLowerCase().includes(q))
-    .filter((c) => !params.status || c.status === params.status);
+  const rows: ClientRow[] = data.map((c) => {
+    const status = lookup(CLIENT_STATUS, c.status, CLIENT_STATUS.active);
+    const contact = c.contacts.filter((x) => !x.deleted_at).sort((a, b) => Number(b.is_primary) - Number(a.is_primary))[0];
+    const owner = c.members.find((m) => m.role?.key === 'client_owner')?.profile ?? c.members[0]?.profile;
+    const current = c.subscriptions.find((s) => s.status === 'active' && s.starts_on <= today && s.ends_on >= today);
+    return {
+      id: c.id,
+      name: c.name,
+      code: c.code,
+      industry: c.industry,
+      logo: c.logo_url,
+      active: c.status === 'active',
+      statusLabel: c.status === 'active' ? 'Faol' : status.label,
+      statusTone: status.tone,
+      contact: contact?.full_name ?? owner?.full_name ?? null,
+      phone: contact?.phone ?? owner?.phone ?? null,
+      plan: current?.plan?.name ?? null,
+      team: [...new Set(c.team.map((t) => t.person?.full_name).filter((n): n is string => !!n))],
+      contents: c.contents?.[0]?.count ?? 0,
+      billing: money.get(c.id) ?? null,
+    };
+  });
+  const initial = params.status === 'active' ? 'active' : params.status === 'inactive' ? 'inactive' : 'all';
 
   return (
     <div>
       <PageHeader
         title="Barcha mijozlar"
-        description="Kompaniyalar, ularning loginlari, SUN MEDIA jamoasi va tariflari."
+        description="Mijozlar, mas’ul shaxslar, tariflar, kelishilgan narx va to‘lovlar."
         actions={can(context, 'clients.create') ? <AddClientDialog defaultOpen={params.new === '1'} /> : null}
       />
-
-      <form className="mb-6 flex flex-wrap gap-3" role="search">
-        <label className="relative min-w-64 flex-1">
-          <span className="sr-only">Qidirish</span>
-          <Icon name="search" size={16} className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-subtle" />
-          <input name="q" defaultValue={params.q} placeholder="Nomi, kodi yoki sohasi" className="h-10 w-full rounded-xl border border-line bg-surface pr-3 pl-10 text-sm outline-none focus:border-accent" />
-        </label>
-        <select name="status" defaultValue={params.status ?? ''} className="h-10 rounded-xl border border-line bg-surface px-3 text-sm" aria-label="Holat">
-          <option value="">Barcha holatlar</option>
-          {Object.entries(CLIENT_STATUS).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v.label}
-            </option>
-          ))}
-        </select>
-        <button type="submit" className="h-10 rounded-xl border border-line-strong bg-surface px-4 text-sm font-medium hover:bg-surface-2">
-          Filtrlash
-        </button>
-      </form>
-
-      {clients.length === 0 ? (
-        <EmptyRow>{data.length === 0 ? 'Hali mijoz qo‘shilmagan.' : 'Filtrga mos mijoz topilmadi.'}</EmptyRow>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {clients.map((c) => {
-            const status = lookup(CLIENT_STATUS, c.status, CLIENT_STATUS.active);
-            const current = c.subscriptions.find((s) => s.status === 'active' && s.starts_on <= today && s.ends_on >= today);
-            const team = new Set(c.team.map((t) => t.user_id)).size;
-            return (
-              <Link key={c.id} href={`/clients/${c.id}`} className="block">
-                <Card className="flex h-full flex-col gap-4 transition-colors hover:border-line-strong">
-                  <div className="flex items-center gap-3">
-                    <Avatar name={c.name} url={c.logo_url} size={44} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[15px] font-semibold">{c.name}</p>
-                      <p className="truncate text-[13px] text-muted">{[c.code, c.industry].filter(Boolean).join(' · ')}</p>
-                    </div>
-                    <Badge tone={status.tone} dot>
-                      {status.label}
-                    </Badge>
-                  </div>
-                  <dl className="grid grid-cols-3 gap-2 border-t border-line pt-4 text-center">
-                    <Metric label="Tarif" value={current?.plan?.name ?? '—'} />
-                    <Metric label="Jamoa" value={String(team)} />
-                    <Metric label="Loginlar" value={String(c.members.length)} />
-                  </dl>
-                </Card>
-              </Link>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-[11px] tracking-[0.06em] text-subtle uppercase">{label}</dt>
-      <dd className="mt-1 truncate text-sm font-semibold">{value}</dd>
+      <ClientsBoard rows={rows} initial={initial} today={today} finance={finance} />
     </div>
   );
 }

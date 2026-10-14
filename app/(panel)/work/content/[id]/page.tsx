@@ -9,12 +9,14 @@ import { Card, SectionTitle } from '@/components/ui/Card';
 import { cn } from '@/components/ui/cn';
 import { Tabs } from '@/components/ui/Tabs';
 import { StatusChanger } from '@/components/work/StatusChanger';
+import { WorkflowPanel } from '@/components/work/WorkflowPanel';
 import { setContentStatusAction } from '@/lib/actions/work';
 import { can, requireStaff } from '@/lib/auth';
 import { CONTENT_STAGES, isOverdue, responsibleRole } from '@/lib/content';
 import { CONTENT_STATUS, CONTENT_TYPE, lookup, PLATFORM_LABEL, PRIORITY, PUBLICATION_STATUS, TEAM_ROLE_LABEL, VERSION_STATUS } from '@/lib/labels';
 import { createClient } from '@/lib/supabase/server';
 import { formatShortDateTime } from '@/lib/time';
+import { loadPeople, loadWorkflow } from '@/lib/workflow';
 
 export const metadata: Metadata = { title: 'Kontent' };
 
@@ -43,6 +45,7 @@ export default async function ContentPage({ params, searchParams }: { params: Pr
       .from('content_items')
       .select(
         `id, number, title, content_type, status, priority, description, script, caption, hashtags, due_at, client_approval_due_at, plan_month, is_client_visible, created_at,
+         topic, manager_note, post_at, equipment_ready_at, ready_by:profiles!content_items_equipment_ready_by_fkey(full_name),
          client:clients(id, name), project:projects!content_items_project_id_client_id_fkey(name),
          shooting:shootings!content_items_shooting_id_client_id_fkey(title, starts_at, location_name),
          team:content_assignments(role, person:profiles!content_assignments_user_id_fkey(id, full_name)),
@@ -58,6 +61,9 @@ export default async function ContentPage({ params, searchParams }: { params: Pr
   ]);
   if (error) throw error;
   if (!c) notFound();
+  const roleKeys = context.roles.map((r) => r.key);
+  const leads = roleKeys.some((k) => ['system_owner', 'owner', 'director', 'admin'].includes(k));
+  const [workflow, people] = await Promise.all([loadWorkflow(c.id), leads ? loadPeople() : Promise.resolve([])]);
 
   const status = lookup(CONTENT_STATUS, c.status, CONTENT_STATUS.idea);
   const current = CONTENT_STAGES.findIndex((s) => s.statuses.includes(c.status));
@@ -118,6 +124,15 @@ export default async function ContentPage({ params, searchParams }: { params: Pr
         ))}
       </ol>
 
+      <WorkflowPanel
+        contentId={c.id}
+        stages={workflow.stages}
+        equipment={workflow.equipment}
+        equipmentReady={c.equipment_ready_at ? { at: c.equipment_ready_at, by: c.ready_by?.full_name ?? null } : null}
+        editors={people.filter((p) => p.skills.some((s) => s.workflowRole === 'editor')).map((p) => ({ id: p.id, name: p.name }))}
+        can={{ reviewScript: can(context, 'content.manage'), manageEditing: leads }}
+      />
+
       <div className="grid gap-8 xl:grid-cols-[1fr_320px]">
         <div>
           <Tabs items={TABS.map((t) => ({ key: t.key, label: t.label, href: `/work/content/${c.id}?tab=${t.key}` }))} active={tab} />
@@ -127,12 +142,15 @@ export default async function ContentPage({ params, searchParams }: { params: Pr
               <Card>
                 <dl className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
                   <Info label="Mijoz" value={c.client?.name} />
+                  <Info label="Mavzu" value={c.topic} />
                   <Info label="Loyiha" value={c.project?.name} />
                   <Info label="Muhimlik" value={lookup(PRIORITY, c.priority, PRIORITY.normal).label} />
                   <Info label="Mijoz ko‘radimi" value={c.is_client_visible ? 'Ha' : 'Yo‘q, faqat jamoa'} />
                   <Info label="Syomka" value={c.shooting ? `${formatShortDateTime(c.shooting.starts_at)} · ${c.shooting.location_name ?? c.shooting.title}` : null} />
                   <Info label="Montaj muddati" value={c.due_at ? formatShortDateTime(c.due_at) : null} danger={overdue} />
+                  <Info label="Post vaqti" value={c.post_at ? formatShortDateTime(c.post_at) : null} />
                 </dl>
+                {c.manager_note ? <p className="mt-4 rounded-xl bg-surface-2 px-4 py-3 text-sm whitespace-pre-wrap">{c.manager_note}</p> : null}
               </Card>
               <section>
                 <SectionTitle>Post</SectionTitle>

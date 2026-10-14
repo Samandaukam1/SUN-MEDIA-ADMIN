@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation';
 
 import { AccountActions } from '@/components/accounts/AccountActions';
 import { AddClientUserDialog } from '@/components/clients/AddClientUserDialog';
+import { BillingCard } from '@/components/clients/BillingCard';
 import { ClientProfileForm } from '@/components/clients/ClientProfileForm';
 import { HomeLogoField } from '@/components/clients/HomeLogoField';
 import { IntegrationsTab } from '@/components/integrations/IntegrationsTab';
@@ -18,9 +19,10 @@ import { Badge } from '@/components/ui/Badge';
 import { Card, SectionTitle } from '@/components/ui/Card';
 import { Tabs } from '@/components/ui/Tabs';
 import { can, requireStaff } from '@/lib/auth';
-import { ACCOUNT_STATUS, CLIENT_STATUS, lookup, TEAM_ROLE_LABEL } from '@/lib/labels';
+import type { Billing } from '@/lib/billing';
+import { ACCOUNT_STATUS, CLIENT_STATUS, CONTENT_STATUS, CONTENT_TYPE, lookup, TEAM_ROLE_LABEL } from '@/lib/labels';
 import { createClient } from '@/lib/supabase/server';
-import { formatShortDateTime } from '@/lib/time';
+import { agencyDateKey, formatShortDateTime } from '@/lib/time';
 
 export const metadata: Metadata = { title: 'Mijoz' };
 
@@ -59,6 +61,30 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
 
   const manage = can(context, 'clients.manage');
   const status = lookup(CLIENT_STATUS, client.status, CLIENT_STATUS.active);
+  const today = agencyDateKey();
+  const finance = can(context, 'finance.read') || can(context, 'subscriptions.manage');
+
+  // CRM card: contact, tariff and its contents, money (finance only — the database returns nothing to others), contents.
+  const [contact, subscription, billing, contents] =
+    active === 'overview'
+      ? await Promise.all([
+          supabase.from('client_contacts').select('full_name, phone, position').eq('client_id', id).is('deleted_at', null).order('is_primary', { ascending: false }).limit(1).maybeSingle(),
+          supabase
+            .from('client_subscriptions')
+            .select('status, starts_on, ends_on, plan:plans(name, price, currency, features:plan_features(quantity, is_included, service:service_types(name, unit)))')
+            .eq('client_id', id)
+            .eq('status', 'active')
+            .lte('starts_on', today)
+            .gte('ends_on', today)
+            .order('starts_on', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          finance ? supabase.from('client_billing').select('*').eq('client_id', id).maybeSingle() : Promise.resolve({ data: null }),
+          supabase.from('content_items').select('id, title, status, content_type, created_at').eq('client_id', id).is('deleted_at', null).order('created_at', { ascending: false }).limit(8),
+        ])
+      : [null, null, null, null];
+  const owner = client.members.find((m) => m.role?.key === 'client_owner')?.profile ?? client.members[0]?.profile;
+  const plan = subscription?.data?.plan ?? null;
 
   let staffOptions: { id: string; name: string; hint?: string | null }[] = [];
   if (active === 'team' && manage) {
@@ -104,6 +130,74 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       />
       <Tabs items={tabs} active={active} />
 
+      {active === 'overview' ? (
+        <div className="mb-6 grid gap-6 xl:grid-cols-[1.2fr_1fr]">
+          <Card>
+            <h2 className="mb-2 text-[15px] font-semibold">Mijoz kartasi</h2>
+            <dl className="divide-y divide-line text-sm">
+              {[
+                ['Brend', client.name],
+                ['Mas’ul shaxs', contact?.data?.full_name ?? owner?.full_name ?? '—'],
+                ['Telefon', contact?.data?.phone ?? owner?.phone ?? '—'],
+                ['Holat', client.status === 'active' ? 'Faol' : 'Nofaol'],
+                ['Tarif', plan?.name ?? 'Tarif biriktirilmagan'],
+                ['Mas’ul xodimlar', client.team.map((t) => t.person?.full_name).filter(Boolean).join(', ') || '—'],
+              ].map(([k, v]) => (
+                <div key={k} className="flex items-start justify-between gap-4 py-2.5">
+                  <dt className="text-muted">{k}</dt>
+                  <dd className="text-right font-semibold">{v}</dd>
+                </div>
+              ))}
+            </dl>
+            {plan?.features?.length ? (
+              <div className="mt-3">
+                <p className="mb-2 text-[11px] font-semibold tracking-[0.08em] text-subtle uppercase">Tarif tarkibi</p>
+                <ul className="flex flex-wrap gap-1.5">
+                  {plan.features
+                    .filter((f) => f.is_included)
+                    .map((f, i) => (
+                      <li key={i} className="rounded-full bg-surface-2 px-2.5 py-1 text-[12.5px]">
+                        {f.service?.name ?? '—'}
+                        {f.quantity ? ` — ${f.quantity}${f.service?.unit ? ` ${f.service.unit}` : ''}` : ''}
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            ) : null}
+            <div className="mt-4">
+              <p className="mb-2 text-[11px] font-semibold tracking-[0.08em] text-subtle uppercase">Shu mijoz uchun kontentlar</p>
+              {contents?.data?.length ? (
+                <ul className="divide-y divide-line rounded-xl border border-line">
+                  {contents.data.map((c) => {
+                    const st = lookup(CONTENT_STATUS, c.status, CONTENT_STATUS.idea);
+                    return (
+                      <li key={c.id}>
+                        <Link href={`/work/content/${c.id}`} className="flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-surface-2">
+                          <span className="min-w-0 flex-1 truncate font-medium">{c.title}</span>
+                          <span className="shrink-0 text-[12px] text-muted">{lookup(CONTENT_TYPE, c.content_type, '')}</span>
+                          <Badge tone={st.tone}>{st.label}</Badge>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="text-[13px] text-muted">Hali kontent yo‘q.</p>
+              )}
+            </div>
+          </Card>
+          {finance ? (
+            <BillingCard
+              clientId={client.id}
+              billing={(billing?.data as Billing | null) ?? null}
+              listPrice={plan?.price != null ? Number(plan.price) : null}
+              listCurrency={plan?.currency ?? 'UZS'}
+              canEdit={can(context, 'subscriptions.manage')}
+              today={today}
+            />
+          ) : null}
+        </div>
+      ) : null}
       {active === 'overview' && manage ? (
         <Card className="mb-6 max-w-3xl">
           <h2 className="mb-4 text-[15px] font-semibold">Bosh sahifa logosi</h2>

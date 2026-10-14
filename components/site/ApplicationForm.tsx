@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useActionState, useEffect, useId, useRef, useState } from 'react';
 
 import { submitApplication, type ApplicationState } from '@/lib/site/actions';
-import type { SiteSettings } from '@/lib/site/types';
+import type { BudgetOption, SiteSettings } from '@/lib/site/types';
 import { SiteIcon } from './SiteIcon';
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -73,47 +73,42 @@ const input =
 
 export function ApplicationForm({
   labels,
-  services,
+  budgets,
   source,
   initialService,
   onDone,
 }: {
   labels: FormLabels;
-  services: string[];
+  budgets: BudgetOption[];
   source: string;
+  /** What the visitor clicked ("Tarif: Standart"): that tariff's budget is chosen in advance. */
   initialService?: string;
   onDone?: () => void;
 }) {
   const uid = useId();
   const [state, action, pending] = useActionState<ApplicationState, FormData>(submitApplication, { status: 'idle' });
   // Every field is controlled: React resets uncontrolled fields after each action, even when it returns errors.
-  const [name, setName] = useState('');
-  const [company, setCompany] = useState('');
-  const [message, setMessage] = useState('');
+  const [first, setFirst] = useState('');
+  const [last, setLast] = useState('');
+  const [brand, setBrand] = useState('');
   const [phone, setPhone] = useState('');
-  const [link, setLink] = useState('');
-  const [service, setService] = useState(initialService ?? '');
+  const [instagram, setInstagram] = useState('');
+  const [telegram, setTelegram] = useState('');
+  const preset = () => budgets.findIndex((b) => initialService?.toLowerCase().includes(b.plan.toLowerCase()));
+  const [choice, setChoice] = useState<number>(preset);
+  const [custom, setCustom] = useState('');
   const [startedAt, setStartedAt] = useState(0);
-  const [canPaste, setCanPaste] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
-  useEffect(() => {
-    setStartedAt(Date.now());
-    setCanPaste(typeof navigator !== 'undefined' && !!navigator.clipboard?.readText);
-  }, []);
-  useEffect(() => setService(initialService ?? ''), [initialService]);
+  useEffect(() => setStartedAt(Date.now()), []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setChoice(preset()), [initialService]);
 
   const err = state.status === 'error' ? state.fieldErrors ?? {} : {};
   const done = state.status === 'success';
-
-  const pasteLink = async () => {
-    try {
-      const text = (await navigator.clipboard.readText()).trim();
-      if (text) setLink(text.slice(0, 500));
-    } catch {
-      // Clipboard permission refused: the field stays as it was.
-    }
-  };
+  const own = choice === -1;
+  const budgetAmount = own ? custom.replace(/\D/g, '') : String(budgets[choice]?.amount ?? '');
+  const budgetLabel = own ? (custom ? `${Number(custom.replace(/\D/g, '')).toLocaleString('ru-RU').replace(/\u00a0/g, ' ')} so‘m` : '') : (budgets[choice]?.label ?? '');
 
   return (
     <div className="relative">
@@ -158,7 +153,8 @@ export function ApplicationForm({
           >
             <input type="hidden" name="startedAt" value={startedAt} />
             <input type="hidden" name="source" value={source} />
-            <input type="hidden" name="service" value={service} />
+            <input type="hidden" name="budgetAmount" value={budgetAmount} />
+            <input type="hidden" name="budgetLabel" value={budgetLabel} />
             <div aria-hidden className="absolute -left-[9999px] h-px w-px overflow-hidden">
               <label>
                 Website
@@ -167,19 +163,14 @@ export function ApplicationForm({
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
-              <Field id={`${uid}-name`} label="Ismingiz" icon="user" error={err.fullName}>
-                <input
-                  id={`${uid}-name`}
-                  name="fullName"
-                  required
-                  maxLength={80}
-                  autoComplete="name"
-                  placeholder="Ism Familiya"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  aria-invalid={!!err.fullName || undefined}
-                  className={input}
-                />
+              <Field id={`${uid}-first`} label="Ism" icon="user" error={err.firstName}>
+                <input id={`${uid}-first`} name="firstName" required maxLength={60} autoComplete="given-name" placeholder="Ismingiz" value={first} onChange={(e) => setFirst(e.target.value)} aria-invalid={!!err.firstName || undefined} className={input} />
+              </Field>
+              <Field id={`${uid}-last`} label="Familiya" icon="user" error={err.lastName}>
+                <input id={`${uid}-last`} name="lastName" required maxLength={60} autoComplete="family-name" placeholder="Familiyangiz" value={last} onChange={(e) => setLast(e.target.value)} aria-invalid={!!err.lastName || undefined} className={input} />
+              </Field>
+              <Field id={`${uid}-brand`} label="Brend nomi" icon="building" error={err.brand}>
+                <input id={`${uid}-brand`} name="brand" required maxLength={120} autoComplete="organization" placeholder="Brend yoki kompaniya" value={brand} onChange={(e) => setBrand(e.target.value)} aria-invalid={!!err.brand || undefined} className={input} />
               </Field>
               <Field id={`${uid}-phone`} label="Telefon raqam" icon="phone" error={err.phone}>
                 <input
@@ -200,82 +191,58 @@ export function ApplicationForm({
               </Field>
             </div>
 
-            <Field id={`${uid}-company`} label="Kompaniya yoki brend" icon="building" error={err.company} optional>
-              <input
-                id={`${uid}-company`}
-                name="company"
-                maxLength={120}
-                autoComplete="organization"
-                placeholder="Brend nomi"
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                className={input}
-              />
-            </Field>
+            <div>
+              <div className="grid gap-5 sm:grid-cols-2">
+                <Field id={`${uid}-ig`} label="Instagram username" icon="instagram">
+                  <input id={`${uid}-ig`} name="instagram" maxLength={80} autoComplete="off" placeholder="@brend" value={instagram} onChange={(e) => setInstagram(e.target.value)} aria-invalid={!!err.social || undefined} className={input} />
+                </Field>
+                <Field id={`${uid}-tg`} label="Telegram username" icon="telegram">
+                  <input id={`${uid}-tg`} name="telegram" maxLength={80} autoComplete="off" placeholder="@username" value={telegram} onChange={(e) => setTelegram(e.target.value)} aria-invalid={!!err.social || undefined} className={input} />
+                </Field>
+              </div>
+              <p className={`mt-2 text-[12.5px] ${err.social ? 'text-[#ff8a8a]' : 'text-[#6e6e76]'}`}>{err.social ?? 'Kamida bittasini yozing.'}</p>
+            </div>
 
-            <Field id={`${uid}-link`} label={labels.form_link_label} icon="link" error={err.link} optional>
-              <input
-                id={`${uid}-link`}
-                name="link"
-                inputMode="url"
-                autoComplete="url"
-                maxLength={500}
-                value={link}
-                onChange={(e) => setLink(e.target.value)}
-                placeholder={labels.form_link_placeholder || 'https://'}
-                aria-invalid={!!err.link || undefined}
-                className={input}
-              />
-              {canPaste ? (
-                <button
-                  type="button"
-                  onClick={pasteLink}
-                  className="mr-2 inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-white/[0.07] px-3 text-[13px] font-medium text-[#d9d9de] transition-colors hover:bg-[#d4fc18] hover:text-[#0b0b0c]"
-                >
-                  <SiteIcon name="link" size={14} strokeWidth={2} /> Qo‘yish
-                </button>
+            <fieldset className="flex flex-col gap-2.5">
+              <legend className="mb-2.5 text-[13px] font-medium text-[#a8a8ac]">Byudjet</legend>
+              <div className="flex flex-wrap gap-2">
+                {[...budgets.map((b, i) => ({ key: i, label: b.label })), { key: -1, label: 'O‘zim kiritaman' }].map((b) => {
+                  const on = choice === b.key;
+                  return (
+                    <button
+                      key={b.key}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setChoice(on ? -2 : b.key)}
+                      className={`rounded-full border px-4 py-2 text-[13.5px] font-medium transition-all duration-300 ${
+                        on ? 'border-[#d4fc18] bg-[#d4fc18] text-[#0b0b0c] shadow-[0_8px_24px_-8px_rgb(212_252_24/0.6)]' : 'border-white/[0.1] bg-white/[0.03] text-[#d9d9de] hover:border-white/[0.22]'
+                      }`}
+                    >
+                      {b.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {own ? (
+                <Field id={`${uid}-budget`} label="Oylik byudjet (so‘m)" icon="target" error={err.budget}>
+                  <input
+                    id={`${uid}-budget`}
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="5 000 000"
+                    value={custom}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 13);
+                      setCustom(digits ? Number(digits).toLocaleString('ru-RU').replace(/\u00a0/g, ' ') : '');
+                    }}
+                    aria-invalid={!!err.budget || undefined}
+                    className={`${input} tabular`}
+                  />
+                </Field>
+              ) : err.budget ? (
+                <p className="text-[12.5px] text-[#ff8a8a]">{err.budget}</p>
               ) : null}
-            </Field>
-
-            {services.length ? (
-              <fieldset className="flex flex-col gap-2.5">
-                <legend className="mb-2.5 text-[13px] font-medium text-[#a8a8ac]">Qaysi xizmat kerak?</legend>
-                <div className="flex flex-wrap gap-2">
-                  {[...(initialService && !services.includes(initialService) ? [initialService] : []), ...services, 'Boshqa'].map((s) => {
-                    const on = service === s;
-                    return (
-                      <button
-                        key={s}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => setService(on ? '' : s)}
-                        className={`rounded-full border px-4 py-2 text-[13.5px] font-medium transition-all duration-300 ${
-                          on
-                            ? 'border-[#d4fc18] bg-[#d4fc18] text-[#0b0b0c] shadow-[0_8px_24px_-8px_rgb(212_252_24/0.6)]'
-                            : 'border-white/[0.1] bg-white/[0.03] text-[#d9d9de] hover:border-white/[0.22]'
-                        }`}
-                      >
-                        {s}
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
-            ) : null}
-
-            <Field id={`${uid}-message`} label="Qisqacha loyiha haqida" icon="message" error={err.message} optional multiline>
-              <textarea
-                id={`${uid}-message`}
-                name="message"
-                rows={3}
-                maxLength={2000}
-                placeholder="Maqsad, muddat, byudjet…"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                className={`${input} h-auto min-h-[104px] resize-none py-4`}
-                data-lenis-prevent
-              />
-            </Field>
+            </fieldset>
 
             {state.status === 'error' && !Object.keys(err).length ? (
               <p role="alert" className="rounded-2xl border border-[#ff8a8a]/30 bg-[#ff8a8a]/10 px-4 py-3 text-[14px] text-[#ffb4b4]">

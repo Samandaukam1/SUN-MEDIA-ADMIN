@@ -18,6 +18,7 @@ import { SiteIcon } from '@/components/site/SiteIcon';
 import { SiteImage } from '@/components/site/SiteImage';
 import { getSiteContent, isPublished } from '@/lib/site/content';
 import { partnershipYears } from '@/lib/site/types';
+import { budgetOptions } from '@/lib/site/types';
 
 export const revalidate = 600;
 
@@ -243,7 +244,7 @@ export default async function PartnerPage({ params }: { params: Promise<{ slug: 
         </section>
       ) : null}
 
-      <CtaSection settings={c.settings} services={c.services.map((s) => s.title)} source={`/hamkorlar/${p.slug}`} />
+      <CtaSection settings={c.settings} budgets={budgetOptions(c.plans)} source={`/hamkorlar/${p.slug}`} />
     </>
   );
 }

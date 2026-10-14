@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getSessionContext } from '@/lib/auth';
 import { toUserMessage } from '@/lib/errors';
 import { createClient } from '@/lib/supabase/server';
+import type { Stage } from '@/lib/workflow-shared';
 import { canMoveTo, type TaskStatus } from './tasks';
 
 export type TaskActionResult = { ok: true } | { ok: false; message: string };
@@ -20,7 +21,7 @@ async function myTask(taskId: string) {
   const supabase = await createClient();
   const { data } = await supabase
     .from('tasks')
-    .select('id, status, mine:task_assignments!inner(user_id)')
+    .select('id, status, stage, mine:task_assignments!inner(user_id)')
     .eq('id', taskId)
     .eq('mine.user_id', context.userId)
     .is('deleted_at', null)
@@ -33,7 +34,7 @@ export async function moveMyTask(taskId: string, next: string): Promise<TaskActi
   if (!parsed.success) return { ok: false, message: 'Noma’lum holat.' };
   const found = await myTask(taskId);
   if (!found) return { ok: false, message: 'Vazifa topilmadi yoki sizga biriktirilmagan.' };
-  if (!canMoveTo(found.task.status as TaskStatus, parsed.data)) return { ok: false, message: 'Bu holatga o‘tkazib bo‘lmaydi. Sahifani yangilang.' };
+  if (!canMoveTo(found.task.status as TaskStatus, parsed.data, (found.task.stage as Stage | null) ?? null)) return { ok: false, message: 'Bu holatga o‘tkazib bo‘lmaydi. Sahifani yangilang.' };
   const { data, error } = await found.supabase.from('tasks').update({ status: parsed.data }).eq('id', taskId).eq('status', found.task.status).select('id');
   if (error) return { ok: false, message: toUserMessage(error) };
   if (!data?.length) return { ok: false, message: 'Vazifa holati o‘zgargan. Sahifani yangilang.' };
@@ -58,4 +59,20 @@ export async function commentOnMyTask(taskId: string, body: string): Promise<Tas
 export async function refreshMyTask(taskId: string): Promise<void> {
   if (!z.uuid().safeParse(taskId).success) return;
   revalidatePath(`/xodim/vazifa/${taskId}`);
+}
+
+/** "Keldim": the server records the arrival with its own clock (check_in). */
+export async function checkIn(): Promise<TaskActionResult> {
+  const context = await getSessionContext();
+  if (!context || context.status !== 'active' || context.kind !== 'staff') return { ok: false, message: 'Avval tizimga kiring.' };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('check_in');
+  if (error) {
+    if (error.message === 'CHECK_IN_TOO_EARLY') return { ok: false, message: `Kelganingizni ${error.details || '09:45'} dan boshlab belgilashingiz mumkin.` };
+    return { ok: false, message: toUserMessage(error) };
+  }
+  revalidatePath('/xodim');
+  revalidatePath('/team/attendance');
+  revalidatePath('/panel');
+  return { ok: true };
 }

@@ -33,7 +33,7 @@ const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 const easeIn = (t: number) => t * t * t;
 
 /**
- * Wide screens: five places around the logo, right of the headline column and below the menu; they enter and
+ * Wide screens: three places around the logo, right of the headline column and below the menu; they enter and
  * leave on the right. Phones and narrow tablets: three places beside the logo above the headline, entering from
  * the nearest side.
  */
@@ -46,15 +46,14 @@ export function bubbleLayout(width: number, height: number, viewportHeight: numb
     const top = Math.max(0.16, 118 / height);
     const bottom = 0.88;
     const at = (u: number, v: number) => ({ fx: left + (right - left) * u, fy: top + (bottom - top) * v });
+    // Exactly three at a time, spread around the logo; a popped one is replaced by the next partner.
     return {
-      capacity: 5,
-      diameter: clamp(width * 0.074, 84, 134),
+      capacity: 3,
+      diameter: clamp(width * 0.08, 90, 140),
       slots: [
-        { ...at(0.1, 0.04), z: 0.9, scale: 0.95 },
-        { ...at(0.84, 0.02), z: 0.5, scale: 1.05 },
-        { ...at(0.94, 0.68), z: 1.2, scale: 0.9 },
-        { ...at(0.5, 0.97), z: 0.7, scale: 1.08 },
-        { ...at(0.05, 0.8), z: 1.1, scale: 0.86 },
+        { ...at(0.12, 0.06), z: 0.9, scale: 1 },
+        { ...at(0.9, 0.2), z: 0.6, scale: 1.08 },
+        { ...at(0.42, 0.95), z: 1.1, scale: 1.02 },
       ],
       edges: () => ['right'],
       ceiling: top * height,

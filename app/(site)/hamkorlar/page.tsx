@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { ApplyButton } from '@/components/site/ApplyButton';
 import { Container, CtaSection, NextSteps, PageHero, PartnerCards, SectionHeading, StatsGrid, Testimonials } from '@/components/site/sections';
 import { getSiteContent, isPublished, pageMetadata, pageOf, sectionOf } from '@/lib/site/content';
+import { budgetOptions } from '@/lib/site/types';
 
 export const revalidate = 600;
 export const generateMetadata = () => pageMetadata('partners');
@@ -54,7 +55,7 @@ export default async function PartnersPage() {
           </Container>
         </section>
       ) : null}
-      <CtaSection settings={c.settings} services={c.services.map((s) => s.title)} source={page.path} />
+      <CtaSection settings={c.settings} budgets={budgetOptions(c.plans)} source={page.path} />
     </>
   );
 }

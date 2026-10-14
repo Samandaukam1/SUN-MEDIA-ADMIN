@@ -8,6 +8,7 @@ import { Container, CtaSection, Eyebrow } from '@/components/site/sections';
 import { SiteIcon } from '@/components/site/SiteIcon';
 import { SiteImage } from '@/components/site/SiteImage';
 import { getSiteContent, isPublished } from '@/lib/site/content';
+import { budgetOptions } from '@/lib/site/types';
 
 export const revalidate = 600;
 
@@ -163,7 +164,7 @@ export default async function CasePage({ params }: { params: Promise<{ slug: str
         </section>
       ) : null}
 
-      <CtaSection settings={c.settings} services={c.services.map((s) => s.title)} source={`/keyslar/${item.slug}`} />
+      <CtaSection settings={c.settings} budgets={budgetOptions(c.plans)} source={`/keyslar/${item.slug}`} />
     </>
   );
 }

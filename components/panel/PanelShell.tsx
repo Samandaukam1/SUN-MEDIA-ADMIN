@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { Suspense, useEffect, useState, type ReactNode } from 'react';
 
+import { PresenceHeartbeat } from '@/components/live/PresenceHeartbeat';
 import type { VisibleSection } from '@/lib/nav';
 import type { CreateItem } from './CreateMenu';
 import { Sidebar } from './Sidebar';
@@ -20,7 +21,7 @@ export function PanelShell({
 }: {
   sections: VisibleSection[];
   create: CreateItem[];
-  user: { name: string; role: string; initials: string };
+  user: { id: string; name: string; role: string; initials: string };
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -42,6 +43,7 @@ export function PanelShell({
 
   return (
     <div data-panel className="flex h-dvh overflow-hidden">
+      <PresenceHeartbeat />
       <Sidebar sections={sections} create={create} user={user} open={open} onClose={() => setOpen(false)} />
       <div
         aria-hidden
@@ -50,7 +52,7 @@ export function PanelShell({
       />
       <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
         <Suspense>
-          <TopBar sections={sections} onMenu={() => setOpen(true)} menuOpen={open} />
+          <TopBar sections={sections} onMenu={() => setOpen(true)} menuOpen={open} userId={user.id} />
         </Suspense>
         <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">{children}</div>
       </main>

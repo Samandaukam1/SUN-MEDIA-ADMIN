@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { createLogin, deleteLogin, setLoginBlocked, setTemporaryPassword } from '@/lib/accounts';
-import { can, requirePermission, requireStaff } from '@/lib/auth';
+import { can, isSystemOwner, requirePermission, requireStaff } from '@/lib/auth';
 import { toUserMessage } from '@/lib/errors';
 import { guardSystemOwner } from '@/lib/protect';
 import { createClient } from '@/lib/supabase/server';
@@ -36,7 +36,14 @@ const employeeSchema = z.object({
   employment_type: z.enum(['full_time', 'part_time', 'contractor', 'intern']),
   permissions: z.array(z.string()),
   client_ids: z.array(z.uuid()),
-});
+  skill_ids: z.array(z.uuid()).max(30),
+  work_start: z.string().regex(/^\d{2}:\d{2}$/, 'Vaqtni kiriting'),
+  work_end: z.string().regex(/^\d{2}:\d{2}$/, 'Vaqtni kiriting'),
+  employee_status: z.enum(['active', 'on_leave']),
+  birth_date: z.union([z.literal(''), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Sanani to‘g‘ri kiriting')]),
+  passport_series: z.union([z.literal(''), z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'Seriya 2 ta lotin harfi, masalan AB')]),
+  passport_number: z.union([z.literal(''), z.string().trim().regex(/^\d{7}$/, 'Raqam 7 ta raqam')]),
+}).refine((v) => v.work_end > v.work_start, { message: 'Ish tugash vaqti boshlanishidan keyin bo‘lsin', path: ['work_end'] });
 
 /** Team → Add employee: creates the login, then provisions it with the admin's own session. */
 export async function createEmployeeAccount(_: CredentialsState, formData: FormData): Promise<CredentialsState> {
@@ -52,11 +59,19 @@ export async function createEmployeeAccount(_: CredentialsState, formData: FormD
     employment_type: formData.get('employment_type') ?? 'full_time',
     permissions: formData.getAll('permissions').map(String),
     client_ids: formData.getAll('client_ids').map(String),
+    skill_ids: formData.getAll('skill_ids').map(String),
+    work_start: formData.get('work_start') ?? '09:00',
+    work_end: formData.get('work_end') ?? '18:00',
+    employee_status: formData.get('employee_status') ?? 'active',
+    birth_date: formData.get('birth_date') ?? '',
+    passport_series: formData.get('passport_series') ?? '',
+    passport_number: formData.get('passport_number') ?? '',
   });
   if (!parsed.success) {
     return { status: 'error', message: 'Formadagi xatolarni tuzating.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
   }
   const input = parsed.data;
+  const context = await requireStaff();
   const fullName = `${input.first_name} ${input.last_name}`;
 
   let login;
@@ -84,8 +99,38 @@ export async function createEmployeeAccount(_: CredentialsState, formData: FormD
     return { status: 'error', message: toUserMessage(error) };
   }
 
+  // Skills, work hours, activity and (system owner only) private data. The login already exists, so a failure here
+  // is reported next to the password instead of undoing the account.
+  const problems: string[] = [];
+  if (input.skill_ids.length) {
+    const { error: e } = await supabase.from('employee_skills').insert(input.skill_ids.map((skill_id) => ({ user_id: login.userId, skill_id })));
+    if (e) problems.push('skilllar');
+  }
+  const { error: hoursError } = await supabase.rpc('set_work_hours', { p_user_id: login.userId, p_start: input.work_start, p_end: input.work_end });
+  if (hoursError) problems.push('ish vaqti');
+  if (input.employee_status !== 'active') {
+    const { error: e } = await supabase.from('employees').update({ status: input.employee_status }).eq('user_id', login.userId);
+    if (e) problems.push('faollik holati');
+  }
+  if (isSystemOwner(context) && (input.birth_date || input.passport_series || input.passport_number)) {
+    const { error: e } = await supabase.from('employee_private').insert({
+      user_id: login.userId,
+      birth_date: input.birth_date || null,
+      passport_series: input.passport_series || null,
+      passport_number: input.passport_number || null,
+    });
+    if (e) problems.push('shaxsiy ma’lumotlar');
+  }
+
   revalidatePath('/team');
-  return { status: 'success', name: fullName, email: login.email, password: login.password, userId: login.userId };
+  return {
+    status: 'success',
+    name: fullName,
+    email: login.email,
+    password: login.password,
+    userId: login.userId,
+    note: problems.length ? `Login yaratildi, lekin saqlanmadi: ${problems.join(', ')}. Xodim sahifasida qayta kiriting.` : undefined,
+  };
 }
 
 const clientUserSchema = z.object({

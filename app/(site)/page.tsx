@@ -20,6 +20,7 @@ import {
 } from '@/components/site/sections';
 import { getSiteContent, isPublished } from '@/lib/site/content';
 import type { SiteContent, SiteSection } from '@/lib/site/types';
+import { budgetOptions } from '@/lib/site/types';
 
 export const revalidate = 600;
 
@@ -107,7 +108,7 @@ function block(section: SiteSection, c: SiteContent): ReactNode {
         </Band>
       ) : null;
     case 'cta':
-      return <CtaSection settings={c.settings} services={c.services.map((s) => s.title)} source="/" title={section.title} subtitle={section.subtitle} />;
+      return <CtaSection settings={c.settings} budgets={budgetOptions(c.plans)} source="/" title={section.title} subtitle={section.subtitle} />;
   }
 }
 

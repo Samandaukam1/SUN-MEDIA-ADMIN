@@ -19,7 +19,7 @@ const MESSAGES: Record<string, string> = {
 const message = (e: { message?: string; code?: string } | null) => (e?.message && MESSAGES[e.message]) || toUserMessage(e);
 
 /** Send into a chat this person belongs to (the database checks membership and who may write to client chats). */
-export async function sendRoomMessage(roomId: string, body: string, fileIds: string[] = []): Promise<ChatActionResult> {
+export async function sendRoomMessage(roomId: string, body: string, fileIds: string[] = [], replyTo: string | null = null): Promise<ChatActionResult> {
   await requireStaff();
   if (!z.uuid().safeParse(roomId).success) return { ok: false, message: 'Chat topilmadi.' };
   const files = z.array(z.uuid()).max(10).safeParse(fileIds);
@@ -27,7 +27,8 @@ export async function sendRoomMessage(roomId: string, body: string, fileIds: str
   const text = typeof body === 'string' ? body.trim() : '';
   if (!text && !files.data.length) return { ok: false, message: 'Xabar yozing.' };
   const supabase = await createClient();
-  const { error } = await supabase.rpc('send_message', { p_room_id: roomId, p_body: text, p_file_ids: files.data });
+  const reply = replyTo && z.uuid().safeParse(replyTo).success ? replyTo : undefined;
+  const { error } = await supabase.rpc('send_message', { p_room_id: roomId, p_body: text, p_file_ids: files.data, p_reply_to: reply });
   if (error) return { ok: false, message: error.code === '42501' ? 'Bu chatga yozish huquqingiz yo‘q (faqat kuzatasiz).' : message(error) };
   revalidatePath('/chat', 'layout');
   return { ok: true };
@@ -59,4 +60,37 @@ export async function createGroupChat(name: string, memberIds: string[]): Promis
   if (error || !data) return { ok: false, message: message(error) };
   revalidatePath('/chat', 'layout');
   return { ok: true, roomId: data };
+}
+
+/** The author edits their own message (row-level security: own, not deleted); the database stamps "tahrirlangan". */
+export async function editRoomMessage(messageId: string, body: string): Promise<ChatActionResult> {
+  const context = await requireStaff();
+  if (!z.uuid().safeParse(messageId).success) return { ok: false, message: 'Xabar topilmadi.' };
+  const text = typeof body === 'string' ? body.trim() : '';
+  if (!text) return { ok: false, message: 'Xabar bo‘sh bo‘lmasin.' };
+  if (text.length > 4000) return { ok: false, message: 'Xabar juda uzun.' };
+  const supabase = await createClient();
+  const { data, error } = await supabase.from('messages').update({ body: text }).eq('id', messageId).eq('sender_id', context.userId).is('deleted_at', null).select('id');
+  if (error) return { ok: false, message: message(error) };
+  if (!data?.length) return { ok: false, message: 'Faqat o‘z xabaringizni tahrirlay olasiz.' };
+  revalidatePath('/chat', 'layout');
+  return { ok: true };
+}
+
+/** The author deletes their own message: the text is cleared, "Xabar o‘chirilgan" stays in its place. */
+export async function deleteRoomMessage(messageId: string): Promise<ChatActionResult> {
+  const context = await requireStaff();
+  if (!z.uuid().safeParse(messageId).success) return { ok: false, message: 'Xabar topilmadi.' };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('messages')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', messageId)
+    .eq('sender_id', context.userId)
+    .is('deleted_at', null)
+    .select('id');
+  if (error) return { ok: false, message: message(error) };
+  if (!data?.length) return { ok: false, message: 'Faqat o‘z xabaringizni o‘chira olasiz.' };
+  revalidatePath('/chat', 'layout');
+  return { ok: true };
 }

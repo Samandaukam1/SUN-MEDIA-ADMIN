@@ -31,6 +31,7 @@ const SECTIONS: NavSection[] = [
       { href: '/work/content', label: 'Kontent', anyOf: ['content.manage', 'clients.read_all', 'approvals.manage'] },
       { href: '/work/calendar', label: 'Kalendar', anyOf: ['content.manage', 'shootings.manage', 'clients.read_all'] },
       { href: '/work/shootings', label: 'Syomkalar', anyOf: ['shootings.manage', 'clients.read_all'] },
+      { href: '/work/jihozlar', label: 'Syomka jihozlari', anyOf: ['shootings.manage', 'tasks.manage'] },
       { href: '/work/tasks', label: 'Vazifalar', anyOf: ['tasks.manage', 'tasks.read_all'] },
       { href: '/work/files', label: 'Fayllar', anyOf: ['files.manage', 'clients.read_all'] },
     ],
@@ -64,6 +65,7 @@ const SECTIONS: NavSection[] = [
     pages: [
       { href: '/team', label: 'Xodimlar', anyOf: ['employees.read', 'employees.manage'] },
       { href: '/team/new', label: 'Xodim qo‘shish', permission: 'employees.create' },
+      { href: '/team/skills', label: 'Skilllar', systemOwner: true },
       { href: '/team/accounts', label: 'Akkauntlar', permission: 'employees.manage' },
       { href: '/team/attendance', label: 'Davomat', permission: 'attendance.manage' },
       { href: '/team/performance', label: 'Ish samaradorligi', permission: 'performance.read' },

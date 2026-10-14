@@ -1,5 +1,7 @@
 'use client';
 
+import type { BudgetOption } from '@/lib/site/types';
+
 import { motion } from 'motion/react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -9,7 +11,7 @@ import { ApplicationForm, type FormLabels } from './ApplicationForm';
 import { SiteIcon } from './SiteIcon';
 
 /** "Ariza qoldirish" from any button on the site: a liquid-glass window with the form. */
-export function ApplicationDialog({ labels, services }: { labels: FormLabels; services: string[] }) {
+export function ApplicationDialog({ labels, budgets }: { labels: FormLabels; budgets: BudgetOption[] }) {
   const ref = useRef<HTMLDialogElement>(null);
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -77,7 +79,7 @@ export function ApplicationDialog({ labels, services }: { labels: FormLabels; se
             </h2>
             {labels.form_subtitle ? <p className="mt-2 text-[15px] text-[#a8a8ac]">{labels.form_subtitle}</p> : null}
           </div>
-          <ApplicationForm labels={labels} services={services} source={pathname} initialService={service} onDone={() => setOpen(false)} />
+          <ApplicationForm labels={labels} budgets={budgets} source={pathname} initialService={service} onDone={() => setOpen(false)} />
         </motion.div>
       ) : null}
     </dialog>

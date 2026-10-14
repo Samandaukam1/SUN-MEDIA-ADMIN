@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import { AccessEditor } from '@/components/accounts/AccessEditor';
 import { AccountActions } from '@/components/accounts/AccountActions';
 import { StaffProfileForm } from '@/components/accounts/StaffProfileForm';
+import { PrivateDataEditor, SkillsEditor, WorkHoursEditor } from '@/components/team/EmployeeExtras';
 import { PageHeader } from '@/components/panel/PageHeader';
 import { EmptyRow } from '@/components/panel/Stat';
 import { Avatar } from '@/components/ui/Avatar';
@@ -14,6 +15,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import { can, isSystemOwner, requireStaff } from '@/lib/auth';
 import { ACCOUNT_STATUS, CLIENT_STATUS, EMPLOYEE_STATUS, EMPLOYMENT_TYPE, lookup, PERMISSION_LABEL, TEAM_ROLE_LABEL } from '@/lib/labels';
 import { createClient } from '@/lib/supabase/server';
+import { isOnline, lastSeenLabel } from '@/lib/presence';
 import { formatShortDateTime } from '@/lib/time';
 
 export const metadata: Metadata = { title: 'Xodim' };
@@ -40,7 +42,7 @@ export default async function EmployeePage({ params, searchParams }: { params: P
     .select(
       `id, full_name, first_name, last_name, email, phone, avatar_url, status, status_reason, status_changed_at,
        password_reset_at, created_at, last_seen_at, provisioned_by,
-       employee:employees!inner(job_title, department, employment_type, status, work_start_time, work_days, hired_on),
+       employee:employees!inner(job_title, department, employment_type, status, work_start_time, work_end_time, work_days, hired_on, skills:employee_skills(skill_id)),
        user_roles!user_roles_user_id_fkey(role:roles(key, name, rank)),
        extra:user_permissions!user_permissions_user_id_fkey(permission_key),
        teams:client_team_members!client_team_members_user_id_fkey(team_role, client:clients(id, name, code, status))`,
@@ -67,6 +69,14 @@ export default async function EmployeePage({ params, searchParams }: { params: P
   const canManage = can(context, 'employees.manage') && !self && !protectedAccount && (owner || theirRank >= myRank);
   // The system owner also edits their own name, phone and job title.
   const canEditProfile = canManage || (owner && self);
+  const [allSkills, privateData] = active === 'profile'
+    ? await Promise.all([
+        supabase.from('skills').select('id, name').order('position').order('name'),
+        owner ? supabase.from('employee_private').select('birth_date, passport_series, passport_number').eq('user_id', person.id).maybeSingle() : Promise.resolve({ data: null }),
+      ])
+    : [{ data: [] }, { data: null }];
+  const canHours = (can(context, 'attendance.manage') || can(context, 'employees.manage')) && !protectedAccount;
+  const online = isOnline(person.last_seen_at);
   const tabs = TABS.map((t) => ({ key: t.key, label: t.label, href: `/team/${id}?tab=${t.key}`, count: t.key === 'clients' ? person.teams.length : undefined }));
 
   return (
@@ -88,6 +98,9 @@ export default async function EmployeePage({ params, searchParams }: { params: P
           ))}
           <Badge tone={status.tone} dot>
             {status.label}
+          </Badge>
+          <Badge tone={online ? 'success' : 'neutral'} dot>
+            {online ? 'Online' : `Oxirgi faollik: ${lastSeenLabel(person.last_seen_at)}`}
           </Badge>
           {person.employee ? (
             <Badge tone={lookup(EMPLOYEE_STATUS, person.employee.status, EMPLOYEE_STATUS.active).tone}>
@@ -116,6 +129,18 @@ export default async function EmployeePage({ params, searchParams }: { params: P
             editable={canEditProfile}
           />
         </Card>
+      ) : null}
+      {active === 'profile' ? (
+        <div className="mt-6 grid max-w-3xl gap-6">
+          <SkillsEditor
+            userId={person.id}
+            all={allSkills.data ?? []}
+            selected={(person.employee?.skills ?? []).map((s) => s.skill_id)}
+            editable={(can(context, 'employees.manage') && !protectedAccount) || owner}
+          />
+          <WorkHoursEditor userId={person.id} start={person.employee?.work_start_time ?? null} end={person.employee?.work_end_time ?? null} editable={canHours} />
+          {owner ? <PrivateDataEditor userId={person.id} data={privateData.data} /> : null}
+        </div>
       ) : null}
 
       {active === 'account' ? (

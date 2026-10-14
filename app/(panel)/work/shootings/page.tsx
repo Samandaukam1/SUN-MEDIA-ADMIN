@@ -41,7 +41,7 @@ export default async function ShootingsPage({ searchParams }: { searchParams: Pr
       <PageHeader
         title="Syomkalar"
         description="Qachon, qayerda va kim boradi."
-        actions={can(context, 'shootings.manage') ? <ButtonLink href="/work/shootings/new" variant="primary">+ Syomka</ButtonLink> : null}
+        actions={can(context, 'tasks.manage') ? <ButtonLink href="/work/tasks/yaratish" variant="primary">+ Vazifa yaratish</ButtonLink> : null}
       />
       {params.created ? (
         <div className="mb-4">

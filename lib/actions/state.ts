@@ -7,7 +7,7 @@ export type ActionState =
 export type CredentialsState =
   | { status: 'idle' }
   | { status: 'error'; message: string; fieldErrors?: Record<string, string> }
-  | { status: 'success'; name: string; email: string; password: string; userId: string };
+  | { status: 'success'; name: string; email: string; password: string; userId: string; note?: string };
 
 export const idle = { status: 'idle' } as const;
 

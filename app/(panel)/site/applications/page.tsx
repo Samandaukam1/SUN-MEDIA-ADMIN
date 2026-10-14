@@ -24,7 +24,7 @@ export default async function SiteApplicationsPage({ searchParams }: { searchPar
 
   let query = supabase
     .from('site_applications')
-    .select('id, full_name, phone, company, link_url, service, message, source_path, status, created_at, handled_at, handled_by')
+    .select('id, full_name, phone, company, link_url, service, message, instagram, telegram, budget_amount, budget_label, source_path, status, created_at, handled_at, handled_by')
     .order('created_at', { ascending: false })
     .limit(200);
   if (status !== 'all') query = query.eq('status', status);

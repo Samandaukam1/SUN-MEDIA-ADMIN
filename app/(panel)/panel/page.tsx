@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { TeamList } from '@/components/live/TeamList';
 import { LiveRefresh } from '@/components/panel/LiveRefresh';
 import { EmptyRow } from '@/components/panel/Stat';
 import { Badge } from '@/components/ui/Badge';
@@ -12,6 +13,7 @@ import { can, requireStaff } from '@/lib/auth';
 import { lookup, SHOOTING_ATTENDANCE_STATUS, SHOOTING_STATUS, TASK_TYPE } from '@/lib/labels';
 import { commandCenterSchema, type CommandCenter } from '@/lib/schemas/command-center';
 import { createClient } from '@/lib/supabase/server';
+import { loadTeam, type TeamMember } from '@/lib/team-directory';
 import { agencyDateKey, formatDateKeyLong, formatShortDateTime, formatTime } from '@/lib/time';
 import type { StaffContext } from '@/types/app';
 
@@ -20,11 +22,22 @@ export const metadata: Metadata = { title: 'Bosh sahifa' };
 /** "Bugun": the handful of numbers that matter, then today's shootings, urgent deadlines and what just happened. */
 export default async function HomePage() {
   const context = await requireStaff();
-  if (!can(context, 'dashboard.view')) return <StaffWelcome context={context} />;
+  if (!can(context, 'dashboard.view')) return <StaffWelcome context={context} team={await loadTeam()} />;
 
   const today = agencyDateKey();
   const supabase = await createClient();
-  const [ccRes, activityRes] = await Promise.all([supabase.rpc('get_command_center', { p_date: today }), supabase.rpc('get_activity_feed', { p_limit: 8 })]);
+  const [ccRes, activityRes, team, applications] = await Promise.all([
+    supabase.rpc('get_command_center', { p_date: today }),
+    supabase.rpc('get_activity_feed', { p_limit: 8 }),
+    loadTeam(),
+    // New site applications (site managers and the leadership can read them).
+    supabase
+      .from('site_applications')
+      .select('id, full_name, company, phone, budget_label, budget_amount, instagram, telegram, created_at')
+      .eq('status', 'new')
+      .order('created_at', { ascending: false })
+      .limit(5),
+  ]);
   if (ccRes.error) throw ccRes.error;
   const cc = commandCenterSchema.parse(ccRes.data);
   const activity = (activityRes.data ?? []) as ActivityItem[];
@@ -35,7 +48,7 @@ export default async function HomePage() {
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-sm text-subtle">{formatDateKeyLong(today)}</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight">Bugun agentlikda</h1>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight">Bugun Sun Media’da</h1>
         </div>
         <LiveRefresh topics={['staff']} />
       </header>
@@ -52,10 +65,14 @@ export default async function HomePage() {
 
       <div className="grid gap-8 xl:grid-cols-[1.4fr_1fr]">
         <div className="space-y-8">
+          {applications.data?.length ? <Applications items={applications.data} canOpen={can(context, 'site.manage')} /> : null}
           <Shootings cc={cc} />
           <Deadlines cc={cc} />
         </div>
-        <Activity items={activity} />
+        <div className="space-y-8">
+          <TeamList members={team.map(({ id, name, title, lastSeen }) => ({ id, name, title, lastSeen }))} me={context.userId} />
+          <Activity items={activity} />
+        </div>
       </div>
     </div>
   );
@@ -83,6 +100,46 @@ function Today({ cc }: { cc: CommandCenter }) {
           </Card>
         </Link>
       ))}
+    </section>
+  );
+}
+
+type NewApplication = {
+  id: string;
+  full_name: string;
+  company: string;
+  phone: string;
+  budget_label: string | null;
+  budget_amount: number | null;
+  instagram: string | null;
+  telegram: string | null;
+  created_at: string;
+};
+
+function Applications({ items, canOpen }: { items: NewApplication[]; canOpen: boolean }) {
+  return (
+    <section id="arizalar" className="scroll-mt-24">
+      <SectionTitle action={canOpen ? <Link href="/site/applications" className="text-sm font-medium text-muted hover:text-ink">Barchasi</Link> : undefined}>
+        Saytdan yangi arizalar
+      </SectionTitle>
+      <Card className="divide-y divide-line p-0">
+        {items.map((a) => (
+          <div key={a.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">
+                {a.full_name}
+                {a.company ? <span className="font-normal text-muted"> · {a.company}</span> : null}
+              </p>
+              <p className="truncate text-xs text-muted">
+                {[a.phone, a.instagram ? `IG @${a.instagram}` : null, a.telegram ? `TG @${a.telegram}` : null, a.budget_label || (a.budget_amount ? `${Number(a.budget_amount).toLocaleString('ru-RU')} so‘m` : null)]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            </div>
+            <span className="tabular shrink-0 text-xs text-subtle">{formatShortDateTime(a.created_at)}</span>
+          </div>
+        ))}
+      </Card>
     </section>
   );
 }
@@ -184,11 +241,14 @@ function Activity({ items }: { items: ActivityItem[] }) {
   );
 }
 
-function StaffWelcome({ context }: { context: StaffContext }) {
+function StaffWelcome({ context, team }: { context: StaffContext; team: TeamMember[] }) {
   return (
-    <div className="max-w-xl space-y-3 py-16">
+    <div className="grid gap-8 py-10 lg:grid-cols-[1fr_340px]">
+      <div className="max-w-xl space-y-3 py-6">
       <h1 className="text-3xl font-bold tracking-tight">Salom, {context.profile?.full_name.split(' ')[0]}</h1>
       <p className="text-muted">Chap menyudan kerakli bo‘limni tanlang. Kundalik vazifa, syomka va tasdiqlashlar SUN MEDIA mobil ilovasida ham bor.</p>
+      </div>
+      <TeamList members={team.map(({ id, name, title, lastSeen }) => ({ id, name, title, lastSeen }))} me={context.userId} />
     </div>
   );
 }

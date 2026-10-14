@@ -231,7 +231,7 @@ export default function HeroScene({ active, onReady, partners }: { active: boole
   const [quality, setQuality] = useState<Quality>({ sweep: !coarse, low: false });
   const [dpr, setDpr] = useState(coarse ? 1.25 : 1.75);
   const [calm, setCalm] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const [controller] = useState(() => new BubbleController({ capacity: 5, edgesForSlot: () => ['right'] }));
+  const [controller] = useState(() => new BubbleController({ capacity: 3, edgesForSlot: () => ['right'] }));
   const buttons = useRef(new Map<number, HTMLButtonElement>());
   const [views, setViews] = useState<BubbleView[]>([]);
   const bubblePartners = useMemo(() => partners.filter((p) => p.logoUrl), [partners]);

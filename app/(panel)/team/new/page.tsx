@@ -17,10 +17,10 @@ export default async function NewEmployeePage() {
       <PageHeader
         crumbs={[{ label: 'Jamoa', href: '/team' }, { label: 'Xodim qo‘shish' }]}
         title="Xodim qo‘shish"
-        description="Ism, lavozim, rol va ruxsatlar. Oxirida login va vaqtinchalik parolni nusxalab xodimga berasiz."
+        description="Ism, shaxsiy ma’lumot, lavozim, skilllar, ish vaqti, rol va ruxsatlar. Oxirida login va vaqtinchalik parolni nusxalab xodimga berasiz."
       />
       <Card className="max-w-3xl">
-        <EmployeeForm {...options} canCreateRole={isSystemOwner(context)} />
+        <EmployeeForm {...options} canCreateRole={isSystemOwner(context)} privateFields={isSystemOwner(context)} />
       </Card>
     </div>
   );

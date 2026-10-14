@@ -61,6 +61,8 @@ export async function loadClientConversations(): Promise<ClientConversation[] | 
   return z.array(clientConversationSchema).parse(data ?? []);
 }
 
+export type RoomMember = { id: string; name: string; lastSeen: string | null; deliveredAt: string | null; readAt: string | null };
+
 export type RoomInfo = {
   id: string;
   kind: 'project' | 'internal' | 'direct';
@@ -68,7 +70,7 @@ export type RoomInfo = {
   subtitle: string;
   clientId: string | null;
   isMember: boolean;
-  members: { id: string; name: string }[];
+  members: RoomMember[];
 };
 
 export async function loadRoom(roomId: string, userId: string): Promise<RoomInfo | null> {
@@ -76,11 +78,17 @@ export async function loadRoom(roomId: string, userId: string): Promise<RoomInfo
   const supabase = await createClient();
   const { data } = await supabase
     .from('chat_rooms')
-    .select('id, kind, name, client_id, client:clients(id, name), members:chat_members(user_id, person:profiles(id, full_name))')
+    .select('id, kind, name, client_id, client:clients(id, name), members:chat_members(user_id, last_read_at, last_delivered_at, person:profiles(id, full_name, last_seen_at))')
     .eq('id', roomId)
     .maybeSingle();
   if (!data) return null;
-  const members = (data.members ?? []).map((m) => ({ id: m.user_id, name: m.person?.full_name ?? '—' }));
+  const members = (data.members ?? []).map((m) => ({
+    id: m.user_id,
+    name: m.person?.full_name ?? '—',
+    lastSeen: m.person?.last_seen_at ?? null,
+    deliveredAt: m.last_delivered_at,
+    readAt: m.last_read_at,
+  }));
   const others = members.filter((m) => m.id !== userId);
   const title =
     data.kind === 'project' ? (data.client?.name ?? data.name ?? 'Mijoz') : data.kind === 'direct' ? (others[0]?.name ?? 'Suhbat') : (data.name ?? 'Guruh');
@@ -114,4 +122,41 @@ export async function loadColleagues(userId: string): Promise<{ id: string; name
 /** Unread messages across the person's chats (muted and archived ones left out) — the sidebar badge. */
 export function unreadTotal(chats: MyChat[]): number {
   return chats.filter((c) => !c.muted && !c.archived).reduce((n, c) => n + (c.unread_count ?? 0), 0);
+}
+
+export type PanelMessage = {
+  id: string;
+  sender_id: string | null;
+  body: string;
+  is_system: boolean;
+  created_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
+  sender_label: string | null;
+  reply_to_id: string | null;
+  sender: { full_name: string; avatar_url: string | null } | null;
+  reply: { id: string; body: string; deleted_at: string | null; sender: { full_name: string } | null } | null;
+  reads: { user_id: string; read_at: string }[];
+  attachments: { file: { id: string; name: string; kind: string; mime_type: string | null; size_bytes: number | null } | null }[];
+};
+
+export const ROOM_PAGE = 50;
+
+/** A room's newest page (or the page before `before`), oldest first, with replies and per-person read times. */
+export async function loadRoomMessages(roomId: string, before: string | null): Promise<PanelMessage[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from('messages')
+    .select(
+      `id, sender_id, body, is_system, created_at, edited_at, deleted_at, sender_label, reply_to_id,
+       sender:profiles!messages_sender_id_fkey(full_name, avatar_url),
+       reply:reply_to_id(id, body, deleted_at, sender:profiles!messages_sender_id_fkey(full_name)),
+       reads:message_reads(user_id, read_at),
+       attachments:message_attachments(file:files(id, name, kind, mime_type, size_bytes))`,
+    )
+    .eq('room_id', roomId);
+  if (before) query = query.lt('created_at', before);
+  const { data, error } = await query.order('created_at', { ascending: false }).order('id', { ascending: false }).limit(ROOM_PAGE);
+  if (error) throw error;
+  return ((data ?? []) as unknown as PanelMessage[]).reverse();
 }

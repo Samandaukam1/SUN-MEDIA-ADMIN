@@ -13,7 +13,7 @@ import { addDaysToKey, agencyDateKey, formatDateKeyLong, isDateKey } from '@/lib
 
 export const metadata: Metadata = { title: 'Davomat' };
 
-/** Jamoa → Davomat: today's office roster; the admin marks everyone in under a minute. Employees never check themselves in. */
+/** Jamoa → Davomat: employees press “Keldim” themselves (from 09:45); the Rahbar or admin corrects, marks the rest and flags errors. */
 export default async function AttendancePage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const context = await requireStaff();
   if (!can(context, 'attendance.read') && !can(context, 'attendance.manage')) redirect('/no-access?reason=permission');
@@ -23,7 +23,11 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('get_attendance_day', { p_date: date });
   if (error) throw error;
-  const rows: RosterRow[] = data.filter((r) => r.scheduled || r.status);
+  const { data: alerts } = await supabase.from('attendance_alerts').select('id, attendance_id, note').eq('status', 'open').eq('work_date', date);
+  const alertOf = new Map((alerts ?? []).map((a) => [a.attendance_id, { id: a.id, note: a.note }]));
+  const rows: RosterRow[] = data
+    .filter((r) => r.scheduled || r.status)
+    .map((r) => ({ ...r, alert: r.attendance_id ? (alertOf.get(r.attendance_id) ?? null) : null }));
   const count = (s: string) => rows.filter((r) => r.status === s).length;
 
   return (

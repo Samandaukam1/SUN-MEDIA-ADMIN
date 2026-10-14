@@ -4,6 +4,7 @@ import { ApplyButton } from '@/components/site/ApplyButton';
 import { PlansGrid } from '@/components/site/PlansGrid';
 import { Container, CtaSection, PageHero } from '@/components/site/sections';
 import { getSiteContent, isPublished, pageMetadata, pageOf } from '@/lib/site/content';
+import { budgetOptions } from '@/lib/site/types';
 
 export const revalidate = 600;
 export const generateMetadata = () => pageMetadata('plans');
@@ -38,7 +39,7 @@ export default async function PlansPage() {
           )}
         </Container>
       </section>
-      <CtaSection settings={c.settings} services={c.services.map((s) => s.title)} source={page.path} />
+      <CtaSection settings={c.settings} budgets={budgetOptions(c.plans)} source={page.path} />
     </>
   );
 }

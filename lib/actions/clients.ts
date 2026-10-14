@@ -137,3 +137,29 @@ export async function removeTeamMember(clientId: string, userId: string, teamRol
   revalidatePath(`/clients/${clientId}`);
   return { status: 'success' };
 }
+
+const billingSchema = z.object({
+  agreed_price: z.coerce.number().min(0).max(1e13).nullable(),
+  currency: z.enum(['UZS', 'USD']),
+  billing_period: z.enum(['monthly', 'quarterly', 'yearly', 'one_time']),
+  next_payment_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  next_payment_amount: z.coerce.number().min(0).max(1e13).nullable(),
+  payment_status: z.enum(['paid', 'pending', 'partial']),
+  last_paid_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  note: z.string().trim().max(1000).nullable(),
+});
+export type BillingInput = z.input<typeof billingSchema>;
+
+/** The agreed price and payments of one client (only this client; the tariff's list price is untouched). */
+export async function saveClientBilling(clientId: string, input: BillingInput): Promise<{ ok: true } | { ok: false; message: string }> {
+  await requireStaff();
+  if (!z.uuid().safeParse(clientId).success) return { ok: false, message: 'Mijoz topilmadi.' };
+  const parsed = billingSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: 'Narx va sanalarni tekshiring.' };
+  const supabase = await createClient();
+  const { error } = await supabase.from('client_billing').upsert({ client_id: clientId, ...parsed.data, note: parsed.data.note || null }, { onConflict: 'client_id' });
+  if (error) return { ok: false, message: toUserMessage(error) };
+  revalidatePath(`/clients/${clientId}`);
+  revalidatePath('/clients');
+  return { ok: true };
+}

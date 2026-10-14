@@ -9,6 +9,7 @@ import { SmoothScroll } from '@/components/site/SmoothScroll';
 import { getSiteUrl } from '@/lib/env.server';
 import { getSiteContent, navigation } from '@/lib/site/content';
 import './site.css';
+import { budgetOptions } from '@/lib/site/types';
 
 const unbounded = Unbounded({ subsets: ['latin', 'latin-ext', 'cyrillic'], variable: '--font-unbounded', display: 'swap' });
 
@@ -53,7 +54,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       <SiteHeader nav={nav} ctaLabel={settings.primary_cta_label} phone={settings.phone_primary} />
       <main>{children}</main>
       <SiteFooter settings={settings} nav={nav} />
-      <ApplicationDialog labels={settings} services={content.services.map((s) => s.title)} />
+      <ApplicationDialog labels={settings} budgets={budgetOptions(content.plans)} />
       <CursorGlow />
       <div className="s-grain" aria-hidden />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organization).replace(/</g, '\\u003c') }} />

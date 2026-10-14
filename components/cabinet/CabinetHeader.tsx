@@ -1,10 +1,11 @@
 import Link from 'next/link';
+import type { ReactNode } from 'react';
 
 import { Logo } from '@/components/brand/Logo';
 import { SiteIcon } from '@/components/site/SiteIcon';
 
 /** Top bar of every cabinet: SUN MEDIA mark, whose cabinet this is, password change and sign-out. */
-export function CabinetHeader({ name, role, home }: { name: string; role: string; home: string }) {
+export function CabinetHeader({ name, role, home, extra }: { name: string; role: string; home: string; extra?: ReactNode }) {
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#050506]/70 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:h-[72px] sm:px-8">
@@ -16,6 +17,7 @@ export function CabinetHeader({ name, role, home }: { name: string; role: string
             <p className="truncate text-[14px] font-semibold text-white">{name}</p>
             <p className="truncate text-[12px] text-[#8e8e96]">{role}</p>
           </div>
+          {extra}
           <Link
             href="/parol"
             aria-label="Parolni almashtirish"

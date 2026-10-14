@@ -4,6 +4,7 @@ import { Logo } from '@/components/brand/Logo';
 import { GlassCard, Reveal } from '@/components/site/motion';
 import { BenefitsBento, Container, CtaSection, PageHero, ProcessSteps, SectionHeading, StatsGrid } from '@/components/site/sections';
 import { getSiteContent, isPublished, pageMetadata, pageOf, sectionOf } from '@/lib/site/content';
+import { budgetOptions } from '@/lib/site/types';
 
 export const revalidate = 600;
 export const generateMetadata = () => pageMetadata('about');
@@ -76,7 +77,7 @@ export default async function AboutPage() {
         </section>
       ) : null}
 
-      <CtaSection settings={c.settings} services={c.services.map((s) => s.title)} source={page.path} />
+      <CtaSection settings={c.settings} budgets={budgetOptions(c.plans)} source={page.path} />
     </>
   );
 }

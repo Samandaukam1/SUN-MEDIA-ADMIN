@@ -5,6 +5,7 @@ import { Reveal } from '@/components/site/motion';
 import { ContactCards, Container, PageHero } from '@/components/site/sections';
 import { SocialRow } from '@/components/site/SiteFooter';
 import { getSiteContent, isPublished, pageMetadata, pageOf } from '@/lib/site/content';
+import { budgetOptions } from '@/lib/site/types';
 
 export const revalidate = 600;
 export const generateMetadata = () => pageMetadata('contact');
@@ -33,7 +34,7 @@ export default async function ContactPage() {
               <div className="relative">
                 <h2 className="font-display s-silver text-[28px] leading-tight font-medium tracking-[-0.03em] sm:text-[36px]">{s.form_title}</h2>
                 {s.form_subtitle ? <p className="mt-3 mb-8 text-[15.5px] text-[#a8a8ac]">{s.form_subtitle}</p> : <div className="mb-8" />}
-                <ApplicationForm labels={s} services={c.services.map((x) => x.title)} source={page.path} />
+                <ApplicationForm labels={s} budgets={budgetOptions(c.plans)} source={page.path} />
               </div>
             </div>
           </Reveal>

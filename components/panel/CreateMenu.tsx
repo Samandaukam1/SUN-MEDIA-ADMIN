@@ -27,21 +27,35 @@ export function CreateMenu({ items }: { items: CreateItem[] }) {
     };
   }, [open]);
 
+  // The first item, when it is "Vazifa yaratish", is the button itself; the rest open from the arrow beside it.
+  const primary = items[0]?.href === '/work/tasks/yaratish' ? items[0] : null;
+  const rest = primary ? items.slice(1) : items;
+  const btn =
+    'flex items-center justify-center gap-2 rounded-xl bg-brand py-2.5 text-sm font-semibold text-on-brand transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand';
+
   return (
     <div ref={ref} className="relative">
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-on-brand transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-      >
-        <Icon name="plus" size={17} />
-        Yaratish
-      </button>
+      {primary ? (
+        <div className="flex gap-1.5">
+          <Link href={primary.href} className={`${btn} min-w-0 flex-1 px-3`}>
+            <Icon name="plus" size={17} />
+            Vazifa yaratish
+          </Link>
+          {rest.length ? (
+            <button type="button" aria-haspopup="menu" aria-expanded={open} aria-label="Boshqa yaratish turlari" onClick={() => setOpen(!open)} className={`${btn} w-10 shrink-0`}>
+              <Icon name="chevronDown" size={17} />
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <button type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} className={`${btn} w-full px-4`}>
+          <Icon name="plus" size={17} />
+          Yaratish
+        </button>
+      )}
       {open ? (
         <div role="menu" className="absolute top-full right-0 left-0 z-30 mt-2 overflow-hidden rounded-xl border border-line bg-surface py-1.5 text-ink shadow-2xl">
-          {items.map((item) => (
+          {rest.map((item) => (
             <Link key={item.href} href={item.href} role="menuitem" className="flex items-start gap-3 px-3.5 py-2.5 hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-none">
               <Icon name={item.icon} size={17} className="mt-0.5 text-muted" />
               <span>

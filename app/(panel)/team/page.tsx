@@ -12,7 +12,7 @@ import { Icon } from '@/components/ui/Icon';
 import { can, requireStaff } from '@/lib/auth';
 import { ACCOUNT_STATUS, lookup } from '@/lib/labels';
 import { createClient } from '@/lib/supabase/server';
-import { formatShortDateTime } from '@/lib/time';
+import { isOnline, lastSeenLabel } from '@/lib/presence';
 
 export const metadata: Metadata = { title: 'Jamoa' };
 
@@ -29,7 +29,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
       .from('profiles')
       .select(
         `id, full_name, email, phone, avatar_url, status, last_seen_at,
-         employee:employees!inner(job_title, employment_type, status),
+         employee:employees!inner(job_title, employment_type, status, skills:employee_skills(skill:skills(name))),
          user_roles!user_roles_user_id_fkey(role:roles(key, name, rank))`,
       )
       .is('deleted_at', null)
@@ -105,7 +105,7 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                 <th className="px-5 py-3">Rol</th>
                 <th className="hidden px-5 py-3 lg:table-cell">Telefon</th>
                 <th className="px-5 py-3">Akkaunt</th>
-                <th className="hidden px-5 py-3 xl:table-cell">Oxirgi faollik</th>
+                <th className="px-5 py-3">Faollik</th>
                 <th className="w-10 px-5 py-3" />
               </tr>
             </thead>
@@ -119,7 +119,9 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                         <Avatar name={p.full_name} url={p.avatar_url} size={36} />
                         <span className="min-w-0">
                           <span className="block truncate font-medium">{p.full_name}</span>
-                          <span className="block truncate text-[13px] text-muted">{p.employee?.job_title ?? p.email}</span>
+                          <span className="block truncate text-[13px] text-muted">
+                            {[p.employee?.job_title, (p.employee?.skills ?? []).map((sk) => sk.skill?.name).filter(Boolean).join(', ')].filter(Boolean).join(' · ') || p.email}
+                          </span>
                         </span>
                       </Link>
                     </td>
@@ -138,7 +140,9 @@ export default async function TeamPage({ searchParams }: { searchParams: Promise
                         {status.label}
                       </Badge>
                     </td>
-                    <td className="hidden px-5 py-3.5 text-muted xl:table-cell">{p.last_seen_at ? formatShortDateTime(p.last_seen_at) : '—'}</td>
+                    <td className="px-5 py-3.5 text-[13px] whitespace-nowrap">
+                      {isOnline(p.last_seen_at) ? <span className="font-medium text-success">● Online</span> : <span className="text-muted">{lastSeenLabel(p.last_seen_at)}</span>}
+                    </td>
                     <td className="px-5 py-3.5 text-subtle">
                       <Icon name="chevronRight" size={16} />
                     </td>

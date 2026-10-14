@@ -1,8 +1,10 @@
 import { notFound } from 'next/navigation';
 
 import { FaqList } from '@/components/site/FaqList';
-import { Container, CtaSection, PageHero, ProcessSteps, SectionHeading, ServiceRows } from '@/components/site/sections';
+import { Container, CtaSection, PageHero, ProcessSteps, SectionHeading } from '@/components/site/sections';
+import { ServicesExplorer } from '@/components/site/ServicesExplorer';
 import { getSiteContent, isPublished, pageMetadata, pageOf, sectionOf } from '@/lib/site/content';
+import { budgetOptions } from '@/lib/site/types';
 
 export const revalidate = 600;
 export const generateMetadata = () => pageMetadata('services');
@@ -20,7 +22,7 @@ export default async function ServicesPage() {
       {c.services.length ? (
         <section className="pb-24">
           <Container>
-            <ServiceRows services={c.services} />
+            <ServicesExplorer services={c.services} />
           </Container>
         </section>
       ) : null}
@@ -44,7 +46,7 @@ export default async function ServicesPage() {
           </Container>
         </section>
       ) : null}
-      <CtaSection settings={c.settings} services={c.services.map((s) => s.title)} source={page.path} />
+      <CtaSection settings={c.settings} budgets={budgetOptions(c.plans)} source={page.path} />
     </>
   );
 }

@@ -26,17 +26,21 @@ type Props = {
   loginDomain: string;
   /** Tizim egasi: may type a new role here; it starts with the selected role's permissions. */
   canCreateRole?: boolean;
+  /** What people can do (operator, montaj…), separate from the role. */
+  skills?: Option[];
+  /** Tizim egasi only: birth date and passport. */
+  privateFields?: boolean;
 };
 
 const STEPS = ['Asosiy ma’lumot', 'Lavozim', 'Login va ruxsat', 'Tasdiqlash'] as const;
 // Which step holds each field, so a server-side error takes the admin straight to it.
-const FIELD_STEP: Record<string, number> = { first_name: 0, last_name: 0, phone: 0, job_title: 1, role_key: 1, employment_type: 1, email: 2 };
+const FIELD_STEP: Record<string, number> = { first_name: 0, last_name: 0, phone: 0, birth_date: 0, passport_series: 0, passport_number: 0, job_title: 1, role_key: 1, employment_type: 1, work_start: 1, work_end: 1, email: 2 };
 
 /**
  * Jamoa → Xodim qo‘shish: four short steps, then the login and temporary password to hand over.
  * The Auth login is created on the server; the password is shown once and never stored.
  */
-export function EmployeeForm({ roles: initialRoles, clients, permissions, rolePermissions: initialRolePermissions, loginDomain, canCreateRole = false }: Props) {
+export function EmployeeForm({ roles: initialRoles, clients, permissions, rolePermissions: initialRolePermissions, loginDomain, canCreateRole = false, skills = [], privateFields = false }: Props) {
   const [roles, setRoles] = useState(initialRoles);
   const [rolePermissions, setRolePermissions] = useState(initialRolePermissions);
   const [newRole, setNewRole] = useState<string | null>(null);
@@ -81,6 +85,7 @@ export function EmployeeForm({ roles: initialRoles, clients, permissions, rolePe
           </div>
         </div>
         <CredentialsCard email={state.email} password={state.password} />
+        {state.note ? <Notice tone="warning" title={state.note} /> : null}
         <div className="flex justify-end gap-3 border-t border-line pt-5">
           <a href={`/team/${state.userId}`} className="inline-flex h-10 items-center rounded-xl px-4 text-sm font-medium text-ink hover:bg-surface-2">
             Profilni ochish
@@ -128,6 +133,17 @@ export function EmployeeForm({ roles: initialRoles, clients, permissions, rolePe
         <div className="sm:col-span-2">
           <TextInput label="Telefon" name="phone" type="tel" placeholder="+998 90 123 45 67" value={phone} onChange={(e) => setPhone(e.target.value)} error={errors.phone} />
         </div>
+        {privateFields ? (
+          <div className="grid gap-4 rounded-2xl border border-line p-4 sm:col-span-2 sm:grid-cols-3">
+            <p className="text-[12.5px] text-muted sm:col-span-3">
+              <Icon name="lock" size={13} className="mr-1 inline" />
+              Maxfiy: faqat Tizim egasi ko‘radi va o‘zgartiradi.
+            </p>
+            <TextInput label="Tug‘ilgan sana" name="birth_date" type="date" error={errors.birth_date} />
+            <TextInput label="Pasport seriyasi" name="passport_series" maxLength={2} placeholder="AB" autoComplete="off" className="uppercase" error={errors.passport_series} />
+            <TextInput label="Pasport raqami" name="passport_number" maxLength={7} inputMode="numeric" placeholder="1234567" autoComplete="off" error={errors.passport_number} />
+          </div>
+        ) : null}
       </div>
 
       <div ref={step === 1 ? stepRef : undefined} className={cn('space-y-5', step !== 1 && 'hidden')}>
@@ -140,7 +156,26 @@ export function EmployeeForm({ roles: initialRoles, clients, permissions, rolePe
               </option>
             ))}
           </SelectInput>
+          <TextInput label="Ish boshlash vaqti" name="work_start" type="time" defaultValue="09:00" required error={errors.work_start} />
+          <TextInput label="Ish tugash vaqti" name="work_end" type="time" defaultValue="18:00" required error={errors.work_end} />
+          <SelectInput label="Faollik holati" name="employee_status" defaultValue="active">
+            <option value="active">Faol</option>
+            <option value="on_leave">Ta’tilda</option>
+          </SelectInput>
         </div>
+        {skills.length ? (
+          <fieldset>
+            <legend className="mb-2 text-[13px] font-medium text-muted">Skilllar — nima qila oladi (bir nechtasi mumkin)</legend>
+            <div className="flex flex-wrap gap-2">
+              {skills.map((sk) => (
+                <label key={sk.value} className="flex cursor-pointer items-center gap-2 rounded-xl border border-line px-3 py-2 text-sm hover:bg-surface-2 has-[:checked]:border-accent has-[:checked]:bg-accent-soft">
+                  <input type="checkbox" name="skill_ids" value={sk.value} className="size-4 accent-[var(--accent)]" />
+                  {sk.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ) : null}
         <SelectInput
           label="Rol (tizimda nima qila oladi)"
           name="role_key"

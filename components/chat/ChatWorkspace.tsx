@@ -171,6 +171,10 @@ export async function ChatWorkspace({ mode, xona, oldin }: { mode: 'team' | 'cli
                   me={context.userId}
                   members={room.members}
                   direct={room.kind === 'direct'}
+                  seeAllReceipts={
+                    room.kind !== 'direct' &&
+                    (context.roles.some((r) => ['system_owner', 'owner', 'director'].includes(r.key)) || context.permissions.includes('chat.observe'))
+                  }
                   messages={messages}
                   olderHref={older}
                   readOnly={!room.isMember}

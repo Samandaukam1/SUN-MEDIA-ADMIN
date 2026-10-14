@@ -50,6 +50,10 @@ select ok((select count(*) from public.attendance_history h join public.attendan
 
 set local role authenticated;
 select pg_temp.login('rahbar');
+select throws_ok($$insert into public.attendance(user_id, work_date, status) values (pg_temp.id('smm'), (now() at time zone 'Asia/Tashkent')::date, 'present')$$,
+  '22023', 'ATTENDANCE_REASON_REQUIRED', 'nobody marks a colleague “came” without the time and a reason (no bulk “everyone present”)');
+select lives_ok($$insert into public.attendance(user_id, work_date, status) values (pg_temp.id('smm'), (now() at time zone 'Asia/Tashkent')::date, 'vacation')$$,
+  'a vacation day is set by the Rahbar');
 select throws_ok($$delete from public.attendance where user_id = pg_temp.id('emp') and work_date = (now() at time zone 'Asia/Tashkent')::date$$,
   '42501', 'SELF_ATTENDANCE_KEPT', 'a self-confirmed day is not deleted');
 select lives_ok($$select public.check_in()$$, 'the Rahbar presses KELDIM for himself');

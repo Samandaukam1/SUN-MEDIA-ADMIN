@@ -1,4 +1,5 @@
--- Daily attendance: office-only marking, automatic lateness from the work start + grace, roster
+-- Daily attendance: corrections by the office (with the time and a reason), automatic lateness from the work start
+-- + grace, roster
 -- for any day, history kept. Seed-safe, rolled back.
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -27,9 +28,9 @@ insert into public.employees (user_id, work_start_time, work_days) select id, '0
 
 -- 2026-09-28 is a Monday
 select pg_temp.at_login('admin');
-select lives_ok($$insert into public.attendance (user_id, work_date, status, arrived_at) values (pg_temp.at('editor'), '2026-09-28', 'present', '09:40')$$,
+select lives_ok($$insert into public.attendance (user_id, work_date, status, arrived_at, correction_note) values (pg_temp.at('editor'), '2026-09-28', 'present', '09:40', 'Kartadan')$$,
   'admin marks the editor as arrived at 09:40');
-select lives_ok($$insert into public.attendance (user_id, work_date, status, arrived_at) values (pg_temp.at('operator'), '2026-09-28', 'late', '09:05')$$,
+select lives_ok($$insert into public.attendance (user_id, work_date, status, arrived_at, correction_note) values (pg_temp.at('operator'), '2026-09-28', 'late', '09:05', 'Kartadan')$$,
   'admin marks the operator late at 09:05');
 reset role;
 select is((select status::text || ':' || late_minutes from public.attendance where user_id = pg_temp.at('editor') and work_date = '2026-09-28'), 'late:40',

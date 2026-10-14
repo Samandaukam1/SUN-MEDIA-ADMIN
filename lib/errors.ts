@@ -47,6 +47,7 @@ const KNOWN: Record<string, string> = {
   WORK_HOURS_INVALID: 'Ish tugash vaqti boshlanishidan keyin bo‘lsin.',
   APPLICATION_INVALID: 'Maydonlarni tekshiring.',
   OWN_ATTENDANCE_LOCKED: 'O‘z davomatingizni o‘zgartira olmaysiz — uni Rahbar tuzatadi.',
+  ATTENDANCE_REASON_REQUIRED: 'Xodim o‘rniga “Keldi” belgilanmaydi — u KELDIM tugmasini o‘zi bosadi. Tuzatish uchun kelgan vaqti va sababini yozing.',
   SELF_ATTENDANCE_KEPT: 'Xodim o‘zi tasdiqlagan davomat o‘chirilmaydi — kerak bo‘lsa holatini tuzating.',
   PLATFORM_INVALID: 'Platformani tanlang.',
   PLATFORM_REQUIRED: 'Kamida bitta platformani tanlang.',

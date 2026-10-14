@@ -1,6 +1,7 @@
 -- Daily attendance, done properly: every employee confirms their own day with KELDIM; what they confirmed (and
--- when, by the server's clock) is kept apart from corrections by the Rahbar or an admin, nobody edits or deletes
--- their own record, and a self-confirmed record is never deleted. The day's roster gains the work end time, the
+-- when, by the server's clock) is kept apart from corrections by the Rahbar or an admin, nobody marks a colleague
+-- "came" without the time and a reason, nobody edits or deletes their own record, and a self-confirmed record is
+-- never deleted. The day's roster gains the work end time, the
 -- source and the correction. Posts: platforms and time are planned with the task, the post is confirmed by hand with
 -- its link (no automatic publishing without a real integration). Chat observers see who read client chats. Additive.
 
@@ -44,6 +45,13 @@ begin
     end if;
     new.corrected_by := v_uid;
     new.corrected_at := now();
+  end if;
+  -- Nobody marks a colleague "came" without the real time and a reason: that is a correction, never a KELDIM
+  -- on their behalf (and never a bulk "everyone present").
+  -- (Only for people who may write attendance at all; everyone else is refused by row-level security.)
+  if v_uid is not null and v_uid <> new.user_id and new.status in ('present', 'late', 'remote') and private.has_permission('attendance.manage')
+     and (nullif(btrim(new.correction_note), '') is null or (new.status in ('present', 'late') and new.arrived_at is null)) then
+    raise exception 'ATTENDANCE_REASON_REQUIRED' using errcode = '22023';
   end if;
   new.marked_by := v_uid;
   new.marked_at := now();

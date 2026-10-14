@@ -51,11 +51,14 @@ export function ChatRoom({
   readOnly,
   readOnlyReason,
   live,
+  seeAllReceipts = false,
 }: {
   roomId: string;
   me: string;
   members: RoomMember[];
   direct: boolean;
+  /** The Rahbar / chat observers: who read every message in the room, not only their own. */
+  seeAllReceipts?: boolean;
   messages: PanelMessage[];
   olderHref: string | null;
   readOnly: boolean;
@@ -75,7 +78,6 @@ export function ChatRoom({
   const [status, setStatus] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const lastId = messages.at(-1)?.id;
-  const others = members.filter((m) => m.id !== me);
   const nameOf = new Map(members.map((m) => [m.id, m.name]));
 
   useEffect(() => {
@@ -231,9 +233,10 @@ export function ChatRoom({
           lastDay = day;
           const mine = m.sender_id === me;
           const attached = m.attachments.map((a) => a.file).filter((f): f is NonNullable<typeof f> => !!f);
-          const receipt = mine && !m.deleted_at ? receiptOf(m, others) : null;
+          const recipients = members.filter((o) => o.id !== m.sender_id);
+          const receipt = (mine || seeAllReceipts) && !m.deleted_at ? receiptOf(m, recipients) : null;
           const readers = m.reads.filter((r) => r.user_id !== m.sender_id).sort((a, b) => a.read_at.localeCompare(b.read_at));
-          const unread = others.filter((o) => !readers.some((r) => r.user_id === o.id));
+          const unread = recipients.filter((o) => !readers.some((r) => r.user_id === o.id));
           const actions = !m.deleted_at && !readOnly;
           return (
             <div key={m.id}>
@@ -279,7 +282,7 @@ export function ChatRoom({
                       {m.edited_at && !m.deleted_at ? <span>tahrirlangan ·</span> : null}
                       {timeFmt.format(new Date(m.created_at))}
                       {receipt ? (
-                        direct ? (
+                        direct && mine ? (
                           <Ticks state={receipt} />
                         ) : (
                           <button type="button" onClick={() => setReadersOf(readersOf === m.id ? null : m.id)} aria-label="Kimlar o‘qidi" aria-expanded={readersOf === m.id} className="inline-flex">

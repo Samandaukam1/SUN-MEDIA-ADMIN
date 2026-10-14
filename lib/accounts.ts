@@ -29,8 +29,9 @@ export type CreatedLogin = { userId: string; email: string; password: string };
  * Creates the Auth login with the service role. This is the ONLY step that needs it; roles,
  * memberships and permissions are written by the caller's own session through provisioning RPCs.
  */
-export async function createLogin(email: string, fullName: string): Promise<CreatedLogin> {
-  const password = generateTemporaryPassword();
+export async function createLogin(email: string, fullName: string, initialPassword?: string): Promise<CreatedLogin> {
+  // The owner may type the first password; otherwise a strong one is generated. Either way it must be changed at first sign-in.
+  const password = initialPassword || generateTemporaryPassword();
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.createUser({
     email,

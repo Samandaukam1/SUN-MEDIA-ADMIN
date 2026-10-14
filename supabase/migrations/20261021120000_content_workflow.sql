@@ -550,6 +550,10 @@ begin
       perform private.notify_event(private.role_member_ids('admin') || v_managers, v_key, 'editing.submitted', 'Montaj tugatildi — tekshiring', v_label, v_href, 'tasks', new.id, v_content.client_id);
     elsif new.status = 'done' then
       perform private.workflow_advance(v_content.id, 'approved');
+      -- With a post time it is ready to go out at that time.
+      if v_content.post_at is not null then
+        perform private.workflow_advance(v_content.id, 'scheduled');
+      end if;
       perform private.notify_event(
         v_assignees || v_managers || coalesce((select array_agg(user_id) from public.content_assignments where content_id = v_content.id and role = 'project_manager'), '{}'),
         v_key, 'content.approved', 'Kontent tasdiqlandi', v_label, v_href, 'content_items', v_content.id, v_content.client_id);
@@ -834,7 +838,10 @@ begin
     returning id into v_task_id;
   else
     v_task_id := v_task.id;
-    update public.tasks set due_at = p_due_at, description = coalesce(nullif(btrim(p_note), ''), description) where id = v_task_id;
+    update public.tasks
+    set due_at = p_due_at,
+        description = concat_ws(E'\n\n', description, case when nullif(btrim(p_note), '') is not null then 'Montaj izohi: ' || btrim(p_note) end)
+    where id = v_task_id;
     delete from public.task_assignments where task_id = v_task_id and user_id <> p_editor_id;
   end if;
   insert into public.task_assignments (task_id, user_id, assigned_by) values (v_task_id, p_editor_id, auth.uid()) on conflict do nothing;

@@ -34,7 +34,7 @@ type Props = {
 
 const STEPS = ['Asosiy ma’lumot', 'Lavozim', 'Login va ruxsat', 'Tasdiqlash'] as const;
 // Which step holds each field, so a server-side error takes the admin straight to it.
-const FIELD_STEP: Record<string, number> = { first_name: 0, last_name: 0, phone: 0, birth_date: 0, passport_series: 0, passport_number: 0, job_title: 1, role_key: 1, employment_type: 1, work_start: 1, work_end: 1, email: 2 };
+const FIELD_STEP: Record<string, number> = { first_name: 0, last_name: 0, phone: 0, birth_date: 0, passport_series: 0, passport_number: 0, job_title: 1, role_key: 1, employment_type: 1, work_start: 1, work_end: 1, email: 2, initial_password: 2 };
 
 /**
  * Jamoa → Xodim qo‘shish: four short steps, then the login and temporary password to hand over.
@@ -271,7 +271,16 @@ export function EmployeeForm({ roles: initialRoles, clients, permissions, rolePe
           hint={!emailTouched && suggested ? 'Ism-familiyadan taklif qilindi — o‘zgartirish mumkin.' : 'Xodim shu login bilan ilovaga kiradi.'}
           error={errors.email}
         />
-        <p className="text-sm text-muted">Vaqtinchalik parol avtomatik yaratiladi. Xodim birinchi kirishda uni o‘zgartiradi.</p>
+        <TextInput
+          label="Dastlabki parol (ixtiyoriy)"
+          name="initial_password"
+          type="text"
+          autoComplete="new-password"
+          maxLength={72}
+          placeholder="Bo‘sh qoldirsangiz — avtomatik yaratiladi"
+          hint="Kamida 10 belgi, harf va raqam. Xodim birinchi kirishda parolni o‘zgartiradi; parol bazada ochiq saqlanmaydi."
+          error={errors.initial_password}
+        />
         {permissions.length > 0 ? (
           <fieldset>
             <legend className="mb-1 text-[15px] font-semibold">Bu xodim nima qila oladi?</legend>

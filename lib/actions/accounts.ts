@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { createLogin, deleteLogin, setLoginBlocked, setTemporaryPassword } from '@/lib/accounts';
 import { can, isSystemOwner, requirePermission, requireStaff } from '@/lib/auth';
 import { toUserMessage } from '@/lib/errors';
+import { passwordProblem } from '@/lib/password-policy';
 import { guardSystemOwner } from '@/lib/protect';
 import { createClient } from '@/lib/supabase/server';
 import { fieldErrorsFrom, type ActionState, type CredentialsState } from './state';
@@ -43,6 +44,7 @@ const employeeSchema = z.object({
   birth_date: z.union([z.literal(''), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Sanani to‘g‘ri kiriting')]),
   passport_series: z.union([z.literal(''), z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'Seriya 2 ta lotin harfi, masalan AB')]),
   passport_number: z.union([z.literal(''), z.string().trim().regex(/^\d{7}$/, 'Raqam 7 ta raqam')]),
+  initial_password: z.string().max(72),
 }).refine((v) => v.work_end > v.work_start, { message: 'Ish tugash vaqti boshlanishidan keyin bo‘lsin', path: ['work_end'] });
 
 /** Team → Add employee: creates the login, then provisions it with the admin's own session. */
@@ -66,17 +68,20 @@ export async function createEmployeeAccount(_: CredentialsState, formData: FormD
     birth_date: formData.get('birth_date') ?? '',
     passport_series: formData.get('passport_series') ?? '',
     passport_number: formData.get('passport_number') ?? '',
+    initial_password: formData.get('initial_password') ?? '',
   });
   if (!parsed.success) {
     return { status: 'error', message: 'Formadagi xatolarni tuzating.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
   }
   const input = parsed.data;
   const context = await requireStaff();
+  const weak = input.initial_password ? passwordProblem(input.initial_password, { email: input.email }) : null;
+  if (weak) return { status: 'error', message: 'Formadagi xatolarni tuzating.', fieldErrors: { initial_password: weak } };
   const fullName = `${input.first_name} ${input.last_name}`;
 
   let login;
   try {
-    login = await createLogin(input.email, fullName);
+    login = await createLogin(input.email, fullName, input.initial_password || undefined);
   } catch (error) {
     return { status: 'error', message: toUserMessage(error), fieldErrors: { email: toUserMessage(error) } };
   }

@@ -27,21 +27,22 @@ function initials(name: string) {
 }
 
 /**
- * The panel's chat: SUN MEDIA's own conversations ("team") or the chats with clients ("clients"), list on the left
- * and the open conversation on the right; on phones one at a time.
+ * The chat: SUN MEDIA's own conversations ("team") or the chats with clients ("clients") in the panel, and every
+ * conversation the person belongs to in the staff cabinet ("staff"). List on the left and the open conversation
+ * on the right; on phones one at a time. Rows come through row-level security, so nobody reads others' chats.
  */
-export async function ChatWorkspace({ mode, xona, oldin }: { mode: 'team' | 'clients'; xona?: string; oldin?: string }) {
+export async function ChatWorkspace({ mode, xona, oldin }: { mode: 'team' | 'clients' | 'staff'; xona?: string; oldin?: string }) {
   const context = await requireStaff();
-  const base = mode === 'team' ? '/chat' : '/chat/mijozlar';
+  const base = mode === 'team' ? '/chat' : mode === 'staff' ? '/xodim/chat' : '/chat/mijozlar';
   const chats = await loadMyChats();
   let items: Item[];
   let observeAll = false;
-  if (mode === 'team') {
+  if (mode === 'team' || mode === 'staff') {
     items = chats
-      .filter((c) => c.kind !== 'project' && !c.archived)
+      .filter((c) => (mode === 'staff' || c.kind !== 'project') && !c.archived)
       .map((c) => ({
         id: c.room_id,
-        title: c.kind === 'direct' ? (c.peer_name ?? 'Suhbat') : (c.name ?? 'Guruh'),
+        title: c.kind === 'direct' ? (c.peer_name ?? 'Suhbat') : c.kind === 'project' ? (c.client_name ?? c.name ?? 'Mijoz') : (c.name ?? 'Guruh'),
         preview: c.last_is_system ? (c.last_message_body ?? '') : `${c.last_sender_name ? `${c.last_sender_name}: ` : ''}${c.last_message_body || (c.last_has_files ? 'Fayl' : '')}`,
         at: c.last_message_at,
         unread: c.unread_count ?? 0,
@@ -76,7 +77,7 @@ export async function ChatWorkspace({ mode, xona, oldin }: { mode: 'team' | 'cli
   const [room, messages, colleagues] = await Promise.all([
     selected ? loadRoom(selected, context.userId) : null,
     selected ? loadRoomMessages(selected, before) : [],
-    mode === 'team' ? loadColleagues(context.userId) : [],
+    mode !== 'clients' ? loadColleagues(context.userId) : [],
   ]);
   const older = selected && messages.length === ROOM_PAGE ? `${base}?xona=${selected}&oldin=${encodeURIComponent(messages[0].created_at)}` : null;
 
@@ -84,19 +85,23 @@ export async function ChatWorkspace({ mode, xona, oldin }: { mode: 'team' | 'cli
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">{mode === 'team' ? 'Jamoa chati' : 'Mijozlar bilan chat'}</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{mode === 'clients' ? 'Mijozlar bilan chat' : 'Chat'}</h1>
           <p className="text-sm text-muted">
-            {mode === 'team' ? 'SUN MEDIA xodimlari o‘rtasida: guruhlar va shaxsiy yozishmalar.' : 'Har bir mijoz bilan bitta chat — mijoz uni o‘z kabinetida va ilovada ko‘radi.'}
+            {mode === 'team'
+              ? 'SUN MEDIA xodimlari o‘rtasida: guruhlar va shaxsiy yozishmalar.'
+              : mode === 'staff'
+                ? 'Hamkasblar, guruhlar va siz biriktirilgan mijoz chatlari. Ilovadagi chat bilan bir xil.'
+                : 'Har bir mijoz bilan bitta chat — mijoz uni o‘z kabinetida va ilovada ko‘radi.'}
           </p>
         </div>
-        {mode === 'team' ? <NewChat colleagues={colleagues} /> : null}
+        {mode !== 'clients' ? <NewChat colleagues={colleagues} base={base} /> : null}
       </div>
       <div className="grid h-[calc(100dvh-14rem)] min-h-[440px] overflow-hidden rounded-2xl border border-line bg-surface lg:grid-cols-[320px_1fr]">
         <aside className={`min-h-0 flex-col border-line lg:flex lg:border-r ${selected ? 'hidden' : 'flex'}`}>
           <ul className="min-h-0 flex-1 overflow-y-auto">
             {items.length === 0 ? (
               <li className="px-5 py-10 text-center text-sm text-muted">
-                {mode === 'team' ? 'Hali suhbat yo‘q. “Yangi suhbat” bilan boshlang.' : 'Mijoz chatlari yo‘q yoki siz ularga biriktirilmagansiz.'}
+                {mode !== 'clients' ? 'Hali suhbat yo‘q. “Yangi suhbat” bilan boshlang.' : 'Mijoz chatlari yo‘q yoki siz ularga biriktirilmagansiz.'}
               </li>
             ) : null}
             {items.map((i) => {
@@ -110,7 +115,7 @@ export async function ChatWorkspace({ mode, xona, oldin }: { mode: 'team' | 'cli
                         <img src={i.logo} alt="" className="size-full object-cover" />
                       ) : i.direct ? (
                         initials(i.title)
-                      ) : mode === 'team' ? (
+                      ) : mode !== 'clients' ? (
                         <Icon name="users" size={17} />
                       ) : (
                         initials(i.title)
@@ -154,7 +159,7 @@ export async function ChatWorkspace({ mode, xona, oldin }: { mode: 'team' | 'cli
                       : `${room.subtitle} · ${room.members.filter((m) => isOnline(m.lastSeen)).length} online · ${room.members.map((m) => m.name).slice(0, 5).join(', ')}${room.members.length > 5 ? '…' : ''}`}
                   </p>
                 </div>
-                {room.clientId ? (
+                {room.clientId && mode !== 'staff' ? (
                   <Link href={`/clients/${room.clientId}`} className="shrink-0 text-[13px] font-medium text-muted hover:text-ink">
                     Mijoz sahifasi →
                   </Link>

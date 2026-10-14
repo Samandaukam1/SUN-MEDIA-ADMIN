@@ -1,15 +1,17 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 
 import { Avatar } from '@/components/ui/Avatar';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/components/ui/cn';
 import { Notice } from '@/components/ui/Notice';
 import { reportAttendanceError, resolveAttendanceAlert } from '@/lib/actions/team';
-import { markAllPresentAction, markAttendanceAction } from '@/lib/actions/work';
+import { markAttendanceAction } from '@/lib/actions/work';
+import { agencyNowTime, agencyToday, dayState, lateLabel, sourceLabel, type DayStateKey } from '@/lib/attendance';
 import type { Database } from '@/types/database';
 
 type Status = Database['public']['Enums']['attendance_status'];
@@ -19,15 +21,29 @@ export type RosterRow = {
   avatar_url: string | null;
   job_title: string | null;
   work_start_time: string;
+  work_end_time?: string | null;
+  scheduled?: boolean | null;
   status: Status | null;
   arrived_at: string | null;
   late_minutes: number | null;
   note: string | null;
   attendance_id?: string | null;
   marked_by_name?: string | null;
+  source?: string | null;
+  corrected_by_name?: string | null;
+  corrected_at?: string | null;
+  correction_note?: string | null;
   /** An open "Davomat xatomi?" alert on this record. */
   alert?: { id: string; note: string | null } | null;
 };
+
+const CORRECT: { status: Status; label: string; time?: boolean }[] = [
+  { status: 'late', label: 'Keldi (vaqt bilan)', time: true },
+  { status: 'remote', label: 'Masofadan ishladi' },
+  { status: 'vacation', label: 'Ta’til' },
+  { status: 'excused', label: 'Ruxsatli / dam olish' },
+  { status: 'absent', label: 'Kelmagan' },
+];
 
 /** The Rahbar flags a record (everyone is told to check it), then closes the alert with a correction note or dismisses it. */
 function AlertControls({ row, canMark }: { row: RosterRow; canMark: boolean }) {
@@ -52,7 +68,7 @@ function AlertControls({ row, canMark }: { row: RosterRow; canMark: boolean }) {
         <span className="font-semibold text-warning">⚠ Davomat xatosi tekshirilmoqda</span>
         {row.alert.note ? <span className="text-muted">— {row.alert.note}</span> : null}
         {canMark ? (
-          <span className="ml-auto flex gap-1.5">
+          <span className="ml-auto flex flex-wrap gap-1.5">
             <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Nima tuzatildi?" aria-label="Tuzatish izohi" className="h-8 w-44 rounded-lg border border-line bg-surface px-2.5 text-[13px] outline-none focus:border-accent" />
             <Button size="md" className="h-8" loading={pending} onClick={() => go(() => resolveAttendanceAlert(row.alert!.id, note, false))}>
               Tuzatildi
@@ -85,139 +101,172 @@ function AlertControls({ row, canMark }: { row: RosterRow; canMark: boolean }) {
   );
 }
 
-const MARKS: { status: Status; label: string }[] = [
-  { status: 'present', label: 'Keldi' },
-  { status: 'late', label: 'Kechikdi' },
-  { status: 'absent', label: 'Kelmadi' },
-  { status: 'excused', label: 'Sababli' },
-  { status: 'vacation', label: 'Ta’til' },
-  { status: 'remote', label: 'Masofadan' },
-];
+/** Correction dialog: a status, the real arrival time and the reason — recorded as a correction, not a KELDIM. */
+function CorrectDialog({ row, date, onClose }: { row: RosterRow; date: string; onClose: () => void }) {
+  const router = useRouter();
+  const [status, setStatus] = useState<Status>(row.status === 'present' ? 'late' : (row.status ?? 'late'));
+  const [time, setTime] = useState(row.arrived_at?.slice(0, 5) ?? row.work_start_time.slice(0, 5));
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const withTime = CORRECT.find((c) => c.status === status)?.time;
+  return (
+    <div className="fixed inset-0 z-40 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal aria-labelledby="correct-title" onClick={onClose}>
+      <div className="w-full max-w-md space-y-4 rounded-2xl border border-line bg-surface p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div>
+          <p id="correct-title" className="text-lg font-semibold">
+            {row.full_name} — davomatni tuzatish
+          </p>
+          <p className="mt-1 text-[13px] text-muted">
+            Bu xodimning “KELDIM”i emas, Rahbar tuzatishi sifatida saqlanadi. Ish vaqti {row.work_start_time.slice(0, 5)}–{row.work_end_time?.slice(0, 5) ?? '18:00'}.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {CORRECT.map((c) => (
+            <button
+              key={c.status}
+              type="button"
+              aria-pressed={status === c.status}
+              onClick={() => setStatus(c.status)}
+              className={cn('h-9 rounded-lg border px-3 text-[13px] font-medium', status === c.status ? 'border-accent bg-accent-soft text-accent-on-soft' : 'border-line text-muted hover:text-ink')}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        {withTime ? (
+          <label className="block text-[13px] text-muted">
+            Haqiqiy kelgan vaqti
+            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="mt-1 h-11 w-full rounded-xl border border-line bg-surface px-4 text-[15px]" />
+            <span className="mt-1 block text-[12px] text-subtle">Kechikish shu xodimning ish boshlash vaqtiga qarab o‘zi hisoblanadi.</span>
+          </label>
+        ) : null}
+        <label className="block text-[13px] text-muted">
+          Sabab {status === 'vacation' || status === 'excused' ? '(ixtiyoriy)' : ''}
+          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder="Masalan: kartadan tekshirildi" className="mt-1 h-11 w-full rounded-xl border border-line bg-surface px-4 text-[14px]" />
+        </label>
+        {error ? <p className="text-[13px] text-danger">{error}</p> : null}
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Bekor qilish
+          </Button>
+          <Button
+            loading={pending}
+            onClick={() =>
+              start(async () => {
+                setError(null);
+                const res = await markAttendanceAction({ userId: row.user_id, date, status, arrivedAt: withTime ? time : null, note });
+                if (res.status === 'error') return setError(res.message ?? 'Saqlab bo‘lmadi.');
+                onClose();
+                router.refresh();
+              })
+            }
+          >
+            Saqlash
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-const ACTIVE: Record<Status, string> = {
-  present: 'border-success bg-success text-white',
-  late: 'border-warning bg-warning text-white',
-  absent: 'border-danger bg-danger text-white',
-  excused: 'border-info bg-info text-white',
-  vacation: 'border-violet bg-violet text-white',
-  remote: 'border-ink bg-ink text-bg',
+const TONE_BG: Record<string, string> = {
+  success: 'bg-success',
+  warning: 'bg-warning',
+  danger: 'bg-danger',
+  info: 'bg-info',
+  violet: 'bg-violet',
+  neutral: 'bg-line-strong',
 };
 
-/** Office attendance in one screen: a button per status next to every person; each click saves at once. */
-export function AttendanceBoard({ rows, date, isToday, canMark }: { rows: RosterRow[]; date: string; isToday: boolean; canMark: boolean }) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [lateFor, setLateFor] = useState<RosterRow | null>(null);
-  const [lateTime, setLateTime] = useState('');
-  const unmarked = rows.filter((r) => !r.status);
-
-  const run = (key: string, job: () => Promise<{ status: string; message?: string }>) => {
-    setBusy(key);
-    setError(null);
-    startTransition(async () => {
-      const result = await job();
-      if (result.status === 'error') setError(result.message ?? 'Saqlab bo‘lmadi. Qayta urinib ko‘ring.');
-      router.refresh();
-      setBusy(null);
-    });
-  };
-
-  const mark = (row: RosterRow, status: Status) => {
-    if (status === 'late') {
-      const now = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
-      setLateTime(row.arrived_at?.slice(0, 5) ?? (isToday ? now : row.work_start_time.slice(0, 5)));
-      setLateFor(row);
-      return;
-    }
-    run(`${row.user_id}:${status}`, () => markAttendanceAction({ userId: row.user_id, date, status, arrivedAt: status === 'present' ? row.work_start_time.slice(0, 5) : null, note: row.note }));
-  };
+/**
+ * Today's attendance as the Rahbar sees it: every employee presses KELDIM themselves; here are the arrivals, the
+ * schedule, the lateness, who is still to confirm and who did not confirm by the end of their day. Corrections and
+ * error alerts sit beside each person. Live: a new KELDIM appears without reloading (realtime refresh of the page).
+ */
+export function AttendanceBoard({ rows, date, canMark }: { rows: RosterRow[]; date: string; isToday: boolean; canMark: boolean }) {
+  const [correcting, setCorrecting] = useState<RosterRow | null>(null);
+  const [today, setToday] = useState(() => agencyToday());
+  const [now, setNow] = useState(() => agencyNowTime());
+  useEffect(() => {
+    const t = setInterval(() => {
+      setToday(agencyToday());
+      setNow(agencyNowTime());
+    }, 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const states = rows.map((r) => ({ row: r, state: dayState(r, date, today, now) }));
+  const count = (...keys: DayStateKey[]) => states.filter((s) => keys.includes(s.state.key)).length;
+  const working = states.filter((s) => s.state.key !== 'dayoff');
+  const stats = [
+    { label: 'Jami xodimlar', value: working.length, tone: '' },
+    { label: 'Bugun keldi', value: count('present', 'late', 'remote'), tone: 'text-success' },
+    { label: 'Kechikdi', value: count('late'), tone: count('late') ? 'text-warning' : '' },
+    { label: 'Hali belgilanmagan', value: count('waiting'), tone: '' },
+    { label: 'Kelmagan', value: count('absent', 'unconfirmed'), tone: count('absent', 'unconfirmed') ? 'text-danger' : '' },
+    { label: 'Ta’til / ruxsatli', value: count('vacation', 'excused'), tone: '' },
+  ];
+  const order: DayStateKey[] = ['unconfirmed', 'absent', 'waiting', 'late', 'present', 'remote', 'excused', 'vacation', 'dayoff'];
+  const sorted = [...states].sort((a, b) => order.indexOf(a.state.key) - order.indexOf(b.state.key) || a.row.full_name.localeCompare(b.row.full_name));
 
   return (
     <div className="space-y-4">
-      {error ? <Notice tone="danger" title={error} /> : null}
-      {canMark && unmarked.length ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-surface px-5 py-3">
-          <p className="flex-1 text-sm">
-            <span className="font-semibold">{unmarked.length} kishi</span> hali belgilanmagan. Hammasi o‘z vaqtida kelgan bo‘lsa — bir bosishda belgilang, keyin kechikkanlarni to‘g‘rilang.
-          </p>
-          <Button loading={busy === 'all'} disabled={pending} onClick={() => run('all', () => markAllPresentAction({ userIds: unmarked.map((r) => r.user_id), date }))}>
-            Qolganlar — Keldi
-          </Button>
-        </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {stats.map((s) => (
+          <Card key={s.label} className="flex flex-col gap-1 py-4">
+            <span className="text-[12.5px] text-muted">{s.label}</span>
+            <span className={cn('tabular text-2xl font-bold', s.tone)}>{s.value}</span>
+          </Card>
+        ))}
+      </div>
+      {count('waiting') ? (
+        <Notice tone="info" title={`${count('waiting')} xodim hali “KELDIM” bosmagan`}>
+          Ish kuni tugaguncha ular “Hali belgilanmagan”. O‘z ish vaqti tugagach ham bosilmasa — “Kelmagan — davomat tasdiqlanmagan”.
+        </Notice>
       ) : null}
 
       <Card className="divide-y divide-line p-0">
-        {rows.map((row) => (
-          <div key={row.user_id} className="flex flex-wrap items-center gap-4 px-5 py-3">
-            <Avatar name={row.full_name} url={row.avatar_url} size={36} />
-            <div className="min-w-48 flex-1">
-              <p className="font-medium">{row.full_name}</p>
-              <p className="text-[13px] text-muted">
-                {[
-                  row.job_title,
-                  row.arrived_at ? `keldi ${row.arrived_at.slice(0, 5)}` : `ish ${row.work_start_time.slice(0, 5)} da`,
-                  row.late_minutes ? `${row.late_minutes} daq kechikdi` : null,
-                  row.arrived_at && row.marked_by_name ? (row.marked_by_name === row.full_name ? '“Keldim” — o‘zi belgiladi' : `belgiladi: ${row.marked_by_name}`) : null,
-                  row.note,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
+        {sorted.map(({ row, state }) => {
+          const source = sourceLabel(row);
+          return (
+            <div key={row.user_id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5">
+              <Avatar name={row.full_name} url={row.avatar_url} size={38} />
+              <div className="min-w-44 flex-1">
+                <p className="font-medium">{row.full_name}</p>
+                <p className="text-[12.5px] text-muted">
+                  {[row.job_title, `Ish vaqti ${row.work_start_time.slice(0, 5)}–${row.work_end_time?.slice(0, 5) ?? '18:00'}`].filter(Boolean).join(' · ')}
+                </p>
+              </div>
+              <div className="min-w-40 text-right sm:text-left">
+                <p className="tabular text-[15px] font-semibold">{row.arrived_at ? row.arrived_at.slice(0, 5) : '—'}</p>
+                <p className="text-[12px] text-muted">{row.late_minutes ? `${lateLabel(row.late_minutes)} kechikdi` : row.arrived_at ? 'o‘z vaqtida' : 'kelgan vaqt'}</p>
+              </div>
+              <div className="flex min-w-52 flex-col gap-1">
+                <span className="inline-flex items-center gap-2 text-[13.5px] font-medium">
+                  <span className={cn('size-2 rounded-full', TONE_BG[state.tone])} aria-hidden />
+                  {state.label}
+                </span>
+                {source ? (
+                  <span className="text-[12px] text-muted" title={row.correction_note ?? undefined}>
+                    {source}
+                    {row.correction_note ? ` · ${row.correction_note}` : ''}
+                  </span>
+                ) : null}
+              </div>
+              <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                {row.source === 'self' && !row.corrected_by_name ? <Badge tone="success">KELDIM</Badge> : null}
+                {canMark && state.key !== 'dayoff' ? (
+                  <Button variant="secondary" className="h-8 px-3 text-[12.5px]" onClick={() => setCorrecting(row)}>
+                    Tuzatish
+                  </Button>
+                ) : null}
+                <AlertControls row={row} canMark={canMark} />
+              </div>
             </div>
-            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={`${row.full_name} davomati`}>
-              {MARKS.map((m) => {
-                const on = row.status === m.status;
-                return (
-                  <button
-                    key={m.status}
-                    type="button"
-                    role="radio"
-                    aria-checked={on}
-                    disabled={!canMark || pending}
-                    onClick={() => mark(row, m.status)}
-                    className={cn(
-                      'h-8 rounded-lg border px-3 text-[13px] font-medium transition-colors disabled:cursor-default',
-                      on ? ACTIVE[m.status] : 'border-line bg-surface text-muted hover:border-line-strong hover:text-ink',
-                      busy === `${row.user_id}:${m.status}` && 'opacity-60',
-                    )}
-                  >
-                    {m.label}
-                  </button>
-                );
-              })}
-            </div>
-            <AlertControls row={row} canMark={canMark} />
-          </div>
-        ))}
+          );
+        })}
       </Card>
-
-      {lateFor ? (
-        <div className="fixed inset-0 z-40 grid place-items-center bg-black/30 p-4" role="dialog" aria-modal aria-labelledby="late-title" onClick={() => setLateFor(null)}>
-          <div className="w-full max-w-sm space-y-4 rounded-2xl border border-line bg-surface p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <p id="late-title" className="text-lg font-semibold">
-              {lateFor.full_name} qachon keldi? (tuzatish)
-            </p>
-            <input type="time" value={lateTime} onChange={(e) => setLateTime(e.target.value)} className="h-11 w-full rounded-xl border border-line bg-surface px-4 text-[15px]" aria-label="Kelgan vaqti" />
-            <p className="text-[13px] text-muted">Ish {lateFor.work_start_time.slice(0, 5)} da boshlanadi. Kechikish daqiqasi o‘zi hisoblanadi.</p>
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setLateFor(null)}>
-                Bekor qilish
-              </Button>
-              <Button
-                onClick={() => {
-                  const row = lateFor;
-                  setLateFor(null);
-                  run(`${row.user_id}:late`, () => markAttendanceAction({ userId: row.user_id, date, status: 'late', arrivedAt: lateTime || null, note: row.note }));
-                }}
-              >
-                Saqlash
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {correcting ? <CorrectDialog row={correcting} date={date} onClose={() => setCorrecting(null)} /> : null}
     </div>
   );
 }

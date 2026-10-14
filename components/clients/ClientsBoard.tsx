@@ -98,7 +98,7 @@ export function ClientsBoard({ rows, initial, today, finance }: { rows: ClientRo
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-line pt-4 text-[13px]">
                     <div>
                       <dt className="text-[11px] tracking-[0.06em] text-subtle uppercase">Tarif</dt>
-                      <dd className="mt-0.5 truncate font-semibold">{c.plan ?? '—'}</dd>
+                      <dd className="mt-0.5 truncate font-semibold">{c.plan ?? <span className="font-normal text-subtle">Tanlanmagan</span>}</dd>
                     </div>
                     {finance ? (
                       <div>
@@ -116,10 +116,10 @@ export function ClientsBoard({ rows, initial, today, finance }: { rows: ClientRo
                     {finance ? (
                       <div className="col-span-2 flex items-center justify-between gap-2">
                         <span className="text-muted">
-                          Keyingi to‘lov: <span className="font-semibold text-ink">{payDate(c.billing?.next_payment_on ?? null, today)}</span>
+                          Keyingi to‘lov: <span className="font-semibold text-ink">{c.billing?.next_payment_on ? payDate(c.billing.next_payment_on, today) : 'Belgilanmagan'}</span>
                           {c.billing ? ` · ${BILLING_PERIOD[c.billing.billing_period] ?? ''}` : ''}
                         </span>
-                        {pay ? <Badge tone={pay.tone}>{pay.label}</Badge> : null}
+                        {pay && c.billing?.agreed_price != null ? <Badge tone={pay.tone}>{pay.label}</Badge> : null}
                       </div>
                     ) : null}
                     <div className="col-span-2 truncate text-muted">

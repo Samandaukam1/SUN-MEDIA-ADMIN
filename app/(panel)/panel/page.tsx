@@ -1,13 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { CheckInCard } from '@/components/cabinet/CheckInCard';
 import { TeamList } from '@/components/live/TeamList';
+import { TodayAttendance } from '@/components/team/TodayAttendance';
 import { LiveRefresh } from '@/components/panel/LiveRefresh';
 import { EmptyRow } from '@/components/panel/Stat';
 import { Badge } from '@/components/ui/Badge';
 import { Card, SectionTitle } from '@/components/ui/Card';
 import { cn } from '@/components/ui/cn';
-import { Icon } from '@/components/ui/Icon';
 import { describeActivity, type ActivityItem } from '@/lib/activity';
 import { can, requireStaff } from '@/lib/auth';
 import { lookup, SHOOTING_ATTENDANCE_STATUS, SHOOTING_STATUS, TASK_TYPE } from '@/lib/labels';
@@ -26,7 +27,7 @@ export default async function HomePage() {
 
   const today = agencyDateKey();
   const supabase = await createClient();
-  const [ccRes, activityRes, team, applications] = await Promise.all([
+  const [ccRes, activityRes, team, applications, myDay, roster] = await Promise.all([
     supabase.rpc('get_command_center', { p_date: today }),
     supabase.rpc('get_activity_feed', { p_limit: 8 }),
     loadTeam(),
@@ -37,11 +38,12 @@ export default async function HomePage() {
       .eq('status', 'new')
       .order('created_at', { ascending: false })
       .limit(5),
+    loadMyDay(context.userId, today),
+    can(context, 'attendance.read') ? supabase.rpc('get_attendance_day', { p_date: today }) : Promise.resolve({ data: null }),
   ]);
   if (ccRes.error) throw ccRes.error;
   const cc = commandCenterSchema.parse(ccRes.data);
   const activity = (activityRes.data ?? []) as ActivityItem[];
-  const canAttendance = can(context, 'attendance.manage');
 
   return (
     <div className="space-y-8">
@@ -53,15 +55,9 @@ export default async function HomePage() {
         <LiveRefresh topics={['staff']} />
       </header>
 
-      <Today cc={cc} />
+      {myDay ? <CheckInCard {...myDay} tone="panel" /> : null}
 
-      {canAttendance && cc.attendance.unmarked > 0 ? (
-        <Link href="/team/attendance" className="flex items-center gap-4 rounded-2xl border border-warning/40 bg-warning-soft px-5 py-4 hover:border-warning">
-          <Icon name="userCheck" className="text-warning" />
-          <span className="flex-1 text-sm font-medium">{cc.attendance.unmarked} xodimning bugungi davomati belgilanmagan</span>
-          <span className="text-sm font-semibold">Belgilash →</span>
-        </Link>
-      ) : null}
+      <Today cc={cc} />
 
       <div className="grid gap-8 xl:grid-cols-[1.4fr_1fr]">
         <div className="space-y-8">
@@ -70,6 +66,7 @@ export default async function HomePage() {
           <Deadlines cc={cc} />
         </div>
         <div className="space-y-8">
+          {roster.data ? <TodayAttendance rows={roster.data.filter((r) => r.scheduled || r.status)} date={today} /> : null}
           <TeamList members={team.map(({ id, name, title, lastSeen }) => ({ id, name, title, lastSeen }))} me={context.userId} />
           <Activity items={activity} />
         </div>
@@ -251,4 +248,25 @@ function StaffWelcome({ context, team }: { context: StaffContext; team: TeamMemb
       <TeamList members={team.map(({ id, name, title, lastSeen }) => ({ id, name, title, lastSeen }))} me={context.userId} />
     </div>
   );
+}
+
+/** The signed-in person's own KELDIM card, when they are an employee. */
+async function loadMyDay(userId: string, today: string) {
+  const supabase = await createClient();
+  const [employee, record, setting, profile] = await Promise.all([
+    supabase.from('employees').select('work_start_time, status').eq('user_id', userId).maybeSingle(),
+    supabase.from('attendance').select('arrived_at, status, late_minutes, source, corrector:profiles!attendance_corrected_by_fkey(full_name)').eq('user_id', userId).eq('work_date', today).maybeSingle(),
+    supabase.from('app_settings').select('value').eq('key', 'attendance.check_in_from').maybeSingle(),
+    supabase.from('profiles').select('full_name').eq('id', userId).maybeSingle(),
+  ]);
+  if (!employee.data || employee.data.status === 'terminated') return null;
+  const r = record.data;
+  return {
+    record: r ? { arrivedAt: r.arrived_at, status: r.status, lateMinutes: r.late_minutes ?? 0, source: r.source, correctedBy: r.corrector?.full_name ?? null } : null,
+    from: typeof setting.data?.value === 'string' ? setting.data.value : '09:45',
+    workStart: employee.data.work_start_time,
+    serverNow: new Date().toISOString(),
+    today,
+    name: (profile.data?.full_name ?? '').split(' ')[0] || undefined,
+  };
 }

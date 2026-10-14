@@ -7,12 +7,14 @@ import { Panel } from '@/components/cabinet/partner/parts';
 import { fileSize } from '@/components/cabinet/partner/parts';
 import { StatusPill } from '@/components/cabinet/StatusPill';
 import { ScriptEditor } from '@/components/cabinet/ScriptEditor';
+import { PublicationControls } from '@/components/work/PublicationControls';
+import { StaffHeaderActions } from '@/components/cabinet/StaffHeaderActions';
 import { TaskComment, TaskStatusButtons, TaskUpload } from '@/components/cabinet/TaskControls';
-import { NotificationBell } from '@/components/live/NotificationBell';
 import { PresenceHeartbeat } from '@/components/live/PresenceHeartbeat';
 import { SiteIcon } from '@/components/site/SiteIcon';
 import { getSessionContext } from '@/lib/auth';
 import { homeFor } from '@/lib/cabinet/routing';
+import { loadMyChats, unreadTotal } from '@/lib/chat';
 import { assigneeActions } from '@/lib/cabinet/tasks';
 import { CONTENT_STATUS, CONTENT_TYPE, PRIORITY, TASK_TYPE, TEAM_ROLE_LABEL } from '@/lib/labels';
 import { createClient } from '@/lib/supabase/server';
@@ -74,6 +76,10 @@ export default async function EmployeeTaskPage({ params }: { params: Promise<{ i
       ? supabase.from('content_equipment').select('prepared_at, item:equipment(name)').eq('content_id', task.content.id)
       : Promise.resolve({ data: [] as { prepared_at: string | null; item: { name: string } | null }[] }),
   ]);
+  const publications =
+    stage === 'publishing' && task.content
+      ? ((await supabase.from('content_publications').select('platform, scheduled_at, published_at, status, post_url').eq('content_id', task.content.id)).data ?? [])
+      : [];
   // The last word from someone else (e.g. why the script came back).
   const reviewNote = [...(comments.data ?? [])].reverse().find((c) => c.author?.id !== context.userId)?.body ?? null;
   const roles = (myRoles.data ?? []).map((r) => TEAM_ROLE_LABEL[r.role as keyof typeof TEAM_ROLE_LABEL] ?? r.role);
@@ -89,7 +95,7 @@ export default async function EmployeeTaskPage({ params }: { params: Promise<{ i
         name={context.profile?.full_name || context.profile?.email || ''}
         role={role}
         home="/xodim"
-        extra={<NotificationBell userId={context.userId} area="staff" tone="dark" />}
+        extra={<StaffHeaderActions userId={context.userId} unreadChats={unreadTotal(await loadMyChats().catch(() => []))} />}
       />
       <main className="mx-auto max-w-4xl space-y-6 px-4 pt-8 pb-20 sm:px-8 sm:pt-10">
         <Link href="/xodim" className="inline-flex items-center gap-2 text-[13.5px] text-[#a8a8ac] hover:text-white">
@@ -146,6 +152,19 @@ export default async function EmployeeTaskPage({ params }: { params: Promise<{ i
         ) : task.content?.script && (stage === 'shooting' || stage === 'editing') ? (
           <Panel title="Ssenariy">
             <p className="font-mono text-[13.5px] leading-relaxed whitespace-pre-wrap text-[#d9d9de]">{task.content.script}</p>
+          </Panel>
+        ) : null}
+
+        {stage === 'publishing' && task.content ? (
+          <Panel title="Post joylash" note="qo‘lda joylanadi — havola bilan tasdiqlang">
+            <PublicationControls
+              contentId={task.content.id}
+              publications={publications.map((p) => ({ platform: p.platform, scheduledAt: p.scheduled_at, publishedAt: p.published_at, status: p.status, url: p.post_url }))}
+              postAt={task.content.post_at}
+              canSchedule={false}
+              canConfirm={task.status !== 'done'}
+              tone="dark"
+            />
           </Panel>
         ) : null}
 

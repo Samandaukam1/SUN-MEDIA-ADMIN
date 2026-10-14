@@ -9,7 +9,7 @@ import { getBrowserClient } from '@/lib/supabase/client';
  * Re-renders the current server page when a realtime change signal arrives on any of the topics
  * (debounced), and on an interval for time-driven state such as overdue tasks.
  */
-export function LiveRefresh({ topics, intervalMs = 60_000 }: { topics: string[]; intervalMs?: number }) {
+export function LiveRefresh({ topics, intervalMs = 60_000, quiet = false }: { topics: string[]; intervalMs?: number; quiet?: boolean }) {
   const router = useRouter();
   const [connected, setConnected] = useState(false);
   const topicsKey = topics.join('|');
@@ -44,6 +44,7 @@ export function LiveRefresh({ topics, intervalMs = 60_000 }: { topics: string[];
     };
   }, [topicsKey, intervalMs, router]);
 
+  if (quiet) return null;
   return (
     <span className="inline-flex items-center gap-2 text-xs font-medium text-subtle" aria-live="polite">
       <span className={`size-2 rounded-full ${connected ? 'bg-success' : 'bg-subtle'}`} aria-hidden />

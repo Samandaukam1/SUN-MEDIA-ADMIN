@@ -172,7 +172,17 @@ export async function saveShootingAction(_: ActionState, formData: FormData): Pr
 // ---------------------------------------------------------------------------
 const ATTENDANCE = ['present', 'late', 'absent', 'excused', 'vacation', 'remote'] as const;
 
-export async function markAttendanceAction(input: { userId: string; date: string; status: Enums['attendance_status']; arrivedAt?: string | null; note?: string | null }): Promise<ActionState> {
+/**
+ * A correction by the Rahbar or an admin (never a KELDIM on someone's behalf): the database keeps the employee's own
+ * confirmation and time, marks the record as corrected, writes the history and refuses changes to one's own day.
+ */
+export async function markAttendanceAction(input: {
+  userId: string;
+  date: string;
+  status: Enums['attendance_status'];
+  arrivedAt?: string | null;
+  note?: string | null;
+}): Promise<ActionState> {
   await requireStaff();
   const parsed = z
     .object({
@@ -180,33 +190,27 @@ export async function markAttendanceAction(input: { userId: string; date: string
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       status: z.enum(ATTENDANCE),
       arrivedAt: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
-      note: z.string().trim().max(1000).nullable().optional(),
+      note: z.string().trim().max(500).nullable().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { status: 'error', message: 'Ma’lumot noto‘g‘ri.' };
   const { userId, date, status, arrivedAt, note } = parsed.data;
+  const arrival = status === 'present' || status === 'late' || status === 'remote';
+  if (arrival && !note) return { status: 'error', message: 'Tuzatish sababini yozing (masalan: kartadan tekshirildi).' };
+  if (arrival && status !== 'remote' && !arrivedAt) return { status: 'error', message: 'Kelgan vaqtini kiriting.' };
   const supabase = await createClient();
   const { error } = await supabase
     .from('attendance')
     .upsert(
-      { user_id: userId, work_date: date, status, arrived_at: status === 'present' || status === 'late' ? (arrivedAt ?? null) : null, note: note || null },
+      {
+        user_id: userId,
+        work_date: date,
+        status,
+        arrived_at: status === 'present' || status === 'late' ? (arrivedAt ?? null) : null,
+        correction_note: note || null,
+      },
       { onConflict: 'user_id,work_date' },
     );
-  if (error) return { status: 'error', message: toUserMessage(error) };
-  revalidatePath('/team/attendance');
-  revalidatePath('/panel');
-  return { status: 'success' };
-}
-
-export async function markAllPresentAction(input: { userIds: string[]; date: string }): Promise<ActionState> {
-  await requireStaff();
-  const ids = z.array(z.uuid()).max(500).safeParse(input.userIds);
-  if (!ids.success || !/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { status: 'error', message: 'Ma’lumot noto‘g‘ri.' };
-  if (!ids.data.length) return { status: 'success' };
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from('attendance')
-    .upsert(ids.data.map((user_id) => ({ user_id, work_date: input.date, status: 'present' as const })), { onConflict: 'user_id,work_date', ignoreDuplicates: true });
   if (error) return { status: 'error', message: toUserMessage(error) };
   revalidatePath('/team/attendance');
   revalidatePath('/panel');

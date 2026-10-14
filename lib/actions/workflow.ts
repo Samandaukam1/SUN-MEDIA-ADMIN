@@ -10,6 +10,8 @@ import { tashkentInstant } from '@/lib/workflow-shared';
 
 export type WorkflowResult = { ok: true; id?: string } | { ok: false; message: string };
 
+const PLATFORMS = ['instagram', 'telegram', 'tiktok', 'youtube', 'facebook', 'linkedin', 'x', 'website', 'other'] as const;
+
 /** Signed-in, active SUN MEDIA staff; every rule beyond that is checked by the database functions. */
 async function staffClient() {
   const context = await getSessionContext();
@@ -46,6 +48,7 @@ const createSchema = z.object({
   equipmentIds: z.array(uuid).max(60),
   newEquipment: z.array(z.string().trim().min(1).max(80)).max(20),
   note: z.string().trim().max(4000),
+  platforms: z.array(z.enum(PLATFORMS)).min(1, 'Kamida bitta platformani tanlang').max(6),
 });
 export type CreateContentTaskInput = z.input<typeof createSchema>;
 
@@ -75,6 +78,7 @@ export async function createContentTask(input: CreateContentTaskInput): Promise<
       shoot_member_ids: v.shootMemberIds,
       equipment_ids: v.equipmentIds,
       new_equipment: v.newEquipment,
+      platforms: v.platforms,
     },
   });
   if (error || !data) return fail(error);
@@ -156,6 +160,33 @@ export async function addContentEquipment(contentId: string, name: string): Prom
   const supabase = await staffClient();
   if (!supabase || !uuid.safeParse(contentId).success) return NO_ACCESS;
   const { error } = await supabase.rpc('add_content_equipment', { p_content_id: contentId, p_name: String(name ?? '').trim().slice(0, 80) });
+  if (error) return fail(error);
+  refresh(contentId);
+  return { ok: true };
+}
+
+/** Set or move the post time and platforms (managers); the person responsible is told. */
+export async function schedulePost(contentId: string, date: string, time: string, platforms: string[]): Promise<WorkflowResult> {
+  const supabase = await staffClient();
+  if (!supabase || !uuid.safeParse(contentId).success) return NO_ACCESS;
+  const at = tashkentInstant(date, time || '19:00');
+  if (!at) return { ok: false, message: 'Post sanasi va vaqtini belgilang.' };
+  const list = z.array(z.enum(PLATFORMS)).min(1).max(6).safeParse(platforms);
+  if (!list.success) return { ok: false, message: 'Kamida bitta platformani tanlang.' };
+  const { error } = await supabase.rpc('schedule_post', { p_content_id: contentId, p_at: at, p_platforms: list.data });
+  if (error) return fail(error);
+  refresh(contentId);
+  return { ok: true };
+}
+
+/** "Post joylandi": the published link per platform; with every planned platform linked the post stage is done. */
+export async function confirmPublication(contentId: string, links: Record<string, string>): Promise<WorkflowResult> {
+  const supabase = await staffClient();
+  if (!supabase || !uuid.safeParse(contentId).success) return NO_ACCESS;
+  const clean = Object.fromEntries(Object.entries(links ?? {}).map(([k, v]) => [k, String(v ?? '').trim()]).filter(([, v]) => v));
+  if (!Object.keys(clean).length) return { ok: false, message: 'Joylangan post havolasini kiriting.' };
+  if (Object.keys(clean).some((k) => !(PLATFORMS as readonly string[]).includes(k))) return { ok: false, message: 'Platforma noto‘g‘ri.' };
+  const { error } = await supabase.rpc('confirm_publication', { p_content_id: contentId, p_links: clean });
   if (error) return fail(error);
   refresh(contentId);
   return { ok: true };

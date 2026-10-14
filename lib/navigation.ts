@@ -42,6 +42,7 @@ const SECTIONS: NavSection[] = [
     icon: 'briefcase',
     pages: [
       { href: '/clients', label: 'Barcha mijozlar', anyOf: ['clients.read_all', 'clients.manage'] },
+      { href: '/clients/narxlar', label: 'Narxlar va to‘lovlar', anyOf: ['finance.read', 'subscriptions.manage'] },
       { href: '/clients/projects', label: 'Loyihalar', anyOf: ['projects.manage', 'clients.read_all'] },
       { href: '/plans', label: 'Tariflar', anyOf: ['plans.manage', 'subscriptions.read', 'subscriptions.manage'] },
       { href: '/clients/contracts', label: 'Shartnomalar', permission: 'contracts.manage' },

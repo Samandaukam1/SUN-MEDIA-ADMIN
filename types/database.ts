@@ -119,12 +119,17 @@ export type Database = {
       attendance: {
         Row: {
           arrived_at: string | null
+          checked_in_at: string | null
+          corrected_at: string | null
+          corrected_by: string | null
+          correction_note: string | null
           created_at: string
           id: string
           late_minutes: number
           marked_at: string
           marked_by: string | null
           note: string | null
+          source: string
           status: Database["public"]["Enums"]["attendance_status"]
           updated_at: string
           user_id: string
@@ -132,12 +137,17 @@ export type Database = {
         }
         Insert: {
           arrived_at?: string | null
+          checked_in_at?: string | null
+          corrected_at?: string | null
+          corrected_by?: string | null
+          correction_note?: string | null
           created_at?: string
           id?: string
           late_minutes?: number
           marked_at?: string
           marked_by?: string | null
           note?: string | null
+          source?: string
           status: Database["public"]["Enums"]["attendance_status"]
           updated_at?: string
           user_id: string
@@ -145,18 +155,30 @@ export type Database = {
         }
         Update: {
           arrived_at?: string | null
+          checked_in_at?: string | null
+          corrected_at?: string | null
+          corrected_by?: string | null
+          correction_note?: string | null
           created_at?: string
           id?: string
           late_minutes?: number
           marked_at?: string
           marked_by?: string | null
           note?: string | null
+          source?: string
           status?: Database["public"]["Enums"]["attendance_status"]
           updated_at?: string
           user_id?: string
           work_date?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "attendance_corrected_by_fkey"
+            columns: ["corrected_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "attendance_marked_by_fkey"
             columns: ["marked_by"]
@@ -560,6 +582,7 @@ export type Database = {
           next_payment_on: string | null
           note: string | null
           payment_status: string
+          site_plan_id: string | null
           updated_at: string
           updated_by: string | null
         }
@@ -574,6 +597,7 @@ export type Database = {
           next_payment_on?: string | null
           note?: string | null
           payment_status?: string
+          site_plan_id?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -588,6 +612,7 @@ export type Database = {
           next_payment_on?: string | null
           note?: string | null
           payment_status?: string
+          site_plan_id?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -597,6 +622,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: true
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_billing_site_plan_id_fkey"
+            columns: ["site_plan_id"]
+            isOneToOne: false
+            referencedRelation: "site_plans"
             referencedColumns: ["id"]
           },
           {
@@ -7686,12 +7718,17 @@ export type Database = {
         Args: never
         Returns: {
           arrived_at: string | null
+          checked_in_at: string | null
+          corrected_at: string | null
+          corrected_by: string | null
+          correction_note: string | null
           created_at: string
           id: string
           late_minutes: number
           marked_at: string
           marked_by: string | null
           note: string | null
+          source: string
           status: Database["public"]["Enums"]["attendance_status"]
           updated_at: string
           user_id: string
@@ -7769,6 +7806,10 @@ export type Database = {
       }
       configure_safi: { Args: { p_config: Json }; Returns: Json }
       confirm_equipment: { Args: { p_content_id: string }; Returns: undefined }
+      confirm_publication: {
+        Args: { p_content_id: string; p_links: Json }
+        Returns: undefined
+      }
       create_content_task: { Args: { p: Json }; Returns: string }
       create_custom_role: {
         Args: { p_base_key: string; p_name: string }
@@ -7973,6 +8014,10 @@ export type Database = {
           arrived_at: string
           attendance_id: string
           avatar_url: string
+          checked_in_at: string
+          corrected_at: string
+          corrected_by_name: string
+          correction_note: string
           full_name: string
           job_title: string
           late_minutes: number
@@ -7981,8 +8026,10 @@ export type Database = {
           note: string
           roles: Json
           scheduled: boolean
+          source: string
           status: Database["public"]["Enums"]["attendance_status"]
           user_id: string
+          work_end_time: string
           work_start_time: string
         }[]
       }
@@ -8549,6 +8596,10 @@ export type Database = {
       save_task: {
         Args: { p_payload: Json; p_task_id: string }
         Returns: string
+      }
+      schedule_post: {
+        Args: { p_at: string; p_content_id: string; p_platforms: string[] }
+        Returns: undefined
       }
       search_sun_coin_recipients: { Args: { p_query?: string }; Returns: Json }
       send_crm_report: {

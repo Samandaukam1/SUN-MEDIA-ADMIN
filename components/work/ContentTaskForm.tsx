@@ -12,7 +12,7 @@ import { SelectInput, TextArea, TextInput } from '@/components/ui/Inputs';
 import { Notice } from '@/components/ui/Notice';
 import { createContentTask } from '@/lib/actions/workflow';
 import { CONTENT_TYPE } from '@/lib/labels';
-import { WORKFLOW_ROLE_LABEL, type WorkflowRole } from '@/lib/workflow-shared';
+import { PLATFORM_OPTIONS, WORKFLOW_ROLE_LABEL, type WorkflowRole } from '@/lib/workflow-shared';
 
 type Person = { id: string; name: string; jobTitle: string | null; skills: { id: string; name: string; workflowRole: WorkflowRole | null }[] };
 type Option = { id: string; name: string };
@@ -39,9 +39,11 @@ function PeoplePicker({
   if (!list.length) {
     return (
       <p className="rounded-xl border border-dashed border-line px-3 py-3 text-[13px] text-muted">
-        {role ? `Hali hech kimda “${WORKFLOW_ROLE_LABEL[role]}” skilli yo‘q.` : 'Faol xodim yo‘q.'}{' '}
-        <Link href="/team" className="font-medium text-ink underline underline-offset-2">
-          Jamoa → xodim → Skilllar
+        {role
+          ? `Ro‘yxat bo‘sh, chunki hali hech bir xodimga “${WORKFLOW_ROLE_LABEL[role]}” skilli biriktirilmagan. Owner uni Jamoa → Skilllar jadvalida bir bosishda belgilaydi.`
+          : 'Faol xodim yo‘q.'}{' '}
+        <Link href="/team/skills" className="font-medium text-ink underline underline-offset-2">
+          Skilllarni biriktirish
         </Link>
       </p>
     );
@@ -102,6 +104,7 @@ export function ContentTaskForm({ clients, people, equipment, defaultClient }: {
   const [gear, setGear] = useState<string[]>([]);
   const [newGear, setNewGear] = useState<string[]>([]);
   const [gearName, setGearName] = useState('');
+  const [platforms, setPlatforms] = useState<string[]>(['instagram']);
   const set = (key: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [key]: e.target.value });
 
   const nameOf = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people]);
@@ -139,6 +142,7 @@ export function ContentTaskForm({ clients, people, equipment, defaultClient }: {
         equipmentIds: hasShoot ? gear : [],
         newEquipment: hasShoot ? newGear : [],
         shootDate: f.shootDate,
+        platforms: platforms as 'instagram'[],
       });
       if (!res.ok) {
         setError(res.message);
@@ -199,6 +203,26 @@ export function ContentTaskForm({ clients, people, equipment, defaultClient }: {
           <div className="grid gap-4 sm:grid-cols-3">
             <TextInput label="Post sanasi" name="postDate" type="date" value={f.postDate} onChange={set('postDate')} />
             <TextInput label="Post vaqti" name="postTime" type="time" value={f.postTime} onChange={set('postTime')} disabled={!f.postDate} />
+          </div>
+          <div>
+            <p className="mb-1.5 text-[13px] font-medium text-muted">Qayerga joylanadi</p>
+            <div className="flex flex-wrap gap-2">
+              {PLATFORM_OPTIONS.map((p) => {
+                const on = platforms.includes(p.key);
+                return (
+                  <button
+                    key={p.key}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setPlatforms(on ? platforms.filter((x) => x !== p.key) : [...platforms, p.key])}
+                    className={cn('h-9 rounded-xl border px-3.5 text-sm', on ? 'border-accent bg-accent-soft font-medium text-accent-on-soft' : 'border-line text-muted hover:bg-surface-2')}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1.5 text-[12.5px] text-subtle">Post qo‘lda joylanadi: mas’ul xodim havolani kiritib tasdiqlaydi. Mas’ulga post vaqti haqida xabar va 1 soat oldin eslatma boradi.</p>
           </div>
           {!hasShoot ? <p className="text-[13px] text-subtle">Syomka sanasi kiritilmasa, syomka va jihozlar bosqichi yaratilmaydi.</p> : null}
         </Card>

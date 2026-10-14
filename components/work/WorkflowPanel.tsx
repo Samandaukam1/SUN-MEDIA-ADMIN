@@ -12,6 +12,7 @@ import { Icon } from '@/components/ui/Icon';
 import { assignEditing, reviewEditing, reviewScript, type WorkflowResult } from '@/lib/actions/workflow';
 import { formatShortDateTime } from '@/lib/time';
 import { STAGES, stageStatusLabel, type Stage } from '@/lib/workflow-shared';
+import { PublicationControls, type Publication } from './PublicationControls';
 
 type StageTask = { id: string; stage: Stage; status: string; dueAt: string | null; updatedAt: string; assignees: { id: string; name: string }[] };
 type Equipment = { id: string; name: string; preparedAt: string | null };
@@ -86,9 +87,9 @@ function AssignEditor({ contentId, editors, current }: { contentId: string; edit
   if (!editors.length) {
     return (
       <p className="mt-3 rounded-xl border border-dashed border-line px-3 py-2.5 text-[13px] text-muted">
-        Montaj skilli bor xodim yo‘q.{' '}
-        <Link href="/team" className="font-medium text-ink underline underline-offset-2">
-          Xodimlarga skill biriktiring
+        Ro‘yxat bo‘sh: hali hech bir xodimga montaj skilli biriktirilmagan.{' '}
+        <Link href="/team/skills" className="font-medium text-ink underline underline-offset-2">
+          Skilllarni biriktirish
         </Link>
       </p>
     );
@@ -134,6 +135,8 @@ export function WorkflowPanel({
   equipment,
   equipmentReady,
   editors,
+  publications,
+  postAt,
   can,
 }: {
   contentId: string;
@@ -141,7 +144,9 @@ export function WorkflowPanel({
   equipment: Equipment[];
   equipmentReady: { at: string; by: string | null } | null;
   editors: { id: string; name: string }[];
-  can: { reviewScript: boolean; manageEditing: boolean };
+  publications: Publication[];
+  postAt: string | null;
+  can: { reviewScript: boolean; manageEditing: boolean; managePosts: boolean };
 }) {
   if (!stages.length) return null;
   const byStage = new Map(stages.map((s) => [s.stage, s]));
@@ -205,6 +210,11 @@ export function WorkflowPanel({
                   ) : null}
                   {s.key === 'editing' && can.manageEditing && t.status !== 'done' && t.status !== 'in_review' ? (
                     <AssignEditor contentId={contentId} editors={editors} current={t.assignees[0]?.id ?? null} />
+                  ) : null}
+                  {s.key === 'publishing' ? (
+                    <div className="mt-3">
+                      <PublicationControls contentId={contentId} publications={publications} postAt={postAt} canSchedule={can.managePosts} canConfirm={can.managePosts && t.status !== 'done'} />
+                    </div>
                   ) : null}
                   {s.key === 'editing' && can.manageEditing && t.status === 'in_review' ? (
                     <Review label="Montaj tekshiruvda" onDecide={(approve, note) => reviewEditing(contentId, approve, note)} />

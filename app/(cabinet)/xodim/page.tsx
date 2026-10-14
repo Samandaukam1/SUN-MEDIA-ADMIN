@@ -4,19 +4,22 @@ import { redirect } from 'next/navigation';
 
 import { CabinetHeader } from '@/components/cabinet/CabinetHeader';
 import { CheckInCard } from '@/components/cabinet/CheckInCard';
+import { StaffHeaderActions } from '@/components/cabinet/StaffHeaderActions';
 import { Chip, Panel, SectionTitle } from '@/components/cabinet/partner/parts';
 import { StatusPill } from '@/components/cabinet/StatusPill';
-import { NotificationBell } from '@/components/live/NotificationBell';
 import { PresenceHeartbeat } from '@/components/live/PresenceHeartbeat';
 import { TeamList } from '@/components/live/TeamList';
+import { LiveRefresh } from '@/components/panel/LiveRefresh';
 import { SiteIcon } from '@/components/site/SiteIcon';
+import { agencyToday } from '@/lib/attendance';
 import { getSessionContext } from '@/lib/auth';
 import { homeFor, isPanelUser } from '@/lib/cabinet/routing';
 import { groupOf, type TaskGroup } from '@/lib/cabinet/tasks';
+import { loadMyChats, unreadTotal } from '@/lib/chat';
 import { CONTENT_STATUS, PRIORITY, TASK_TYPE } from '@/lib/labels';
 import { createClient } from '@/lib/supabase/server';
 import { loadTeam } from '@/lib/team-directory';
-import { agencyDateKey, formatShortDateTime } from '@/lib/time';
+import { formatShortDateTime, formatTime } from '@/lib/time';
 import { STAGE_LABEL, stageStatusLabel, type Stage } from '@/lib/workflow-shared';
 
 export const metadata: Metadata = { title: 'Xodim kabineti' };
@@ -30,8 +33,13 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'bajarilgan', label: 'Tugallangan' },
 ];
 const inFilter = (filter: Filter, group: TaskGroup | null) => (filter === 'faol' ? group === 'yangi' || group === 'jarayonda' : group === filter);
+const DAY = 24 * 3600 * 1000;
 
-/** Staff cabinet: "Keldim", only the tasks assigned to this person (the database filters the rest out), the team. */
+/**
+ * Staff cabinet home: greeting, today's attendance (KELDIM first of all), today's tasks, new notifications,
+ * upcoming deadlines and chat; then the full task list and the team. Only this person's rows come back
+ * (row-level security), and the page follows the person's realtime topic.
+ */
 export default async function EmployeeCabinetPage({ searchParams }: { searchParams: Promise<{ holat?: string }> }) {
   const context = await getSessionContext();
   if (!context) redirect('/?kirish=xodim');
@@ -43,8 +51,8 @@ export default async function EmployeeCabinetPage({ searchParams }: { searchPara
   const filter: Filter = FILTERS.some((g) => g.key === holat) ? (holat as Filter) : 'faol';
 
   const supabase = await createClient();
-  const today = agencyDateKey();
-  const [{ data, error }, attendance, employee, setting, team] = await Promise.all([
+  const today = agencyToday();
+  const [{ data, error }, attendance, employee, setting, team, notifications, chats] = await Promise.all([
     supabase
       .from('tasks')
       .select(
@@ -59,52 +67,54 @@ export default async function EmployeeCabinetPage({ searchParams }: { searchPara
       .neq('status', 'cancelled')
       .order('due_at', { ascending: true, nullsFirst: false })
       .limit(300),
-    supabase.from('attendance').select('arrived_at, status, late_minutes').eq('user_id', context.userId).eq('work_date', today).maybeSingle(),
+    supabase
+      .from('attendance')
+      .select('arrived_at, status, late_minutes, source, corrector:profiles!attendance_corrected_by_fkey(full_name)')
+      .eq('user_id', context.userId)
+      .eq('work_date', today)
+      .maybeSingle(),
     supabase.from('employees').select('work_start_time').eq('user_id', context.userId).maybeSingle(),
     supabase.from('app_settings').select('value').eq('key', 'attendance.check_in_from').maybeSingle(),
     loadTeam(),
+    supabase.from('notifications').select('id, title, body, created_at, data').is('read_at', null).neq('type', 'chat.message').order('created_at', { ascending: false }).limit(5),
+    loadMyChats().catch(() => []),
   ]);
   if (error) throw error;
 
   const now = Date.now();
   const tasks = data ?? [];
   const open = tasks.filter((t) => inFilter('faol', groupOf(t.status)));
-  const overdue = open.filter((t) => t.due_at && new Date(t.due_at).getTime() < now);
-  const soon = open.filter((t) => t.due_at && new Date(t.due_at).getTime() >= now && new Date(t.due_at).getTime() < now + 24 * 3600 * 1000);
-  const doneMonth = tasks.filter((t) => t.status === 'done' && t.completed_at && new Date(t.completed_at).getTime() > now - 30 * 24 * 3600 * 1000);
+  const due = (t: (typeof tasks)[number]) => (t.due_at ? new Date(t.due_at).getTime() : null);
+  const overdue = open.filter((t) => (due(t) ?? Infinity) < now);
+  const todayTasks = open.filter((t) => t.status === 'in_progress' || t.status === 'revision' || (t.due_at && agencyToday(new Date(t.due_at)) <= today));
+  const upcoming = open.filter((t) => (due(t) ?? 0) >= now && (due(t) ?? 0) < now + 3 * DAY).slice(0, 6);
   const shown = tasks
     .filter((t) => inFilter(filter, groupOf(t.status)))
     .sort((a, b) => (filter === 'bajarilgan' ? (b.completed_at ?? '').localeCompare(a.completed_at ?? '') : 0));
-
-  const projects = new Map<string, { name: string; client: string | null; open: number; total: number }>();
-  for (const t of tasks) {
-    if (!t.project) continue;
-    const p = projects.get(t.project.id) ?? { name: t.project.name, client: t.client?.name ?? null, open: 0, total: 0 };
-    p.total += 1;
-    if (groupOf(t.status) !== 'bajarilgan') p.open += 1;
-    projects.set(t.project.id, p);
-  }
+  const recentChats = [...chats].filter((c) => !c.archived).sort((a, b) => (b.last_message_at ?? '').localeCompare(a.last_message_at ?? '')).slice(0, 4);
 
   const role = context.employee?.job_title || context.roles.map((r) => r.name).join(', ') || 'Xodim';
   const from = typeof setting.data?.value === 'string' ? setting.data.value : '09:45';
+  const firstName = (context.profile?.full_name ?? '').split(' ')[0] || 'hamkasb';
+  const hasEmployee = !!employee.data;
 
   return (
     <>
       <PresenceHeartbeat />
+      <LiveRefresh topics={[`user:${context.userId}`]} quiet />
       <CabinetHeader
         name={context.profile?.full_name || context.profile?.email || ''}
         role={role}
         home="/xodim"
-        extra={<NotificationBell userId={context.userId} area="staff" tone="dark" />}
+        extra={<StaffHeaderActions userId={context.userId} unreadChats={unreadTotal(chats)} />}
       />
       <main className="mx-auto max-w-6xl space-y-8 px-4 pt-8 pb-20 sm:px-8 sm:pt-12">
+        {/* 1. Salomlashuv */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-[12px] font-semibold tracking-[0.16em] text-[#d4fc18] uppercase">Bugun Sun Media’da</p>
-            <h1 className="font-display mt-1.5 text-[28px] leading-tight font-medium tracking-[-0.03em] text-white sm:text-[38px]">
-              Salom, {(context.profile?.full_name ?? '').split(' ')[0] || 'hamkasb'}
-            </h1>
-            <p className="mt-1.5 text-[14px] text-[#a8a8ac]">Vazifalaringiz, davomatingiz va jamoa.</p>
+            <h1 className="font-display mt-1.5 text-[28px] leading-tight font-medium tracking-[-0.03em] text-white sm:text-[38px]">Assalomu alaykum, {firstName}!</h1>
+            <p className="mt-1.5 text-[14px] text-[#a8a8ac]">Davomatingiz, bugungi ishlaringiz va jamoa — bir joyda.</p>
           </div>
           {isPanelUser(context) ? (
             <Link href="/panel" className="lg inline-flex h-10 items-center gap-2 rounded-full px-4 text-[13.5px] font-medium text-white hover:text-[#d4fc18]">
@@ -113,25 +123,91 @@ export default async function EmployeeCabinetPage({ searchParams }: { searchPara
           ) : null}
         </div>
 
-        <CheckInCard
-          record={attendance.data ? { arrivedAt: attendance.data.arrived_at, status: attendance.data.status, lateMinutes: attendance.data.late_minutes ?? 0 } : null}
-          from={from}
-          workStart={employee.data?.work_start_time ?? null}
-          serverNow={new Date().toISOString()}
-        />
+        {/* 2. Bugungi davomat */}
+        {hasEmployee ? (
+          <CheckInCard
+            record={
+              attendance.data
+                ? {
+                    arrivedAt: attendance.data.arrived_at,
+                    status: attendance.data.status,
+                    lateMinutes: attendance.data.late_minutes ?? 0,
+                    source: attendance.data.source,
+                    correctedBy: attendance.data.corrector?.full_name ?? null,
+                  }
+                : null
+            }
+            from={from}
+            workStart={employee.data?.work_start_time ?? null}
+            serverNow={new Date().toISOString()}
+            today={today}
+            name={firstName}
+          />
+        ) : null}
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {[
-            { label: 'Faol vazifalar', value: open.length, tone: 'text-white' },
-            { label: '24 soat ichida muddati', value: soon.length, tone: 'text-[#d4fc18]' },
-            { label: 'Muddati o‘tgan', value: overdue.length, tone: overdue.length ? 'text-[#ff9c9c]' : 'text-white' },
-            { label: 'Bajarildi (30 kun)', value: doneMonth.length, tone: 'text-white' },
-          ].map((s) => (
-            <div key={s.label} className="lg rounded-[22px] p-4 sm:p-5">
-              <p className="text-[12.5px] font-medium text-[#a8a8ac]">{s.label}</p>
-              <p className={`font-display mt-2 text-[28px] leading-none font-medium tabular-nums ${s.tone}`}>{s.value}</p>
-            </div>
-          ))}
+        <div className="grid gap-4 lg:grid-cols-3">
+          {/* 3. Bugungi vazifalar */}
+          <Panel title="Bugungi vazifalar" note={`${todayTasks.length} ta`}>
+            {todayTasks.length ? (
+              <ul className="space-y-2">
+                {todayTasks.slice(0, 5).map((t) => (
+                  <li key={t.id}>
+                    <Link href={`/xodim/vazifa/${t.id}`} className="group flex items-start justify-between gap-3 rounded-2xl bg-white/[0.03] px-3.5 py-2.5 hover:bg-white/[0.06]">
+                      <span className="min-w-0">
+                        <span className="block truncate text-[14px] font-medium text-white group-hover:text-[#d4fc18]">{t.title}</span>
+                        <span className="block text-[12px] text-[#8e8e96]">{t.stage ? stageStatusLabel(t.stage as Stage, t.status) : TASK_TYPE[t.task_type]}</span>
+                      </span>
+                      {t.due_at ? <span className={`shrink-0 text-[12px] tabular-nums ${(due(t) ?? 0) < now ? 'text-[#ff9c9c]' : 'text-[#d9d9de]'}`}>{formatTime(t.due_at)}</span> : null}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-[13.5px] text-[#8e8e96]">Bugun uchun ochiq vazifa yo‘q.</p>
+            )}
+            {overdue.length ? <p className="mt-3 text-[12.5px] font-semibold text-[#ff9c9c]">⚠ {overdue.length} ta vazifa muddati o‘tgan</p> : null}
+          </Panel>
+
+          {/* 5. Yaqinlashayotgan deadline */}
+          <Panel title="Yaqinlashayotgan deadline" note="3 kun ichida">
+            {upcoming.length ? (
+              <ul className="space-y-2">
+                {upcoming.map((t) => (
+                  <li key={t.id}>
+                    <Link href={`/xodim/vazifa/${t.id}`} className="group flex items-start justify-between gap-3 rounded-2xl bg-white/[0.03] px-3.5 py-2.5 hover:bg-white/[0.06]">
+                      <span className="min-w-0 truncate text-[14px] font-medium text-white group-hover:text-[#d4fc18]">{t.title}</span>
+                      <span className="shrink-0 text-[12px] text-[#d4fc18] tabular-nums">{formatShortDateTime(t.due_at)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-[13.5px] text-[#8e8e96]">Yaqin kunlarda muddati tugaydigan vazifa yo‘q.</p>
+            )}
+          </Panel>
+
+          {/* 4. Yangi bildirishnomalar */}
+          <Panel title="Yangi bildirishnomalar" note={notifications.data?.length ? `${notifications.data.length} ta` : undefined}>
+            {notifications.data?.length ? (
+              <ul className="space-y-2">
+                {notifications.data.map((n) => {
+                  const d = (n.data ?? {}) as { staff_href?: string };
+                  const href = typeof d.staff_href === 'string' && d.staff_href.startsWith('/') ? d.staff_href : '/xodim';
+                  return (
+                    <li key={n.id}>
+                      <Link href={href} className="block rounded-2xl bg-[#d4fc18]/[0.04] px-3.5 py-2.5 hover:bg-white/[0.06]">
+                        <span className="block text-[13.5px] font-semibold text-white">{n.title}</span>
+                        {n.body ? <span className="mt-0.5 line-clamp-2 block text-[12.5px] text-[#a8a8ac]">{n.body}</span> : null}
+                        <span className="mt-1 block text-[11.5px] text-[#6e6e76]">{formatShortDateTime(n.created_at)}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-[13.5px] text-[#8e8e96]">Yangi bildirishnoma yo‘q.</p>
+            )}
+          </Panel>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
@@ -147,7 +223,7 @@ export default async function EmployeeCabinetPage({ searchParams }: { searchPara
             {shown.length ? (
               <ul className="space-y-2.5">
                 {shown.map((t) => {
-                  const late = inFilter('faol', groupOf(t.status)) && t.due_at && new Date(t.due_at).getTime() < now;
+                  const late = inFilter('faol', groupOf(t.status)) && (due(t) ?? Infinity) < now;
                   const stage = (t.stage as Stage | null) ?? null;
                   return (
                     <li key={t.id}>
@@ -193,23 +269,35 @@ export default async function EmployeeCabinetPage({ searchParams }: { searchPara
             )}
           </div>
           <div className="space-y-6">
-            <TeamList members={team.map(({ id, name, title, lastSeen }) => ({ id, name, title, lastSeen }))} me={context.userId} tone="dark" />
-            {projects.size ? (
-              <div>
-                <SectionTitle>Loyihalarim</SectionTitle>
-                <ul className="space-y-2.5">
-                  {[...projects.entries()].map(([id, p]) => (
-                    <li key={id} className="lg rounded-[20px] p-4">
-                      <p className="text-[14.5px] font-semibold break-words text-white">{p.name}</p>
-                      <p className="mt-0.5 text-[12.5px] text-[#8e8e96]">{p.client ?? 'Ichki loyiha'}</p>
-                      <p className="mt-2 text-[12.5px] text-[#a8a8ac]">
-                        {p.open} ta ochiq · jami {p.total} ta vazifangiz
-                      </p>
+            {/* 6. Chat */}
+            <Panel title="Chat" note={unreadTotal(chats) ? `${unreadTotal(chats)} ta yangi xabar` : undefined}>
+              {recentChats.length ? (
+                <ul className="space-y-1.5">
+                  {recentChats.map((c) => (
+                    <li key={c.room_id}>
+                      <Link href={`/xodim/chat?xona=${c.room_id}`} className="flex items-center gap-3 rounded-2xl px-2.5 py-2 hover:bg-white/[0.05]">
+                        <span className="min-w-0 flex-1">
+                          <span className={`block truncate text-[14px] ${c.unread_count ? 'font-semibold text-white' : 'text-[#d9d9de]'}`}>
+                            {c.kind === 'direct' ? (c.peer_name ?? 'Suhbat') : c.kind === 'project' ? (c.client_name ?? c.name ?? 'Mijoz') : (c.name ?? 'Guruh')}
+                          </span>
+                          <span className="block truncate text-[12px] text-[#8e8e96]">
+                            {c.last_sender_name ? `${c.last_sender_name}: ` : ''}
+                            {c.last_message_body || (c.last_has_files ? 'Fayl' : 'Xabar yo‘q')}
+                          </span>
+                        </span>
+                        {c.unread_count ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#d4fc18] px-1.5 text-[11px] font-bold text-[#0b0b0c]">{c.unread_count}</span> : null}
+                      </Link>
                     </li>
                   ))}
                 </ul>
-              </div>
-            ) : null}
+              ) : (
+                <p className="text-[13.5px] text-[#8e8e96]">Hali suhbat yo‘q.</p>
+              )}
+              <Link href="/xodim/chat" className="s-btn s-btn-glass lg mt-4 h-11 w-full text-[14px]">
+                Chatni ochish
+              </Link>
+            </Panel>
+            <TeamList members={team.map(({ id, name, title, lastSeen }) => ({ id, name, title, lastSeen }))} me={context.userId} tone="dark" />
           </div>
         </div>
       </main>

@@ -31,6 +31,7 @@ export async function sendRoomMessage(roomId: string, body: string, fileIds: str
   const { error } = await supabase.rpc('send_message', { p_room_id: roomId, p_body: text, p_file_ids: files.data, p_reply_to: reply });
   if (error) return { ok: false, message: error.code === '42501' ? 'Bu chatga yozish huquqingiz yo‘q (faqat kuzatasiz).' : message(error) };
   revalidatePath('/chat', 'layout');
+  revalidatePath('/xodim/chat');
   return { ok: true };
 }
 
@@ -48,6 +49,7 @@ export async function openDirectChat(userId: string): Promise<ChatActionResult> 
   const { data, error } = await supabase.rpc('open_direct_chat', { p_user_id: userId });
   if (error || !data) return { ok: false, message: message(error) };
   revalidatePath('/chat', 'layout');
+  revalidatePath('/xodim/chat');
   return { ok: true, roomId: data };
 }
 
@@ -59,6 +61,7 @@ export async function createGroupChat(name: string, memberIds: string[]): Promis
   const { data, error } = await supabase.rpc('create_group_chat', { p_name: String(name ?? '').trim(), p_member_ids: ids.data });
   if (error || !data) return { ok: false, message: message(error) };
   revalidatePath('/chat', 'layout');
+  revalidatePath('/xodim/chat');
   return { ok: true, roomId: data };
 }
 
@@ -74,6 +77,7 @@ export async function editRoomMessage(messageId: string, body: string): Promise<
   if (error) return { ok: false, message: message(error) };
   if (!data?.length) return { ok: false, message: 'Faqat o‘z xabaringizni tahrirlay olasiz.' };
   revalidatePath('/chat', 'layout');
+  revalidatePath('/xodim/chat');
   return { ok: true };
 }
 
@@ -92,5 +96,6 @@ export async function deleteRoomMessage(messageId: string): Promise<ChatActionRe
   if (error) return { ok: false, message: message(error) };
   if (!data?.length) return { ok: false, message: 'Faqat o‘z xabaringizni o‘chira olasiz.' };
   revalidatePath('/chat', 'layout');
+  revalidatePath('/xodim/chat');
   return { ok: true };
 }

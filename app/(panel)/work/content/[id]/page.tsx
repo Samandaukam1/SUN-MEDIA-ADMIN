@@ -130,7 +130,9 @@ export default async function ContentPage({ params, searchParams }: { params: Pr
         equipment={workflow.equipment}
         equipmentReady={c.equipment_ready_at ? { at: c.equipment_ready_at, by: c.ready_by?.full_name ?? null } : null}
         editors={people.filter((p) => p.skills.some((s) => s.workflowRole === 'editor')).map((p) => ({ id: p.id, name: p.name }))}
-        can={{ reviewScript: can(context, 'content.manage'), manageEditing: leads }}
+        publications={c.publications.map((p) => ({ platform: p.platform, scheduledAt: p.scheduled_at, publishedAt: p.published_at, status: p.status, url: p.post_url }))}
+        postAt={c.post_at}
+        can={{ reviewScript: can(context, 'content.manage'), manageEditing: leads, managePosts: can(context, 'content.manage') || can(context, 'publications.manage') }}
       />
 
       <div className="grid gap-8 xl:grid-cols-[1fr_320px]">

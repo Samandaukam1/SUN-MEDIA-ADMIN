@@ -42,3 +42,29 @@ export function tashkentInstant(date: string, time: string): string | null {
   const t = /^\d{2}:\d{2}$/.test(time) ? time : '10:00';
   return `${date}T${t}:00+05:00`;
 }
+
+export const PLATFORM_OPTIONS: { key: string; label: string }[] = [
+  { key: 'instagram', label: 'Instagram' },
+  { key: 'telegram', label: 'Telegram' },
+  { key: 'tiktok', label: 'TikTok' },
+  { key: 'youtube', label: 'YouTube' },
+  { key: 'facebook', label: 'Facebook' },
+];
+export const PLATFORM_NAME: Record<string, string> = {
+  instagram: 'Instagram',
+  telegram: 'Telegram',
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+  facebook: 'Facebook',
+  linkedin: 'LinkedIn',
+  x: 'X',
+  website: 'Sayt',
+  other: 'Boshqa',
+};
+export const PUBLICATION_LABEL: Record<string, string> = {
+  planned: 'Rejada',
+  scheduled: 'Vaqti belgilangan',
+  published: 'Joylandi',
+  failed: 'Xato',
+  cancelled: 'Bekor',
+};

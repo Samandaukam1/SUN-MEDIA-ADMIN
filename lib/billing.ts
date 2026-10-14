@@ -9,7 +9,11 @@ export type Billing = {
   payment_status: string;
   last_paid_on: string | null;
   note: string | null;
+  site_plan_id?: string | null;
 };
+
+/** A published tariff as a client's plan: name, list price (reference only) and contents. */
+export type TariffOption = { id: string; name: string; price: number | null; currency: string; period: string; items: string[] };
 
 export const BILLING_PERIOD: Record<string, string> = { monthly: 'Har oy', quarterly: 'Har 3 oy', yearly: 'Har yil', one_time: 'Bir martalik' };
 
@@ -26,4 +30,16 @@ export function payDate(key: string | null, today: string): string {
   if (!key) return '—';
   const [y, m, d] = key.split('-').map(Number);
   return `${d}-${MONTHS[m - 1]}${String(y) !== today.slice(0, 4) ? ` ${y}` : ''}`;
+}
+
+/** The published tariffs (Sayt → Tariflar) as plan choices for clients. */
+export function tariffOptions(plans: { id: string; name: string; price: number | null; currency: string; priceMode: string; billingPeriod: string; items: { name: string; quantity: string | null }[] }[]): TariffOption[] {
+  return plans.map((p) => ({
+    id: p.id,
+    name: p.name,
+    price: p.priceMode === 'negotiable' || p.price === null ? null : Number(p.price),
+    currency: p.currency,
+    period: p.billingPeriod,
+    items: p.items.map((i) => (i.quantity ? `${i.name} — ${i.quantity}` : i.name)),
+  }));
 }

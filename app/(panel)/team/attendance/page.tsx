@@ -4,16 +4,19 @@ import { redirect } from 'next/navigation';
 
 import { withParams } from '@/components/panel/List';
 import { PageHeader } from '@/components/panel/PageHeader';
-import { EmptyRow, Stat } from '@/components/panel/Stat';
+import { LiveRefresh } from '@/components/panel/LiveRefresh';
+import { EmptyRow } from '@/components/panel/Stat';
 import { buttonClass } from '@/components/ui/Button';
 import { AttendanceBoard, type RosterRow } from '@/components/team/AttendanceBoard';
 import { can, requireStaff } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { addDaysToKey, agencyDateKey, formatDateKeyLong, isDateKey } from '@/lib/time';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = { title: 'Davomat' };
 
-/** Jamoa → Davomat: employees press “Keldim” themselves (from 09:45); the Rahbar or admin corrects, marks the rest and flags errors. */
+/** Jamoa → Davomat: every employee presses KELDIM themselves (from 09:45); the Rahbar or an admin only corrects and flags errors. */
 export default async function AttendancePage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
   const context = await requireStaff();
   if (!can(context, 'attendance.read') && !can(context, 'attendance.manage')) redirect('/no-access?reason=permission');
@@ -28,7 +31,6 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
   const rows: RosterRow[] = data
     .filter((r) => r.scheduled || r.status)
     .map((r) => ({ ...r, alert: r.attendance_id ? (alertOf.get(r.attendance_id) ?? null) : null }));
-  const count = (s: string) => rows.filter((r) => r.status === s).length;
 
   return (
     <div>
@@ -36,7 +38,8 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
         title="Davomat"
         description={formatDateKeyLong(date)}
         actions={
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <LiveRefresh topics={['staff']} intervalMs={30_000} />
             <Link href={withParams('/team/attendance', { date: addDaysToKey(date, -1) })} className={buttonClass('secondary')} aria-label="Oldingi kun">
               ←
             </Link>
@@ -54,16 +57,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
       {rows.length === 0 ? (
         <EmptyRow>Bu kun dam olish kuni — ish jadvali bo‘yicha hech kim ishlamaydi.</EmptyRow>
       ) : (
-        <>
-          <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
-            <Stat label="Jami" value={String(rows.length)} />
-            <Stat label="Keldi" value={String(count('present') + count('late') + count('remote'))} tone="success" />
-            <Stat label="Kechikdi" value={String(count('late'))} tone={count('late') ? 'warning' : 'default'} />
-            <Stat label="Kelmadi" value={String(count('absent'))} tone={count('absent') ? 'danger' : 'default'} />
-            <Stat label="Belgilanmagan" value={String(rows.filter((r) => !r.status).length)} tone={rows.some((r) => !r.status) ? 'warning' : 'default'} />
-          </div>
-          <AttendanceBoard rows={rows} date={date} isToday={date === today} canMark={can(context, 'attendance.manage')} />
-        </>
+        <AttendanceBoard rows={rows} date={date} isToday={date === today} canMark={can(context, 'attendance.manage')} />
       )}
     </div>
   );

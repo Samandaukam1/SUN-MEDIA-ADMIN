@@ -25,9 +25,9 @@ export function assigneeActions(status: TaskStatus, stage: Stage | null = null):
     if (status === 'in_progress') return [{ status: 'done', label: 'Syomka tugadi' }];
     return [];
   }
+  // A post is finished with its link (the confirmation form), never with a bare "done".
   if (stage === 'publishing') {
-    if (status === 'todo') return [{ status: 'in_progress', label: 'Boshlash' }];
-    if (status === 'in_progress') return [{ status: 'done', label: 'Post joylandi' }];
+    if (status === 'todo') return [{ status: 'in_progress', label: 'Tayyorlashni boshlash' }];
     return [];
   }
   if (status === 'todo') return [{ status: 'in_progress', label: 'Boshlash' }];

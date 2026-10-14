@@ -32,6 +32,23 @@ export async function setEmployeeSkills(userId: string, skillIds: string[]): Pro
   }
   revalidatePath(`/team/${userId}`);
   revalidatePath('/team');
+  revalidatePath('/team/skills');
+  revalidatePath('/work/tasks/yaratish');
+  return { ok: true };
+}
+
+/** One tick in the skills table (Jamoa → Skilllar): add or remove one skill of one person. */
+export async function toggleEmployeeSkill(userId: string, skillId: string, on: boolean): Promise<TeamResult> {
+  await requireStaff();
+  if (!uuid.safeParse(userId).success || !uuid.safeParse(skillId).success) return { ok: false, message: 'Ma’lumot noto‘g‘ri.' };
+  const supabase = await createClient();
+  const { error } = on
+    ? await supabase.from('employee_skills').upsert({ user_id: userId, skill_id: skillId }, { onConflict: 'user_id,skill_id', ignoreDuplicates: true })
+    : await supabase.from('employee_skills').delete().eq('user_id', userId).eq('skill_id', skillId);
+  if (error) return { ok: false, message: toUserMessage(error) };
+  revalidatePath('/team/skills');
+  revalidatePath(`/team/${userId}`);
+  revalidatePath('/work/tasks/yaratish');
   return { ok: true };
 }
 

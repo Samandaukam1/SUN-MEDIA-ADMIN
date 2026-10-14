@@ -33,9 +33,9 @@ export function useMoneyHidden(): boolean {
 }
 
 /** An amount with its eye: 6 500 000 so‘m ⇄ ••••••••. */
-export function Money({ amount, currency = 'UZS', className = '' }: { amount: number | string | null | undefined; currency?: string; className?: string }) {
+export function Money({ amount, currency = 'UZS', className = '', empty = 'Belgilanmagan' }: { amount: number | string | null | undefined; currency?: string; className?: string; empty?: string }) {
   const hidden = useMoneyHidden();
-  if (amount == null || amount === '') return <span className={className}>—</span>;
+  if (amount == null || amount === '') return <span className={`${className} font-normal text-subtle`}>{empty}</span>;
   return (
     <span className={`inline-flex items-center gap-1.5 ${className}`}>
       <span className="tabular">{hidden ? '••••••••' : formatMoney(amount, currency)}</span>

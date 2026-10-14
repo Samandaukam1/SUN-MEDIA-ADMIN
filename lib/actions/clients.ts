@@ -147,6 +147,7 @@ const billingSchema = z.object({
   payment_status: z.enum(['paid', 'pending', 'partial']),
   last_paid_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   note: z.string().trim().max(1000).nullable(),
+  site_plan_id: z.uuid().nullable(),
 });
 export type BillingInput = z.input<typeof billingSchema>;
 

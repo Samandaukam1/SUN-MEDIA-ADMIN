@@ -19,7 +19,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Card, SectionTitle } from '@/components/ui/Card';
 import { Tabs } from '@/components/ui/Tabs';
 import { can, requireStaff } from '@/lib/auth';
-import type { Billing } from '@/lib/billing';
+import { tariffOptions, type Billing } from '@/lib/billing';
+import { getSiteContent } from '@/lib/site/content';
 import { ACCOUNT_STATUS, CLIENT_STATUS, CONTENT_STATUS, CONTENT_TYPE, lookup, TEAM_ROLE_LABEL } from '@/lib/labels';
 import { createClient } from '@/lib/supabase/server';
 import { agencyDateKey, formatShortDateTime } from '@/lib/time';
@@ -85,6 +86,10 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
       : [null, null, null, null];
   const owner = client.members.find((m) => m.role?.key === 'client_owner')?.profile ?? client.members[0]?.profile;
   const plan = subscription?.data?.plan ?? null;
+  // The published tariffs (Sayt → Tariflar) are the plans a client is put on; their list price is only a reference.
+  const tariffs = active === 'overview' ? tariffOptions((await getSiteContent()).plans) : [];
+  const billed = (billing?.data as Billing | null) ?? null;
+  const tariff = tariffs.find((t) => t.id === billed?.site_plan_id) ?? null;
 
   let staffOptions: { id: string; name: string; hint?: string | null }[] = [];
   if (active === 'team' && manage) {
@@ -140,7 +145,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                 ['Mas’ul shaxs', contact?.data?.full_name ?? owner?.full_name ?? '—'],
                 ['Telefon', contact?.data?.phone ?? owner?.phone ?? '—'],
                 ['Holat', client.status === 'active' ? 'Faol' : 'Nofaol'],
-                ['Tarif', plan?.name ?? 'Tarif biriktirilmagan'],
+                ['Tarif', plan?.name ?? tariff?.name ?? 'Tarif tanlanmagan'],
                 ['Mas’ul xodimlar', client.team.map((t) => t.person?.full_name).filter(Boolean).join(', ') || '—'],
               ].map(([k, v]) => (
                 <div key={k} className="flex items-start justify-between gap-4 py-2.5">
@@ -149,6 +154,18 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
                 </div>
               ))}
             </dl>
+            {!plan?.features?.length && tariff?.items.length ? (
+              <div className="mt-3">
+                <p className="mb-2 text-[11px] font-semibold tracking-[0.08em] text-subtle uppercase">Tarif tarkibi</p>
+                <ul className="flex flex-wrap gap-1.5">
+                  {tariff.items.map((item) => (
+                    <li key={item} className="rounded-full bg-surface-2 px-2.5 py-1 text-[12.5px]">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {plan?.features?.length ? (
               <div className="mt-3">
                 <p className="mb-2 text-[11px] font-semibold tracking-[0.08em] text-subtle uppercase">Tarif tarkibi</p>
@@ -187,14 +204,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
             </div>
           </Card>
           {finance ? (
-            <BillingCard
-              clientId={client.id}
-              billing={(billing?.data as Billing | null) ?? null}
-              listPrice={plan?.price != null ? Number(plan.price) : null}
-              listCurrency={plan?.currency ?? 'UZS'}
-              canEdit={can(context, 'subscriptions.manage')}
-              today={today}
-            />
+            <BillingCard clientId={client.id} billing={billed} tariffs={tariffs} canEdit={can(context, 'subscriptions.manage')} today={today} />
           ) : null}
         </div>
       ) : null}

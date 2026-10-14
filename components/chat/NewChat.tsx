@@ -10,7 +10,7 @@ import { createGroupChat, openDirectChat } from '@/lib/actions/chat';
 type Colleague = { id: string; name: string; role: string };
 
 /** "Yangi suhbat" (one colleague) and "Yangi guruh" (a name and several colleagues). */
-export function NewChat({ colleagues }: { colleagues: Colleague[] }) {
+export function NewChat({ colleagues, base = '/chat' }: { colleagues: Colleague[]; base?: string }) {
   const router = useRouter();
   const [mode, setMode] = useState<'direct' | 'group' | null>(null);
   const [query, setQuery] = useState('');
@@ -31,7 +31,7 @@ export function NewChat({ colleagues }: { colleagues: Colleague[] }) {
   };
   const go = (roomId?: string) => {
     close();
-    if (roomId) router.push(`/chat?xona=${roomId}`);
+    if (roomId) router.push(`${base}?xona=${roomId}`);
   };
 
   return (

@@ -4,10 +4,12 @@ import { redirect } from 'next/navigation';
 import { AddClientDialog } from '@/components/clients/AddClientDialog';
 import { PageHeader } from '@/components/panel/PageHeader';
 import { ClientsBoard, type ClientRow } from '@/components/clients/ClientsBoard';
+import { ButtonLink } from '@/components/ui/Button';
 import { can, requireStaff } from '@/lib/auth';
 import { CLIENT_STATUS, lookup } from '@/lib/labels';
 import { createClient } from '@/lib/supabase/server';
-import type { Billing } from '@/lib/billing';
+import { tariffOptions, type Billing } from '@/lib/billing';
+import { getSiteContent } from '@/lib/site/content';
 import { agencyDateKey } from '@/lib/time';
 
 export const metadata: Metadata = { title: 'Mijozlar' };
@@ -38,6 +40,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
   ]);
   if (error) throw error;
   const money = new Map(((billing.data ?? []) as (Billing & { client_id: string })[]).map((b) => [b.client_id, b]));
+  const tariffs = new Map(tariffOptions((await getSiteContent()).plans).map((t) => [t.id, t.name]));
 
   const rows: ClientRow[] = data.map((c) => {
     const status = lookup(CLIENT_STATUS, c.status, CLIENT_STATUS.active);
@@ -55,7 +58,7 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       statusTone: status.tone,
       contact: contact?.full_name ?? owner?.full_name ?? null,
       phone: contact?.phone ?? owner?.phone ?? null,
-      plan: current?.plan?.name ?? null,
+      plan: current?.plan?.name ?? (money.get(c.id)?.site_plan_id ? (tariffs.get(money.get(c.id)!.site_plan_id!) ?? null) : null),
       team: [...new Set(c.team.map((t) => t.person?.full_name).filter((n): n is string => !!n))],
       contents: c.contents?.[0]?.count ?? 0,
       billing: money.get(c.id) ?? null,
@@ -68,7 +71,12 @@ export default async function ClientsPage({ searchParams }: { searchParams: Prom
       <PageHeader
         title="Barcha mijozlar"
         description="Mijozlar, mas’ul shaxslar, tariflar, kelishilgan narx va to‘lovlar."
-        actions={can(context, 'clients.create') ? <AddClientDialog defaultOpen={params.new === '1'} /> : null}
+        actions={
+          <>
+            {finance ? <ButtonLink href="/clients/narxlar">Narxlar va to‘lovlar</ButtonLink> : null}
+            {can(context, 'clients.create') ? <AddClientDialog defaultOpen={params.new === '1'} /> : null}
+          </>
+        }
       />
       <ClientsBoard rows={rows} initial={initial} today={today} finance={finance} />
     </div>

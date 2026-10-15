@@ -1,6 +1,6 @@
-import { formatPrice, quantityNumber, type SitePlan } from '@/lib/site/types';
+import { formatPrice, isUnlimited, quantityLabel, quantityValue, type SitePlan } from '@/lib/site/types';
 import { Reveal } from './motion';
-import { PlanCard } from './PlanCard';
+import { PlanCard, type PlanTier } from './PlanCard';
 import { SiteIcon } from './SiteIcon';
 
 /** Grid that fits the number of tariffs: one centred card, two side by side, then three (or four) per row. */
@@ -11,13 +11,16 @@ function gridFor(count: number) {
   return 'md:grid-cols-2 lg:grid-cols-3';
 }
 
-/** The tier that gets the lime light: the featured one, otherwise (two or more) the highest priced. */
-function topPlanId(plans: SitePlan[]): string | null {
-  const featured = plans.find((p) => p.isFeatured);
-  if (featured) return featured.id;
-  if (plans.length < 2) return null;
-  const priced = plans.filter((p) => p.price !== null && p.priceMode !== 'negotiable');
-  return priced.length ? priced.reduce((a, b) => (Number(b.price) > Number(a.price) ? b : a)).id : null;
+/**
+ * Each tariff's look follows its price: the cheapest is "base", the most expensive "ultra" (premium), the ones
+ * between "pro". A negotiable price counts as the highest; equal prices keep the editor's order.
+ */
+function tiersOf(plans: SitePlan[]): Map<string, PlanTier> {
+  const rank = (p: SitePlan) => (p.priceMode === 'negotiable' || p.price === null ? Number.POSITIVE_INFINITY : Number(p.price));
+  const sorted = plans.map((p, i) => ({ p, i })).sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i);
+  const tiers = new Map<string, PlanTier>();
+  sorted.forEach(({ p }, i) => tiers.set(p.id, sorted.length === 1 || i === sorted.length - 1 ? 'ultra' : i === 0 ? 'base' : 'pro'));
+  return tiers;
 }
 
 /** Side by side: every service of every tariff, with the quantity each one includes. */
@@ -56,7 +59,7 @@ function PlanCompare({ plans, top }: { plans: SitePlan[]; top: string | null }) 
             </thead>
             <tbody>
               {rows.map((row, r) => {
-                const values = plans.map((p) => quantityNumber(cell(p, row.key)?.quantity));
+                const values = plans.map((p) => quantityValue(cell(p, row.key)?.quantity));
                 const best = values.filter((v): v is number => v !== null).length > 1 ? Math.max(...values.filter((v): v is number => v !== null)) : null;
                 return (
                   <tr key={row.key} className={`border-b border-white/[0.05] last:border-0 ${r % 2 ? 'bg-white/[0.015]' : ''}`}>
@@ -71,7 +74,7 @@ function PlanCompare({ plans, top }: { plans: SitePlan[]; top: string | null }) 
                           ) : item.quantity ? (
                             <span className={`inline-flex items-center gap-1.5 text-[14.5px] font-semibold tabular-nums ${isBest ? 'text-[#d4fc18]' : 'text-white'}`}>
                               {isBest ? <SiteIcon name="arrowUpRight" size={14} strokeWidth={2.2} /> : null}
-                              {item.quantity}
+                              {isUnlimited(item.quantity) ? <span className="text-[17px] leading-none">∞</span> : quantityLabel(item.quantity)}
                             </span>
                           ) : (
                             <span className="inline-grid size-6 place-items-center rounded-full bg-[#d4fc18]/12 text-[#d4fc18]">
@@ -93,7 +96,8 @@ function PlanCompare({ plans, top }: { plans: SitePlan[]; top: string | null }) 
 }
 
 export function PlansGrid({ plans, compare = true }: { plans: SitePlan[]; compare?: boolean }) {
-  const top = topPlanId(plans);
+  const tiers = tiersOf(plans);
+  const top = plans.find((p) => tiers.get(p.id) === 'ultra')?.id ?? null;
   return (
     <div className="relative">
       {/* drifting light behind the cards */}
@@ -103,7 +107,7 @@ export function PlansGrid({ plans, compare = true }: { plans: SitePlan[]; compar
       </div>
       <div className={`relative grid items-stretch gap-6 ${gridFor(plans.length)}`}>
         {plans.map((plan, i) => (
-          <PlanCard key={plan.id} plan={plan} index={i} total={plans.length} top={plan.id === top} />
+          <PlanCard key={plan.id} plan={plan} index={i} total={plans.length} tier={tiers.get(plan.id) ?? 'base'} />
         ))}
       </div>
       {compare && plans.length > 1 ? <PlanCompare plans={plans} top={top} /> : null}

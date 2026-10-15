@@ -13,6 +13,21 @@ export function quantityNumber(quantity: string | null | undefined): number | nu
   return m ? Number(m[1].replace(',', '.')) : null;
 }
 
+/** "∞", "cheksiz", "chegarasiz", "unlimited", "безлимит" — an unlimited quantity. */
+export function isUnlimited(quantity: string | null | undefined): boolean {
+  return /∞|cheksiz|chegarasiz|limitsiz|unlimited|без ?лимит|безлимит/i.test(quantity ?? '');
+}
+
+/** A comparable quantity: a number, Infinity when unlimited, null when there is none. */
+export function quantityValue(quantity: string | null | undefined): number | null {
+  return isUnlimited(quantity) ? Infinity : quantityNumber(quantity);
+}
+
+/** How a quantity reads on the site: an unlimited one is a single "∞" (however it was typed). */
+export function quantityLabel(quantity: string | null | undefined): string {
+  return isUnlimited(quantity) ? '∞' : (quantity ?? '').trim();
+}
+
 export function formatPrice(price: number, currency: SiteCurrency): string {
   const fixed = Number.isInteger(price) ? String(price) : price.toFixed(2);
   const [whole, cents] = fixed.split('.');

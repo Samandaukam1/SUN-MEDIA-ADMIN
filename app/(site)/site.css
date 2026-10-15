@@ -393,6 +393,144 @@
     }
   }
 
+  /* ---------------------------------------------------------------------------
+   * Tariff tiers by price: base (calm graphite), pro (brushed chrome), ultra (lime premium)
+   * ------------------------------------------------------------------------- */
+  .s-btn-silver {
+    background: linear-gradient(180deg, #ffffff 0%, #e4e4e7 45%, #a8a8ac 100%);
+    color: #0b0b0c;
+    box-shadow:
+      0 0 0 1px rgb(255 255 255 / 0.45),
+      0 12px 40px -12px rgb(244 244 245 / 0.5),
+      inset 0 1px 0 rgb(255 255 255 / 0.95);
+  }
+
+  .s-btn-silver:hover {
+    box-shadow:
+      0 0 0 1px rgb(255 255 255 / 0.7),
+      0 16px 54px -10px rgb(244 244 245 / 0.6),
+      inset 0 1px 0 #fff;
+  }
+
+  /* A metallic light sweeping across the pro card. */
+  .s-chrome-sweep {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  .s-chrome-sweep::before {
+    content: '';
+    position: absolute;
+    top: -30%;
+    bottom: -30%;
+    left: -70%;
+    width: 45%;
+    background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.09) 45%, rgb(255 255 255 / 0.16) 50%, rgb(255 255 255 / 0.09) 55%, transparent);
+    transform: skewX(-16deg);
+    animation: s-chrome 8s var(--s-ease) infinite;
+  }
+
+  @keyframes s-chrome {
+    0%,
+    58% {
+      left: -70%;
+    }
+    100% {
+      left: 140%;
+    }
+  }
+
+  /* Ultra: holographic light turning slowly inside the card. */
+  .s-holo {
+    position: absolute;
+    inset: -45%;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      rgb(212 252 24 / 0.07) 50deg,
+      rgb(180 230 255 / 0.04) 110deg,
+      transparent 160deg,
+      rgb(244 244 245 / 0.04) 220deg,
+      rgb(212 252 24 / 0.06) 290deg,
+      transparent 340deg
+    );
+    filter: blur(28px);
+    animation: s-spin 22s linear infinite;
+    pointer-events: none;
+  }
+
+  .s-ultra-glow {
+    animation: s-glow 4.8s ease-in-out infinite;
+  }
+
+  @keyframes s-glow {
+    0%,
+    100% {
+      opacity: 0.55;
+      transform: scale(0.98);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.02);
+    }
+  }
+
+  .s-sparkle {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    border-radius: 999px;
+    background: #efffb0;
+    box-shadow: 0 0 10px 2px rgb(212 252 24 / 0.75);
+    opacity: 0;
+    animation: s-twinkle 3.8s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes s-twinkle {
+    0%,
+    100% {
+      opacity: 0;
+      transform: scale(0.3);
+    }
+    45% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .s-lime-sheen {
+    background: linear-gradient(100deg, #a9d600 0%, #d4fc18 24%, #f6ffd0 44%, #d4fc18 58%, #b8e000 100%);
+    background-size: 220% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: s-sheen 7s var(--s-ease) infinite;
+  }
+
+  /* The unlimited mark draws itself again and again. */
+  .s-infinity path {
+    stroke-dasharray: 96;
+    stroke-dashoffset: 96;
+    animation: s-infinity 3.4s var(--s-ease) infinite;
+  }
+
+  @keyframes s-infinity {
+    0% {
+      stroke-dashoffset: 96;
+    }
+    55%,
+    82% {
+      stroke-dashoffset: 0;
+    }
+    100% {
+      stroke-dashoffset: -96;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .s-aura,
     .s-btn-shine::after,
@@ -400,8 +538,17 @@
     .s-marquee,
     .s-silver-sheen,
     .s-pulse-dot::after,
-    .s-hero-fallback {
+    .s-hero-fallback,
+    .s-chrome-sweep::before,
+    .s-holo,
+    .s-ultra-glow,
+    .s-sparkle,
+    .s-lime-sheen {
       animation: none;
+    }
+    .s-infinity path {
+      animation: none;
+      stroke-dashoffset: 0;
     }
   }
 }

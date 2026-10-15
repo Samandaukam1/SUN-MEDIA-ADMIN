@@ -22,7 +22,7 @@ export function ApplyButton({
 }: {
   label: ReactNode;
   service?: string;
-  variant?: 'lime' | 'glass' | 'ink';
+  variant?: 'lime' | 'glass' | 'ink' | 'silver';
   className?: string;
   icon?: boolean;
   magnetic?: boolean;
@@ -31,7 +31,7 @@ export function ApplyButton({
     <button
       type="button"
       onClick={() => openApplication(service)}
-      className={`s-btn ${variant === 'lime' ? 's-btn-lime' : variant === 'ink' ? 's-btn-ink' : 's-btn-glass lg'} group ${className}`}
+      className={`s-btn ${variant === 'lime' ? 's-btn-lime' : variant === 'ink' ? 's-btn-ink' : variant === 'silver' ? 's-btn-silver' : 's-btn-glass lg'} group ${className}`}
     >
       <span>{label}</span>
       {icon ? (

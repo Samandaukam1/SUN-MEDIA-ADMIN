@@ -272,7 +272,7 @@ export function PlansEditor({ plans }: { plans: AdminPlan[] }) {
 
             <fieldset className="space-y-2">
               <legend className="text-[13px] font-medium text-muted">Tarif tarkibidagi xizmatlar</legend>
-              <p className="text-[13px] text-subtle">Masalan: nomi “Reels”, miqdori “oyiga 12 ta”, izoh “ssenariy bilan”.</p>
+              <p className="text-[13px] text-subtle">Masalan: nomi “Reels”, miqdori “oyiga 12 ta”, izoh “ssenariy bilan”. Cheksiz bo‘lsa — “∞” tugmasi.</p>
               {errors.items ? <p className="text-[13px] text-danger">{errors.items}</p> : null}
               <div className="space-y-2">
                 {draft.items.map((item, i) => (
@@ -286,14 +286,29 @@ export function PlansEditor({ plans }: { plans: AdminPlan[] }) {
                         onChange={(e) => setItem(i, { name: e.target.value })}
                         className={cn('h-10 rounded-lg border bg-surface px-3 text-sm outline-none focus:border-accent', errors[`items.${i}.name`] ? 'border-danger' : 'border-line')}
                       />
-                      <input
-                        aria-label={`${i + 1}-xizmat miqdori`}
-                        placeholder="Miqdori (ixtiyoriy)"
-                        maxLength={40}
-                        value={item.quantity}
-                        onChange={(e) => setItem(i, { quantity: e.target.value })}
-                        className="h-10 rounded-lg border border-line bg-surface px-3 text-sm outline-none focus:border-accent"
-                      />
+                      <div className="flex gap-1.5">
+                        <input
+                          aria-label={`${i + 1}-xizmat miqdori`}
+                          placeholder="Miqdori (ixtiyoriy)"
+                          maxLength={40}
+                          value={item.quantity}
+                          onChange={(e) => setItem(i, { quantity: e.target.value })}
+                          className="h-10 min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 text-sm outline-none focus:border-accent"
+                        />
+                        <button
+                          type="button"
+                          title="Cheksiz (∞)"
+                          aria-label={`${i + 1}-xizmat: cheksiz`}
+                          aria-pressed={/∞|cheksiz/i.test(item.quantity)}
+                          onClick={() => setItem(i, { quantity: /∞|cheksiz/i.test(item.quantity) ? '' : '∞' })}
+                          className={cn(
+                            'h-10 w-11 shrink-0 rounded-lg border text-[19px] leading-none',
+                            /∞|cheksiz/i.test(item.quantity) ? 'border-accent bg-accent-soft text-accent-on-soft' : 'border-line text-muted hover:text-ink',
+                          )}
+                        >
+                          ∞
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-2 flex gap-2">
                       <input

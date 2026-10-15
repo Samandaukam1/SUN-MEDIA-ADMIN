@@ -13,6 +13,7 @@ import { SelectInput, TextArea, TextInput } from '@/components/ui/Inputs';
 import { Notice } from '@/components/ui/Notice';
 import { deletePlan, movePlan, savePlan, setPlanFeatured, setPlanPublished, type PlanItemInput } from '@/lib/actions/site';
 import type { ActionState } from '@/lib/actions/state';
+import { CONTENT_TYPE } from '@/lib/labels';
 import { formatPrice, type SiteCurrency } from '@/lib/site/types';
 
 export type AdminPlan = {
@@ -25,8 +26,11 @@ export type AdminPlan = {
   billing_period: 'monthly' | 'one_time';
   is_featured: boolean;
   is_published: boolean;
-  items: { id: string; name: string; quantity: string; note: string }[];
+  items: { id: string; name: string; quantity: string; note: string; service_key: string | null }[];
 };
+
+/** A system service a tariff line can be (Reels, Postlar, Video kontent, ...). */
+export type ServiceOption = { key: string; name: string; unit: string; is_quantitative: boolean; content_types: string[]; is_active: boolean };
 
 type Draft = Omit<AdminPlan, 'id' | 'price' | 'items'> & { id: string | null; price: string; items: (PlanItemInput & { uid: string })[] };
 
@@ -43,6 +47,31 @@ const PERIODS = [
 
 let uidCounter = 0;
 const uid = () => `i${++uidCounter}`;
+
+/** Lines are matched by name the way the database does it: apostrophes, case and extra spaces do not matter. */
+const lineName = (s: string) => s.replace(/[‘’ʻʼ`']/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+/** The service a line without a chosen one gets: the one the same line has in another tariff, else the one with its name. */
+function guessService(name: string, plans: AdminPlan[], services: ServiceOption[]): ServiceOption | null {
+  const n = lineName(name);
+  if (!n) return null;
+  const byKey = new Map(services.map((s) => [s.key, s]));
+  for (const plan of plans) {
+    for (const item of plan.items) {
+      const s = item.service_key ? byKey.get(item.service_key) : undefined;
+      if (s?.is_active && lineName(item.name) === n) return s;
+    }
+  }
+  return services.find((s) => s.is_active && lineName(s.name) === n) ?? null;
+}
+
+function countingHint(s: ServiceOption | null, lineTyped: boolean): string {
+  if (!s) return lineTyped ? 'Tizimda shu nomli yangi xizmat ochiladi, bajarilgani qo‘lda belgilanadi.' : '';
+  if (s.content_types.length) {
+    return `Mijozga ${s.content_types.map((t) => CONTENT_TYPE[t as keyof typeof CONTENT_TYPE] ?? t).join(', ')} joylanganda limitdan o‘zi ayiriladi.`;
+  }
+  return s.is_quantitative ? 'Bajarilgani mijozning Tarif bo‘limida qo‘lda belgilanadi.' : 'Tarifga kiradi, soni sanalmaydi.';
+}
 
 export function priceSummary(plan: Pick<AdminPlan, 'price' | 'currency' | 'price_mode' | 'billing_period'>) {
   if (plan.price_mode === 'negotiable' || plan.price === null) return 'Kelishiladi';
@@ -63,20 +92,23 @@ function toDraft(plan: AdminPlan | null): Draft {
       billing_period: 'monthly',
       is_featured: false,
       is_published: true,
-      items: [{ uid: uid(), id: null, name: '', quantity: '', note: '' }],
+      items: [{ uid: uid(), id: null, name: '', quantity: '', note: '', service_key: '' }],
     };
   }
   return {
     ...plan,
     price: plan.price === null ? '' : String(plan.price),
-    items: plan.items.map((item) => ({ ...item, uid: uid() })),
+    items: plan.items.map((item) => ({ ...item, service_key: item.service_key ?? '', uid: uid() })),
   };
 }
 
-/** "Sayt › Tariflar": tariffs with their services — create, edit, reorder, feature, hide, delete. */
-export function PlansEditor({ plans }: { plans: AdminPlan[] }) {
+/**
+ * "Sayt › Tariflar": tariffs with their services — create, edit, reorder, feature, hide, delete. Each tariff is also the
+ * system tariff (Mijozlar › Tariflar): the database mirrors it, and each line names the system service it counts as.
+ */
+export function PlansEditor({ plans, services, startNew = false }: { plans: AdminPlan[]; services: ServiceOption[]; startNew?: boolean }) {
   const router = useRouter();
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(() => (startNew ? toDraft(null) : null));
   const [deleting, setDeleting] = useState<AdminPlan | null>(null);
   const [state, setState] = useState<ActionState>({ status: 'idle' });
   const [listError, setListError] = useState<string | null>(null);
@@ -111,10 +143,20 @@ export function PlansEditor({ plans }: { plans: AdminPlan[] }) {
     start(async () => {
       if (!draft) return;
       const { id, items, ...values } = draft;
+      // One service once per tariff — the database refuses it too, here the line is pointed out.
+      const keys = items.map((it) => it.service_key || guessService(it.name, plans, services)?.key || (it.name.trim() ? `new:${lineName(it.name)}` : ''));
+      const duplicates: Record<string, string> = {};
+      keys.forEach((k, i) => {
+        if (k && keys.indexOf(k) < i) duplicates[`items.${i}.service_key`] = 'Bu xizmat shu tarifda allaqachon bor — boshqasini tanlang.';
+      });
+      if (Object.keys(duplicates).length) {
+        setState({ status: 'error', message: 'Bitta xizmat tarifda ikki marta bo‘lmaydi.', fieldErrors: duplicates });
+        return;
+      }
       const result = await savePlan(
         id,
         values,
-        items.map(({ id: itemId, name, quantity, note }) => ({ id: itemId ?? null, name, quantity, note })),
+        items.map(({ id: itemId, name, quantity, note, service_key }) => ({ id: itemId ?? null, name, quantity, note, service_key })),
       );
       setState(result);
       if (result.status === 'success') {
@@ -127,8 +169,9 @@ export function PlansEditor({ plans }: { plans: AdminPlan[] }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-sm text-muted">
-          Saytdagi “Tariflar” sahifasi va bosh sahifa bloki. Narx o‘rniga “Kelishiladi” ham tanlanadi. Bu ro‘yxat mijozlar obunasidagi ichki
-          tariflardan (Mijozlar → Tariflar) alohida.
+          Saytdagi “Tariflar” sahifasi va bosh sahifa bloki. Shu yerdagi har bir tarif tizimda ham o‘sha tarif: Mijozlar → Tariflar, mijozga
+          biriktirish, kabinet va ilovadagi limitlar shu tarkib bo‘yicha ishlaydi — tarif ikki marta kiritilmaydi. Yashirilgan tarif yangi
+          mijozga biriktirilmaydi.
         </p>
         <Button onClick={() => open(null)} icon={<Icon name="plus" size={16} />}>
           Tarif qo‘shish
@@ -270,7 +313,7 @@ export function PlansEditor({ plans }: { plans: AdminPlan[] }) {
               </div>
             </div>
 
-            <fieldset className="space-y-2">
+            <fieldset className="min-w-0 space-y-2">
               <legend className="text-[13px] font-medium text-muted">Tarif tarkibidagi xizmatlar</legend>
               <p className="text-[13px] text-subtle">Masalan: nomi “Reels”, miqdori “oyiga 12 ta”, izoh “ssenariy bilan”. Cheksiz bo‘lsa — “∞” tugmasi.</p>
               {errors.items ? <p className="text-[13px] text-danger">{errors.items}</p> : null}
@@ -330,6 +373,14 @@ export function PlansEditor({ plans }: { plans: AdminPlan[] }) {
                       </Button>
                     </div>
                     {errors[`items.${i}.name`] ? <p className="mt-1.5 text-[13px] text-danger">{errors[`items.${i}.name`]}</p> : null}
+                    <ServiceSelect
+                      id={`plan-item-service-${item.uid}`}
+                      item={item}
+                      plans={plans}
+                      services={services}
+                      error={errors[`items.${i}.service_key`]}
+                      onChange={(service_key) => setItem(i, { service_key })}
+                    />
                   </div>
                 ))}
               </div>
@@ -338,7 +389,7 @@ export function PlansEditor({ plans }: { plans: AdminPlan[] }) {
                   type="button"
                   variant="secondary"
                   icon={<Icon name="plus" size={15} />}
-                  onClick={() => set('items', [...draft.items, { uid: uid(), id: null, name: '', quantity: '', note: '' }])}
+                  onClick={() => set('items', [...draft.items, { uid: uid(), id: null, name: '', quantity: '', note: '', service_key: '' }])}
                 >
                   Xizmat qo‘shish
                 </Button>
@@ -357,7 +408,11 @@ export function PlansEditor({ plans }: { plans: AdminPlan[] }) {
         ) : null}
       </Dialog>
 
-      <Dialog open={!!deleting} onClose={() => !pending && setDeleting(null)} title="Tarif o‘chirilsinmi?" description={deleting ? `“${deleting.name}” va uning xizmatlari butunlay o‘chiriladi. Vaqtincha olib qo‘yish uchun “Yashirish”ni bosing.` : undefined}>
+      <Dialog open={!!deleting} onClose={() => !pending && setDeleting(null)} title="Tarif o‘chirilsinmi?" description={
+          deleting
+            ? `“${deleting.name}” saytdan ham, tizimdagi tariflar ro‘yxatidan ham olib tashlanadi. Shu tarifdagi mijozlarning joriy davri saqlanadi. Vaqtincha olib qo‘yish uchun “Yashirish”ni bosing.`
+            : undefined
+        }>
         <div className="flex justify-end gap-3">
           <Button variant="secondary" disabled={pending} onClick={() => setDeleting(null)}>
             Bekor qilish
@@ -379,6 +434,56 @@ export function PlansEditor({ plans }: { plans: AdminPlan[] }) {
           </Button>
         </div>
       </Dialog>
+    </div>
+  );
+}
+
+/** "Tizimda": which system service a line is, and how the system counts it. */
+function ServiceSelect({
+  id,
+  item,
+  plans,
+  services,
+  error,
+  onChange,
+}: {
+  id: string;
+  item: PlanItemInput;
+  plans: AdminPlan[];
+  services: ServiceOption[];
+  error?: string;
+  onChange: (serviceKey: string) => void;
+}) {
+  const chosen = item.service_key ? (services.find((s) => s.key === item.service_key) ?? null) : null;
+  const guess = item.service_key ? null : guessService(item.name, plans, services);
+  const typed = item.name.trim();
+  return (
+    <div className="mt-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <label htmlFor={id} className="text-[12.5px] font-medium text-muted">
+          Tizimda
+        </label>
+        <select
+          id={id}
+          value={item.service_key}
+          onChange={(e) => onChange(e.target.value)}
+          className={cn(
+            'h-9 min-w-0 flex-1 rounded-lg border bg-surface px-2.5 text-[13px] outline-none focus:border-accent',
+            error ? 'border-danger' : 'border-line',
+          )}
+        >
+          <option value="">{guess ? `Avtomatik: ${guess.name}` : typed ? `Yangi xizmat: “${typed}”` : 'Avtomatik (nomi bo‘yicha)'}</option>
+          {services
+            .filter((s) => s.is_active || s.key === item.service_key)
+            .map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.name}
+              </option>
+            ))}
+        </select>
+      </div>
+      <p className="mt-1 text-[12px] text-subtle">{countingHint(chosen ?? guess, !!typed)}</p>
+      {error ? <p className="mt-1 text-[13px] text-danger">{error}</p> : null}
     </div>
   );
 }

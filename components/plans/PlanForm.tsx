@@ -23,9 +23,13 @@ export type PlanValues = {
 
 type Props = { services: ServiceType[]; clients: { id: string; name: string }[]; values?: PlanValues; editable: boolean };
 
-/** Tariff editor: price, period, audience and what is included (quantity per service). */
+/**
+ * Tariff editor: price, period, audience and what is included (quantity per service). Tariffs open to every client come
+ * from Sayt › Tariflar; here a custom tariff for one client is made (an older system-only open tariff stays editable).
+ */
 export function PlanForm({ services, clients, values, editable }: Props) {
   const [state, action] = useActionState<ActionState, FormData>(savePlan, idle);
+  const openAllowed = !!values?.id && values.client_id === null;
   const [included, setIncluded] = useState<Set<string>>(new Set(Object.keys(values?.features ?? {})));
   const errors = state.status === 'error' ? (state.fieldErrors ?? {}) : {};
 
@@ -48,8 +52,21 @@ export function PlanForm({ services, clients, values, editable }: Props) {
             required
             error={errors.duration_months}
           />
-          <SelectInput label="Kimlar uchun" name="client_id" defaultValue={values?.client_id ?? ''} error={errors.client_id} hint="Maxsus tarifni faqat tanlangan mijoz ko‘radi">
-            <option value="">Barcha mijozlar (ochiq katalog)</option>
+          <SelectInput
+            label="Kimlar uchun"
+            name="client_id"
+            defaultValue={values?.client_id ?? ''}
+            required={!openAllowed}
+            error={errors.client_id}
+            hint={openAllowed ? 'Maxsus tarifni faqat tanlangan mijoz ko‘radi' : 'Maxsus tarifni faqat shu mijoz ko‘radi. Hamma uchun tarif Sayt → Tariflar’da qo‘shiladi.'}
+          >
+            {openAllowed ? (
+              <option value="">Barcha mijozlar (ochiq katalog)</option>
+            ) : (
+              <option value="" disabled>
+                Mijozni tanlang
+              </option>
+            )}
             {clients.map((c) => (
               <option key={c.id} value={c.id}>
                 Faqat {c.name}

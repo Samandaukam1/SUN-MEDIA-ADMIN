@@ -21,7 +21,9 @@ export default async function PlansPage() {
   const [plansRes, requestsRes, subsRes] = await Promise.all([
     supabase
       .from('plans')
-      .select('id, name, price, currency, duration_months, is_public, is_active, position, client:clients(id, name), features:plan_features(quantity, is_included, service:service_types(name, unit, position))')
+      .select(
+        'id, name, price, currency, duration_months, is_public, is_active, position, site_plan_id, client:clients(id, name), site:site_plans(price_mode, billing_period), features:plan_features(quantity, is_included, label, unit, position, service:service_types(name, unit, position, is_quantitative))',
+      )
       .is('deleted_at', null)
       .order('is_active', { ascending: false })
       .order('position')
@@ -38,13 +40,25 @@ export default async function PlansPage() {
   const activeByPlan = new Map<string, number>();
   (subsRes.data ?? []).forEach((s) => activeByPlan.set(s.plan_id, (activeByPlan.get(s.plan_id) ?? 0) + 1));
   const manage = can(context, 'plans.manage');
+  const siteManage = can(context, 'site.manage');
 
   return (
     <div>
       <PageHeader
         title="Tariflar"
-        description="Qaysi tarifda nima bor, kim qaysi tarifda va tarifni o‘zgartirish so‘rovlari."
-        actions={manage ? <ButtonLink href="/plans/new" variant="primary">+ Tarif</ButtonLink> : null}
+        description="Saytdagi tariflar bilan bitta ro‘yxat: tarif Sayt → Tariflar’da qo‘shiladi va o‘zgartiriladi, shu yerda, mijoz kabinetida va ilovada o‘sha zahoti ko‘rinadi. Bitta mijoz uchun maxsus tarif shu yerda yaratiladi."
+        actions={
+          siteManage || manage ? (
+            <>
+              {siteManage ? (
+                <ButtonLink href="/site/plans?new=1" variant="primary">
+                  + Tarif
+                </ButtonLink>
+              ) : null}
+              {manage ? <ButtonLink href="/plans/new">+ Maxsus tarif</ButtonLink> : null}
+            </>
+          ) : null
+        }
       />
 
       {requestsRes.data.length ? (
@@ -72,12 +86,15 @@ export default async function PlansPage() {
       ) : null}
 
       {plansRes.data.length === 0 ? (
-        <EmptyRow>Hali tarif yo‘q. “Yangi tarif” orqali birinchisini yarating.</EmptyRow>
+        <EmptyRow>Hali tarif yo‘q. Tariflar Sayt → Tariflar bo‘limida qo‘shiladi.</EmptyRow>
       ) : (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {plansRes.data.map((p) => {
-            const features = [...p.features].filter((f) => f.is_included).sort((a, b) => (a.service?.position ?? 0) - (b.service?.position ?? 0));
+            const features = [...p.features]
+              .filter((f) => f.is_included)
+              .sort((a, b) => (a.position ?? a.service?.position ?? 0) - (b.position ?? b.service?.position ?? 0));
             const active = activeByPlan.get(p.id) ?? 0;
+            const negotiable = p.site?.price_mode === 'negotiable';
             return (
               <Card key={p.id} className={p.is_active ? '' : 'opacity-60'}>
                 <div className="mb-4 flex items-start justify-between gap-3">
@@ -85,19 +102,33 @@ export default async function PlansPage() {
                     <Link href={`/plans/${p.id}`} className="text-lg font-semibold tracking-tight hover:underline">
                       {p.name}
                     </Link>
-                    <p className="mt-1 text-2xl font-bold tracking-tight">{formatMoney(p.price, p.currency)}</p>
-                    <p className="text-[13px] text-muted">{p.duration_months === 1 ? 'oyiga' : `${p.duration_months} oyga`}</p>
+                    <p className="mt-1 text-2xl font-bold tracking-tight">
+                      {negotiable ? 'Kelishiladi' : `${p.site?.price_mode === 'from' ? 'dan ' : ''}${formatMoney(p.price, p.currency)}`}
+                    </p>
+                    <p className="text-[13px] text-muted">
+                      {p.site?.billing_period === 'one_time' ? 'bir martalik' : p.duration_months === 1 ? 'oyiga' : `${p.duration_months} oyga`}
+                    </p>
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
-                    {p.client ? <Badge tone="violet">Maxsus: {p.client.name}</Badge> : <Badge tone="accent">Ochiq</Badge>}
-                    {p.is_active ? null : <Badge>O‘chirilgan</Badge>}
+                    {p.client ? (
+                      <Badge tone="violet">Maxsus: {p.client.name}</Badge>
+                    ) : p.site_plan_id ? (
+                      <Badge tone="accent" dot>
+                        Saytda
+                      </Badge>
+                    ) : (
+                      <Badge>Faqat tizimda</Badge>
+                    )}
+                    {p.is_active ? null : <Badge>{p.site_plan_id ? 'Yashirin' : 'O‘chirilgan'}</Badge>}
                   </div>
                 </div>
                 <ul className="space-y-1.5 text-sm">
                   {features.map((f, i) => (
                     <li key={i} className="flex justify-between gap-3">
-                      <span>{f.service?.name}</span>
-                      <span className="font-medium tabular-nums">{f.quantity == null ? '✓' : `${f.quantity} ${f.service?.unit ?? ''}`}</span>
+                      <span>{f.label ?? f.service?.name}</span>
+                      <span className="font-medium tabular-nums">
+                        {f.quantity != null ? `${f.quantity} ${f.unit ?? f.service?.unit ?? ''}` : f.service?.is_quantitative ? '∞ cheksiz' : '✓'}
+                      </span>
                     </li>
                   ))}
                   {features.length === 0 ? <li className="text-muted">Tarkib belgilanmagan</li> : null}

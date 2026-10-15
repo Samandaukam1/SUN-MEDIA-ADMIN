@@ -56,6 +56,18 @@ export async function savePlan(_: ActionState, formData: FormData): Promise<Acti
   });
   if (!parsed.success) return { status: 'error', message: 'Formadagi xatolarni tuzating.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
   const { id, ...plan } = parsed.data;
+  const supabase = await createClient();
+  // Tariffs open to every client are kept once, in Sayt › Tariflar (mirrored here); this form makes custom ones.
+  if (plan.client_id === null) {
+    const current = id ? (await supabase.from('plans').select('client_id').eq('id', id).maybeSingle()).data : null;
+    if (!current || current.client_id !== null) {
+      return {
+        status: 'error',
+        message: 'Hamma uchun tarif Sayt → Tariflar bo‘limida qo‘shiladi — u saytda ham, tizimda ham bir xil bo‘ladi. Bu yerda bitta mijoz uchun maxsus tarif yaratiladi.',
+        fieldErrors: { client_id: 'Mijozni tanlang' },
+      };
+    }
+  }
 
   const features: { service_key: string; quantity: number | null }[] = [];
   for (const key of formData.getAll('service_keys').map(String)) {
@@ -68,7 +80,6 @@ export async function savePlan(_: ActionState, formData: FormData): Promise<Acti
     features.push({ service_key: key, quantity });
   }
 
-  const supabase = await createClient();
   const row = { ...plan, is_public: plan.client_id === null };
   let planId = id;
   if (id) {

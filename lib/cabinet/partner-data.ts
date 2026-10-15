@@ -89,7 +89,7 @@ export async function loadCalendar(clientId: string, fromIso: string, toIso: str
 // ---------------------------------------------------------------------------
 // Tariff
 // ---------------------------------------------------------------------------
-const featureSchema = z.object({ service_name: str, unit: opt, quantity: z.coerce.number().nullable(), note: opt });
+const featureSchema = z.object({ service_name: str, unit: opt, quantity: z.coerce.number().nullable(), note: opt, is_quantitative: z.boolean().optional() });
 const planSchema = z.object({
   current: z
     .object({

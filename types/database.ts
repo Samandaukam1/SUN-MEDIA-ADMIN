@@ -4128,28 +4128,37 @@ export type Database = {
         Row: {
           created_at: string
           is_included: boolean
+          label: string | null
           note: string | null
           plan_id: string
+          position: number | null
           quantity: number | null
           service_key: string
+          unit: string | null
           updated_at: string
         }
         Insert: {
           created_at?: string
           is_included?: boolean
+          label?: string | null
           note?: string | null
           plan_id: string
+          position?: number | null
           quantity?: number | null
           service_key: string
+          unit?: string | null
           updated_at?: string
         }
         Update: {
           created_at?: string
           is_included?: boolean
+          label?: string | null
           note?: string | null
           plan_id?: string
+          position?: number | null
           quantity?: number | null
           service_key?: string
+          unit?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -4272,6 +4281,7 @@ export type Database = {
           name: string
           position: number
           price: number
+          site_plan_id: string | null
           slug: string
           updated_at: string
         }
@@ -4289,6 +4299,7 @@ export type Database = {
           name: string
           position?: number
           price?: number
+          site_plan_id?: string | null
           slug: string
           updated_at?: string
         }
@@ -4306,6 +4317,7 @@ export type Database = {
           name?: string
           position?: number
           price?: number
+          site_plan_id?: string | null
           slug?: string
           updated_at?: string
         }
@@ -4322,6 +4334,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plans_site_plan_id_fkey"
+            columns: ["site_plan_id"]
+            isOneToOne: true
+            referencedRelation: "site_plans"
             referencedColumns: ["id"]
           },
         ]
@@ -5971,6 +5990,7 @@ export type Database = {
           note: string
           plan_id: string
           quantity: string
+          service_key: string | null
           sort_order: number
           updated_at: string
         }
@@ -5981,6 +6001,7 @@ export type Database = {
           note?: string
           plan_id: string
           quantity?: string
+          service_key?: string | null
           sort_order?: number
           updated_at?: string
         }
@@ -5991,6 +6012,7 @@ export type Database = {
           note?: string
           plan_id?: string
           quantity?: string
+          service_key?: string | null
           sort_order?: number
           updated_at?: string
         }
@@ -6001,6 +6023,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "site_plans"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_plan_items_service_key_fkey"
+            columns: ["service_key"]
+            isOneToOne: false
+            referencedRelation: "service_types"
+            referencedColumns: ["key"]
           },
         ]
       }
@@ -6761,24 +6790,33 @@ export type Database = {
       subscription_quotas: {
         Row: {
           is_included: boolean
+          label: string | null
           note: string | null
+          position: number | null
           quantity: number | null
           service_key: string
           subscription_id: string
+          unit: string | null
         }
         Insert: {
           is_included?: boolean
+          label?: string | null
           note?: string | null
+          position?: number | null
           quantity?: number | null
           service_key: string
           subscription_id: string
+          unit?: string | null
         }
         Update: {
           is_included?: boolean
+          label?: string | null
           note?: string | null
+          position?: number | null
           quantity?: number | null
           service_key?: string
           subscription_id?: string
+          unit?: string | null
         }
         Relationships: [
           {

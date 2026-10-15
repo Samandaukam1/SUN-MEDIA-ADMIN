@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 
-export const metadata: Metadata = { title: 'Yangi tarif' };
+export const metadata: Metadata = { title: 'Maxsus tarif' };
 
 export default async function NewPlanPage() {
   await requirePermission('plans.manage');
@@ -19,7 +19,11 @@ export default async function NewPlanPage() {
   if (clients.error) throw clients.error;
   return (
     <div>
-      <PageHeader crumbs={[{ label: 'Mijozlar', href: '/clients' }, { label: 'Tariflar', href: '/plans' }, { label: 'Yangi tarif' }]} title="Yangi tarif" description="Narx, muddat va tarifga kiradigan xizmatlar miqdori." />
+      <PageHeader
+        crumbs={[{ label: 'Mijozlar', href: '/clients' }, { label: 'Tariflar', href: '/plans' }, { label: 'Maxsus tarif' }]}
+        title="Maxsus tarif"
+        description="Bitta mijoz uchun: narx, muddat va tarifga kiradigan xizmatlar miqdori. Hamma uchun ochiq tarif Sayt → Tariflar’da qo‘shiladi."
+      />
       <Card className="max-w-3xl">
         <PlanForm services={services.data} clients={clients.data} editable />
       </Card>

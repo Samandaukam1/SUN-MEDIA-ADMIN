@@ -139,7 +139,11 @@ export default async function PartnerTariffPage({ searchParams }: { searchParams
                         </span>
                         <span>
                           {f.service_name}
-                          {f.quantity ? <span className="font-semibold text-white"> — {f.quantity} {f.unit ?? ''}</span> : null}
+                          {f.quantity ? (
+                            <span className="font-semibold text-white"> — {f.quantity} {f.unit ?? ''}</span>
+                          ) : f.quantity === null && f.is_quantitative ? (
+                            <span className="font-semibold text-white"> — ∞ cheksiz</span>
+                          ) : null}
                           {f.note ? <span className="block text-[12px] text-[#8e8e96]">{f.note}</span> : null}
                         </span>
                       </li>

@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 
 import { PageHeader } from '@/components/panel/PageHeader';
 import { PlanForm } from '@/components/plans/PlanForm';
+import { SitePlanView } from '@/components/plans/SitePlanView';
 import { Card } from '@/components/ui/Card';
 import { Notice } from '@/components/ui/Notice';
 import { can, requireStaff } from '@/lib/auth';
@@ -19,7 +20,9 @@ export default async function PlanPage({ params, searchParams }: { params: Promi
   const [plan, services, clients] = await Promise.all([
     supabase
       .from('plans')
-      .select('id, name, description, price, duration_months, client_id, is_active, position, features:plan_features(service_key, quantity, is_included)')
+      .select(
+        'id, name, description, price, currency, duration_months, client_id, is_active, position, site_plan_id, site:site_plans(price_mode, billing_period), features:plan_features(service_key, quantity, is_included, label, unit, note, position, service:service_types(name, unit, position, is_quantitative, content_types))',
+      )
       .eq('id', id)
       .is('deleted_at', null)
       .maybeSingle(),
@@ -30,10 +33,26 @@ export default async function PlanPage({ params, searchParams }: { params: Promi
   if (!plan.data) notFound();
   if (services.error) throw services.error;
   const p = plan.data;
+  const crumbs = [{ label: 'Mijozlar', href: '/clients' }, { label: 'Tariflar', href: '/plans' }, { label: p.name }];
+
+  if (p.site_plan_id) {
+    return (
+      <div>
+        <PageHeader crumbs={crumbs} title={p.name} />
+        <SitePlanView
+          plan={{ name: p.name, description: p.description, price: Number(p.price), currency: p.currency, is_active: p.is_active }}
+          site={p.site}
+          lines={p.features.filter((f) => f.is_included)}
+          canEditSite={can(context, 'site.manage')}
+        />
+      </div>
+    );
+  }
+
   const features = Object.fromEntries(p.features.filter((f) => f.is_included).map((f) => [f.service_key, f.quantity]));
   return (
     <div>
-      <PageHeader crumbs={[{ label: 'Mijozlar', href: '/clients' }, { label: 'Tariflar', href: '/plans' }, { label: p.name }]} title={p.name} description="O‘zgarishlar faqat yangi obunalarga ta’sir qiladi: mavjud mijozlar sotib olgan tarkibi saqlanadi." />
+      <PageHeader crumbs={crumbs} title={p.name} description="O‘zgarishlar faqat yangi obunalarga ta’sir qiladi: mavjud mijozlar sotib olgan tarkibi saqlanadi." />
       {saved ? (
         <div className="mb-6 max-w-3xl">
           <Notice tone="success" title="Tarif yaratildi" />

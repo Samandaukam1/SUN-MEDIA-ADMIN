@@ -409,6 +409,8 @@ const planItemSchema = z.object({
   name: z.string().trim().min(1, { message: 'Xizmat nomini yozing' }).max(120, { message: '120 belgigacha' }),
   quantity: z.string().trim().max(40, { message: '40 belgigacha' }),
   note: z.string().trim().max(160, { message: '160 belgigacha' }),
+  // The system service this line is ('' = matched by name, or a new one).
+  service_key: z.string().trim().max(60).regex(/^([a-z][a-z0-9_]*)?$/).default(''),
 });
 
 const planSchema = z
@@ -427,7 +429,7 @@ const planSchema = z
   })
   .refine((v) => v.price_mode === 'negotiable' || v.price !== null, { path: ['price'], message: 'Narxni kiriting yoki “Kelishiladi”ni tanlang' });
 
-export type PlanItemInput = { id?: string | null; name: string; quantity: string; note: string };
+export type PlanItemInput = { id?: string | null; name: string; quantity: string; note: string; service_key: string };
 
 export async function savePlan(id: string | null, values: Record<string, unknown>, items: PlanItemInput[]): Promise<ActionState> {
   await requirePermission('site.manage');
@@ -446,11 +448,11 @@ export async function savePlan(id: string | null, values: Record<string, unknown
   const supabase = await createClient();
   const { error } = await supabase.rpc('site_save_plan', {
     p_plan: { ...parsed.data, id, price: parsed.data.price_mode === 'negotiable' ? null : parsed.data.price },
-    p_items: parsedItems.data.map((item) => ({ id: item.id ?? null, name: item.name, quantity: item.quantity, note: item.note })),
+    p_items: parsedItems.data.map((item) => ({ id: item.id ?? null, name: item.name, quantity: item.quantity, note: item.note, service_key: item.service_key })),
   });
   if (error) return { status: 'error', message: toUserMessage(error) };
   refreshSite('/site/plans');
-  return { status: 'success', message: id ? 'Tarif saqlandi. Saytda yangilandi.' : 'Tarif qo‘shildi.' };
+  return { status: 'success', message: id ? 'Tarif saqlandi: saytda ham, tizimda ham yangilandi.' : 'Tarif qo‘shildi: saytda ham, tizimda ham.' };
 }
 
 export async function deletePlan(id: string): Promise<ActionState> {

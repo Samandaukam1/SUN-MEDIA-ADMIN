@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { AiFailedError, AiNotConfiguredError } from '@/lib/ai';
+import { geminiChat, geminiKey } from './gemini';
 import { agencyKnowledge, budgetHints } from './knowledge';
 import { runTool, toolsFor, type AssistantAction, type AssistantContext } from './tools';
 
@@ -51,12 +52,22 @@ async function systemPrompt(ctx: AssistantContext, name: string | null): Promise
 /** One assistant reply: Claude with tools, looping until it answers in text (at most a few tool rounds). */
 export async function assistantReply(history: ChatTurn[], ctx: AssistantContext, name: string | null): Promise<{ reply: string; actions: AssistantAction[] }> {
   const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new AiNotConfiguredError();
+  const actions: AssistantAction[] = [];
+  // No Claude key: the free Gemini key (AI Studio) runs the same persona and tools.
+  if (!key) {
+    if (!geminiKey()) throw new AiNotConfiguredError();
+    const system = await systemPrompt(ctx, name);
+    const reply = await geminiChat(system, history, toolsFor(ctx.audience), async (tool, input) => {
+      const result = await runTool(tool, input, ctx);
+      if (result.action) actions.push(result.action);
+      return result.content;
+    });
+    return { reply, actions };
+  }
   const model = process.env.ASSISTANT_MODEL || process.env.AI_MODEL || 'claude-sonnet-5-5';
   const system = await systemPrompt(ctx, name);
   const tools = toolsFor(ctx.audience);
   const messages: Message[] = history.map((t) => ({ role: t.role, content: t.text }));
-  const actions: AssistantAction[] = [];
 
   for (let round = 0; round < 5; round++) {
     let response: Response;

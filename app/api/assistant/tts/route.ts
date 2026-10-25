@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 
+import { geminiKey, geminiSpeech } from '@/lib/assistant/gemini';
 import { corsHeaders, rateLimited } from '@/lib/assistant/request';
 
 export const runtime = 'nodejs';
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
   const headers = corsHeaders(request);
   const key = process.env.AZURE_SPEECH_KEY;
   const region = process.env.AZURE_SPEECH_REGION;
-  if (!key || !region) return new NextResponse(null, { status: 204, headers });
+  if ((!key || !region) && !geminiKey()) return new NextResponse(null, { status: 204, headers });
 
   const parsed = body.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Matn noto‘g‘ri.' }, { status: 400, headers });
@@ -46,6 +47,14 @@ export async function POST(request: NextRequest) {
     .replace(/https?:\/\/\S+/g, '')
     .replace(/[*_#`>]/g, '')
     .trim();
+
+  // Free option: Gemini TTS (AI Studio key). Over quota or unavailable → 204, the widget uses the browser voice.
+  if (!key || !region) {
+    const audio = await geminiSpeech(spoken);
+    if (!audio) return new NextResponse(null, { status: 204, headers });
+    return new NextResponse(new Uint8Array(audio.body), { headers: { ...headers, 'Content-Type': audio.type, 'Cache-Control': 'no-store' } });
+  }
+
   const { lang, voice } = voiceFor(spoken);
   const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${lang}"><voice name="${voice}"><prosody rate="${process.env.ASSISTANT_RATE || '+2%'}" pitch="${process.env.ASSISTANT_PITCH || '+12%'}">${escapeXml(spoken)}</prosody></voice></speak>`;
 

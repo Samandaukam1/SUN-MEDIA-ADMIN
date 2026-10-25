@@ -123,7 +123,7 @@ export async function geminiChat(
   history: { role: 'user' | 'assistant'; text: string }[],
   tools: ToolDef[],
   run: (name: string, input: Record<string, unknown>) => Promise<string>,
-  { onText, signal }: { onText?: (delta: string) => void; signal?: AbortSignal } = {},
+  { onText, signal, maxTokens = 900 }: { onText?: (delta: string) => void; signal?: AbortSignal; maxTokens?: number } = {},
 ): Promise<string> {
   // The configured model first, then the free models fastest first: flash-lite answers in about a second and has the
   // largest free quota; the bigger flash models (20 free requests a day, often "high demand") back it up.
@@ -159,7 +159,7 @@ export async function geminiChat(
           systemInstruction: { parts: [{ text: system }] },
           contents,
           tools: [{ functionDeclarations: tools.map(declaration) }],
-          generationConfig: { maxOutputTokens: 900, temperature: 0.7, ...(thinkingConfig ? { thinkingConfig } : {}) },
+          generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7, ...(thinkingConfig ? { thinkingConfig } : {}) },
         }),
         signal: timer.signal,
       });

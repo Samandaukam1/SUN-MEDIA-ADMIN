@@ -13,25 +13,33 @@ type Action = { type: 'lead_created' } | { type: 'link'; href: string; label: st
 type Msg = { role: 'user' | 'assistant'; text: string; actions?: Action[]; error?: boolean; streaming?: boolean; retry?: string };
 type Done = { reply?: string; actions?: Action[] };
 
-const GREETING: Record<'public' | 'member', string> = {
+/** Who the chat is for: the public site, the team's internal system, or a client's cabinet. */
+export type ChatAudience = 'public' | 'staff' | 'client';
+const GREETING: Record<ChatAudience, string> = {
   public: 'Salom! Men Sunny — SUN MEDIA yordamchisiman. Biznesingiz haqida aytib bering, qaysi xizmat mos kelishini topamiz.',
-  member: 'Salom! Men Sunny. Vazifalar, s’yomkalar yoki loyiha holati haqida so‘rang — tezda topib beraman.',
+  staff: 'Salom! Men Sunny — ichki yordamchingiz. Davomat, bugungi holat, kamchiliklar, vazifalar, kontent yoki CRM haqida so‘rang: tizimdan topib beraman.',
+  client: 'Salom! Men Sunny. Loyihangiz, kontent rejasi va s’yomkalar holati haqida so‘rang — tezda topib beraman.',
 };
-const SUGGESTIONS: Record<'public' | 'member', string[]> = {
+const SUGGESTIONS: Record<ChatAudience, string[]> = {
   public: ['Qanday xizmatlaringiz bor?', 'Tariflar narxi qancha?', 'Restoran uchun keyslar bormi?', 'Konsultatsiyaga yozilmoqchiman'],
-  member: ['Bugungi vazifalarim', 'Yaqin s’yomkalar', 'Bu oy kontent holati', 'Post uchun caption yozib ber'],
+  staff: ['Bugun kimlar keldi, kimlar kelmadi?', 'Bugungi kamchiliklar va xavflar', 'Muddati o‘tgan vazifalar kimda?', 'Bugungi umumiy holat'],
+  client: ['Bu oy kontent holati', 'Yaqin s’yomkalar', 'Loyihamiz holati', 'Menejerga qanday yozaman?'],
 };
+/** What is sent with each question: the recent part of the chat, each message within the server's limit. */
+const HISTORY = 24;
+const MAX_TEXT = 2000;
 const LANGS: { key: VoiceLang; label: string }[] = [
   { key: 'uz-UZ', label: 'UZ' },
   { key: 'ru-RU', label: 'RU' },
   { key: 'en-US', label: 'EN' },
 ];
-const STORE = 'sunbot:v2';
+// One conversation per audience: what the team discussed internally never shows on the public site, and back.
+const storeKey = (audience: ChatAudience) => `sunbot:v3:${audience}`;
 const OFFLINE = 'Internet yo‘q. Ulanish tiklangach qayta yuboring.';
 
-function load(): Msg[] | null {
+function load(audience: ChatAudience): Msg[] | null {
   try {
-    const raw = sessionStorage.getItem(STORE);
+    const raw = sessionStorage.getItem(storeKey(audience));
     // Errors are not kept: an old "not connected" or timeout message must not come back after a reload.
     const msgs = raw ? (JSON.parse(raw) as Msg[]).filter((m) => !m.error) : [];
     return msgs.length ? msgs : null;
@@ -39,9 +47,9 @@ function load(): Msg[] | null {
     return null;
   }
 }
-function save(msgs: Msg[]) {
+function save(audience: ChatAudience, msgs: Msg[]) {
   try {
-    sessionStorage.setItem(STORE, JSON.stringify(msgs.filter((m) => !m.error).map(({ role, text, actions }) => ({ role, text, actions })).slice(-30)));
+    sessionStorage.setItem(storeKey(audience), JSON.stringify(msgs.filter((m) => !m.error).map(({ role, text, actions }) => ({ role, text, actions })).slice(-30)));
   } catch {
     // storage blocked: the chat simply does not survive a reload
   }
@@ -139,7 +147,7 @@ export function SunBotChat({
   onFace,
   onReplied,
 }: {
-  audience: 'public' | 'member';
+  audience: ChatAudience;
   open: boolean;
   closing: boolean;
   onClose: () => void;
@@ -175,7 +183,7 @@ export function SunBotChat({
   closeRef.current = onClose;
 
   useEffect(() => {
-    setMsgs(load() ?? [{ role: 'assistant', text: GREETING[audience] }]);
+    setMsgs(load(audience) ?? [{ role: 'assistant', text: GREETING[audience] }]);
     if (stored('sunbot:muted') === '0') setMuted(false);
     if (stored('sunbot:muted')) chosenMute.current = true;
     setOnline(navigator.onLine);
@@ -208,8 +216,8 @@ export function SunBotChat({
   }, [failed]);
 
   useEffect(() => {
-    if (msgs.length) save(msgs);
-  }, [msgs]);
+    if (msgs.length) save(audience, msgs);
+  }, [msgs, audience]);
   // The newest line stays in view, including a "Qayta urinish" button that appears when the connection returns.
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: busy ? 'auto' : 'smooth' });
@@ -300,7 +308,7 @@ export function SunBotChat({
         fetch('/api/assistant', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ messages: history.map(({ role, text }) => ({ role, text })), stream: true }),
+          body: JSON.stringify({ messages: history.slice(-HISTORY).map(({ role, text }) => ({ role, text: text.slice(0, MAX_TEXT) })), stream: true }),
           signal: ctl.signal,
         });
 

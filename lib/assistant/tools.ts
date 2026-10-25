@@ -2,8 +2,10 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { commandCenterSchema } from '@/lib/schemas/command-center';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { normalizePhone } from '@/lib/site/normalize';
+import { agencyDateKey, formatTime } from '@/lib/time';
 import type { Database } from '@/types/database';
 
 /** Who is talking to the assistant. Public visitors get sales tools; signed-in people get read-only work tools (RLS). */
@@ -17,6 +19,9 @@ export type AssistantContext = {
   /** One-way IP key used by site_apply's rate limit; null when the server secret is missing. */
   visitorKey: string | null;
   userAgent: string;
+  /** The signed-in person's permissions (which internal tools are offered); the database checks them again. */
+  permissions: string[];
+  owner: boolean;
 };
 
 /** Something the widget does after the reply (show a button, mark the lead as sent). */
@@ -91,19 +96,112 @@ const WORK_TOOLS: ToolDef[] = [
   },
 ];
 
-export function toolsFor(audience: AssistantAudience): ToolDef[] {
-  if (audience === 'public') return PUBLIC_TOOLS;
-  if (audience === 'client') return WORK_TOOLS.filter((t) => t.name !== 'my_tasks').concat(PUBLIC_TOOLS.filter((t) => t.name === 'show_link'));
-  return WORK_TOOLS;
+const dayParam = { type: 'string', description: 'Sana YYYY-MM-DD (Toshkent vaqti); bo‘sh bo‘lsa — bugun. "Kecha" uchun bugungi sanadan bir kun oldin.' };
+
+/** The internal system, each tool behind the permission the matching panel page needs (the database checks it too). */
+const STAFF_TOOLS: (ToolDef & { needs?: string[] })[] = [
+  {
+    name: 'team',
+    description:
+      'Jamoa: har bir xodim — lavozimi, bo‘limi, bugungi davomat holati (keldi/kechikdi/kelmadi…), kechikish daqiqasi, ochiq va muddati o‘tgan vazifalari, bugun muddati tugaydiganlari, bugungi s’yomkalari. Ism bo‘yicha filtr mumkin.',
+    input_schema: { type: 'object', properties: { name: str('Xodim ismi (qisman), ixtiyoriy') } },
+  },
+  {
+    name: 'attendance',
+    needs: ['attendance.read', 'attendance.manage'],
+    description:
+      'Kun bo‘yicha davomat: kim keldi (kelgan vaqti), kim kechikdi (necha daqiqa), kim kelmadi, kim sababli/ta’tilda/masofadan, kim hali belgilanmagan, ochiq davomat ogohlantirishlari. "Bugun kimlar keldi/kelmadi" savollari uchun.',
+    input_schema: { type: 'object', properties: { date: dayParam } },
+  },
+  {
+    name: 'overview',
+    needs: ['dashboard.view'],
+    description:
+      'Agentlikning kunlik holati (panel bosh sahifasi): vazifalar soni va holati, muddati o‘tgan vazifalar (kimda), yaqin va xavfli muddatlar, tasdiq kutayotgan kontent, rejalashtirilgan va chiqqan postlar, kunning s’yomkalari, davomat xulosasi.',
+    input_schema: { type: 'object', properties: { date: dayParam } },
+  },
+  {
+    name: 'issues',
+    needs: ['dashboard.view'],
+    description:
+      'Kamchiliklar va xavflar ro‘yxati: muddati o‘tgan vazifalar (kimda, necha kun), xavfli muddatlar, 48 soatdan ortiq tasdiq kutayotgan kontent, kechikkan/kelmagan/belgilanmagan xodimlar, ochiq davomat ogohlantirishlari, javobsiz sayt arizalari. "Nima kamchilik bor", "muammolar" savollari uchun.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'crm',
+    needs: ['crm.read'],
+    description: 'CRM: lidlar xulosasi (holatlar, mijozlar bo‘yicha, oxirgi kunlar) va saytdan kelgan yangi arizalar.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'performance',
+    needs: ['performance.read'],
+    description: 'Xodimlar samaradorligi (KPI): tanlangan davrda har bir xodimning ko‘rsatkichlari. Standart — joriy oy boshidan bugungacha.',
+    input_schema: { type: 'object', properties: { from: str('Boshlanish sanasi YYYY-MM-DD, ixtiyoriy'), to: str('Tugash sanasi YYYY-MM-DD, ixtiyoriy') } },
+  },
+  {
+    name: 'search',
+    description: 'Tizim bo‘yicha qidiruv: mijoz, vazifa, kontent, loyiha, xodim nomi bo‘yicha topadi.',
+    input_schema: { type: 'object', properties: { query: str('Qidiruv so‘zi') }, required: ['query'] },
+  },
+];
+
+export function toolsFor(ctx: Pick<AssistantContext, 'audience' | 'permissions' | 'owner'>): ToolDef[] {
+  if (ctx.audience === 'public') return PUBLIC_TOOLS;
+  const link = PUBLIC_TOOLS.filter((t) => t.name === 'show_link');
+  if (ctx.audience === 'client') return WORK_TOOLS.filter((t) => t.name !== 'my_tasks').concat(link);
+  const allowed = (t: { needs?: string[] }) => !t.needs || ctx.owner || t.needs.some((p) => ctx.permissions.includes(p));
+  return [...STAFF_TOOLS.filter(allowed).map(({ name, description, input_schema }) => ({ name, description, input_schema })), ...WORK_TOOLS, ...link];
 }
 
 const SAFE_PATH = /^\/[A-Za-z0-9/_-]*(#[A-Za-z0-9_-]+)?$/;
 const day = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
-const json = (value: unknown) => JSON.stringify(value).slice(0, 12_000);
+const json = (value: unknown) => JSON.stringify(value).slice(0, 14_000);
+const dateArg = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : agencyDateKey());
+/** "09:12:00" (time) or an ISO timestamp → "09:12" in Tashkent. */
+const clock = (v: string | null | undefined) => (!v ? null : /^\d{2}:\d{2}/.test(v) ? v.slice(0, 5) : formatTime(v));
+const daysSince = (iso: string) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
+/** A database refusal (no permission) is said plainly; anything else is a read error. */
+const refused = (error: { message?: string; code?: string }) =>
+  /permission|forbidden|not allowed|denied|PERMISSION|FORBIDDEN|42501/i.test(`${error.message} ${error.code}`)
+    ? 'Bu ma’lumot sizning rolingizga ochiq emas.'
+    : 'Ma’lumotni o‘qib bo‘lmadi.';
+const STATUS_UZ: Record<string, string> = { present: 'keldi', late: 'kechikdi', absent: 'kelmadi', excused: 'sababli', vacation: 'ta’tilda', remote: 'masofadan' };
+
+type AttendanceRow = Database['public']['Functions']['get_attendance_day']['Returns'][number];
+
+/** One day's attendance grouped the way people ask about it. */
+async function attendanceDay(db: SupabaseClient<Database>, date: string) {
+  const { data, error } = await db.rpc('get_attendance_day', { p_date: date });
+  if (error) return { error: refused(error) };
+  const rows = (data as AttendanceRow[]).filter((r) => r.scheduled || r.status);
+  const person = (r: AttendanceRow) => ({
+    ism: r.full_name,
+    lavozim: r.job_title || null,
+    keldi: clock(r.arrived_at) ?? clock(r.checked_in_at),
+    ...(r.late_minutes ? { kechikish_daqiqa: r.late_minutes } : {}),
+    ...(r.note ? { izoh: r.note } : {}),
+  });
+  const by = (status: string) => rows.filter((r) => r.status === status).map(person);
+  const { data: alerts } = await db.from('attendance_alerts').select('note, attendance_id').eq('status', 'open').eq('work_date', date);
+  const nameOf = new Map(rows.map((r) => [r.attendance_id, r.full_name]));
+  return {
+    sana: date,
+    ishchi_kuni_bor: rows.filter((r) => r.scheduled).length,
+    keldi: by('present'),
+    kechikdi: by('late'),
+    kelmadi: by('absent'),
+    sababli: by('excused'),
+    tatilda: by('vacation'),
+    masofadan: by('remote'),
+    hali_belgilanmagan: rows.filter((r) => r.scheduled && !r.status).map((r) => ({ ism: r.full_name, lavozim: r.job_title || null, ish_boshlanishi: clock(r.work_start_time) })),
+    ochiq_ogohlantirishlar: (alerts ?? []).map((a) => ({ xodim: (a.attendance_id && nameOf.get(a.attendance_id)) || null, izoh: a.note })),
+  };
+}
 
 export async function runTool(name: string, input: Record<string, unknown>, ctx: AssistantContext): Promise<ToolResult> {
-  const allowed = toolsFor(ctx.audience).some((t) => t.name === name);
+  const allowed = toolsFor(ctx).some((t) => t.name === name);
   if (!allowed) return { content: 'Bu amal sizga ochiq emas.' };
   const text = (key: string) => String(input[key] ?? '').trim();
 
@@ -217,6 +315,92 @@ export async function runTool(name: string, input: Record<string, unknown>, ctx:
         .filter((r) => !filter || (r.client?.name ?? '').toLowerCase().includes(filter))
         .map((r) => ({ kontent: r.title, turi: r.content_type, holat: r.status, chiqishi: day(r.post_at), mijoz: r.client?.name ?? null }));
       return { content: rows.length ? json(rows) : 'Bu oy uchun kontent topilmadi.' };
+    }
+    case 'team': {
+      const { data, error } = await db.rpc('get_team_directory');
+      if (error) return { content: refused(error) };
+      const filter = text('name').toLowerCase();
+      const rows = (data ?? [])
+        .filter((r) => r.account_status !== 'disabled' && (!filter || r.full_name.toLowerCase().includes(filter)))
+        .map((r) => ({
+          ism: r.full_name,
+          lavozim: r.job_title || null,
+          bolim: r.department || null,
+          bugun: r.attendance_status ? (STATUS_UZ[r.attendance_status] ?? r.attendance_status) : 'belgilanmagan',
+          ...(r.late_minutes ? { kechikish_daqiqa: r.late_minutes } : {}),
+          ochiq_vazifa: r.open_tasks,
+          muddati_otgan: r.overdue_tasks,
+          bugun_muddat: r.due_today,
+          bugungi_syomka: r.shootings_today,
+        }));
+      return { content: rows.length ? json({ xodimlar_soni: rows.length, xodimlar: rows }) : 'Xodim topilmadi.' };
+    }
+    case 'attendance': {
+      const result = await attendanceDay(db, dateArg(input.date));
+      return { content: 'error' in result ? result.error! : json(result) };
+    }
+    case 'overview': {
+      const date = dateArg(input.date);
+      const { data, error } = await db.rpc('get_command_center', { p_date: date });
+      if (error) return { content: refused(error) };
+      const cc = commandCenterSchema.safeParse(data);
+      if (!cc.success) return { content: 'Ma’lumotni o‘qib bo‘lmadi.' };
+      const c = cc.data;
+      return {
+        content: json({
+          sana: date,
+          vazifalar: { jami: c.tasks.total, bajarildi: c.tasks.completed, jarayonda: c.tasks.in_progress, boshlanmagan: c.tasks.todo, muddati_otgan: c.tasks.overdue },
+          muddati_otgan_vazifalar: c.overdue.slice(0, 15).map((t) => ({ vazifa: t.title, muddat: day(t.due_at), kun_otdi: daysSince(t.due_at), mijoz: t.client_name ?? null, kimda: t.assignees })),
+          yaqin_muddatlar: c.deadlines.items.slice(0, 15).map((t) => ({ vazifa: t.title, turi: t.task_type, muddat: day(t.due_at), holat: t.state, mijoz: t.client_name ?? null, kimda: t.assignees.map((a) => a.full_name) })),
+          tasdiq_kutmoqda: { mijozda: c.approvals.client_review, ichki: c.approvals.internal_review, royxat: c.approvals.items.slice(0, 12).map((a) => ({ kontent: a.label, holat: a.status, mijoz: a.client_name, kun_kutmoqda: daysSince(a.since) })) },
+          postlar: { rejalashtirilgan: c.publications.scheduled, chiqdi: c.publications.published, royxat: c.publications.items.slice(0, 10).map((p) => ({ post: p.label, platforma: p.platform, vaqt: day(p.scheduled_at), holat: p.status, mijoz: p.client_name })) },
+          syomkalar: c.shootings.map((s) => ({ syomka: s.title, vaqt: `${day(s.starts_at)}–${clock(s.ends_at)}`, mijoz: s.client_name, joy: s.location_name ?? null, jamoa: s.members.map((m) => `${m.full_name}${m.attendance ? ` (${m.attendance})` : ''}`) })),
+          davomat: { xodimlar: c.attendance.employees, keldi: c.attendance.present, kechikdi: c.attendance.late, kelmadi: c.attendance.absent, sababli: c.attendance.excused, tatilda: c.attendance.vacation, masofadan: c.attendance.remote, belgilanmagan: c.attendance.unmarked },
+        }),
+      };
+    }
+    case 'issues': {
+      const date = agencyDateKey();
+      const { data, error } = await db.rpc('get_command_center', { p_date: date });
+      if (error) return { content: refused(error) };
+      const cc = commandCenterSchema.safeParse(data);
+      if (!cc.success) return { content: 'Ma’lumotni o‘qib bo‘lmadi.' };
+      const c = cc.data;
+      const canAttendance = ctx.owner || ctx.permissions.some((p) => p === 'attendance.read' || p === 'attendance.manage');
+      const att = canAttendance ? await attendanceDay(db, date) : null;
+      const { data: apps } = await db.from('site_applications').select('full_name, company, created_at').eq('status', 'new').order('created_at').limit(20);
+      const stale = (apps ?? []).filter((a) => daysSince(a.created_at) >= 1);
+      return {
+        content: json({
+          sana: date,
+          muddati_otgan_vazifalar: { soni: c.tasks.overdue, royxat: c.overdue.slice(0, 15).map((t) => ({ vazifa: t.title, kun_otdi: daysSince(t.due_at), mijoz: t.client_name ?? null, kimda: t.assignees })) },
+          xavfli_muddatlar: c.deadlines.items.filter((t) => t.state === 'critical').slice(0, 10).map((t) => ({ vazifa: t.title, muddat: day(t.due_at), mijoz: t.client_name ?? null, kimda: t.assignees.map((a) => a.full_name) })),
+          uzoq_tasdiq_kutayotgan: c.approvals.items.filter((a) => daysSince(a.since) >= 2).map((a) => ({ kontent: a.label, kimda: a.status === 'client_review' ? 'mijozda' : 'ichki tekshiruvda', mijoz: a.client_name, kun_kutmoqda: daysSince(a.since) })),
+          davomat: att && !('error' in att) ? { kechikdi: att.kechikdi, kelmadi: att.kelmadi, hali_belgilanmagan: att.hali_belgilanmagan, ochiq_ogohlantirishlar: att.ochiq_ogohlantirishlar } : 'Davomat sizning rolingizga ochiq emas.',
+          javobsiz_sayt_arizalari: { soni: stale.length, royxat: stale.slice(0, 10).map((a) => ({ ism: a.full_name, kompaniya: a.company, kun_otdi: daysSince(a.created_at) })) },
+        }),
+      };
+    }
+    case 'crm': {
+      const { data, error } = await db.rpc('get_crm_summary');
+      if (error) return { content: refused(error) };
+      const { data: apps } = await db.from('site_applications').select('full_name, company, budget_label, created_at').eq('status', 'new').order('created_at', { ascending: false }).limit(10);
+      return { content: json({ crm: data, yangi_sayt_arizalari: (apps ?? []).map((a) => ({ ism: a.full_name, kompaniya: a.company, byudjet: a.budget_label, qachon: day(a.created_at) })) }) };
+    }
+    case 'performance': {
+      const today = agencyDateKey();
+      const from = /^\d{4}-\d{2}-\d{2}$/.test(text('from')) ? text('from') : `${today.slice(0, 8)}01`;
+      const to = /^\d{4}-\d{2}-\d{2}$/.test(text('to')) ? text('to') : today;
+      const { data, error } = await db.rpc('get_employee_scorecards', { p_from: from, p_to: to });
+      if (error) return { content: refused(error) };
+      return { content: (data ?? []).length ? json({ davr: `${from} — ${to}`, xodimlar: (data ?? []).map((r) => ({ ism: r.full_name, rollar: r.role_keys, korsatkichlar: r.metrics })) }) : 'Bu davrda ma’lumot yo‘q.' };
+    }
+    case 'search': {
+      const q = text('query');
+      if (q.length < 2) return { content: 'Qidiruv uchun kamida 2 harf kerak.' };
+      const { data, error } = await db.rpc('global_search', { p_query: q, p_limit: 12 });
+      if (error) return { content: refused(error) };
+      return { content: json(data ?? []) || 'Hech narsa topilmadi.' };
     }
     case 'projects': {
       const { data, error } = await db

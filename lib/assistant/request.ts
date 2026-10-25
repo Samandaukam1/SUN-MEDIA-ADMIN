@@ -19,7 +19,7 @@ export async function assistantContext(request: NextRequest): Promise<{ ctx: Ass
   const secret = gateSecret();
   const vKey = secret ? await visitorKey(secret, ip) : null;
   const userAgent = (request.headers.get('user-agent') ?? '').slice(0, 300);
-  const base: AssistantContext = { audience: 'public', db: null, userId: null, visitorKey: vKey, userAgent };
+  const base: AssistantContext = { audience: 'public', db: null, userId: null, visitorKey: vKey, userAgent, permissions: [], owner: false };
 
   let db: SupabaseClient<Database> | null = null;
   let userId: string | null = null;
@@ -55,7 +55,8 @@ export async function assistantContext(request: NextRequest): Promise<{ ctx: Ass
   const me = parsed.data;
   const audience = me.kind === 'staff' ? 'staff' : 'client';
   const name = me.profile?.full_name ? `${me.profile.full_name}${me.roles[0] ? ` (${me.roles[0].name})` : ''}${audience === 'client' && me.clients[0] ? `, ${me.clients[0].name}` : ''}` : null;
-  return { ctx: { ...base, audience, db, userId }, name, ipKey: userId };
+  const owner = me.roles.some((r) => r.key === 'system_owner');
+  return { ctx: { ...base, audience, db, userId, permissions: me.permissions, owner }, name, ipKey: userId };
 }
 
 /** A small per-instance limiter: enough to stop one visitor from running up the AI bill. */

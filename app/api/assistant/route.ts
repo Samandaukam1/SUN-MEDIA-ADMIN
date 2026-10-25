@@ -8,13 +8,15 @@ import { assistantContext, corsHeaders, rateLimited } from '@/lib/assistant/requ
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
+/** A long chat or a long earlier reply must never block the next question: accept them and keep the recent part. */
 const body = z.object({
   messages: z
-    .array(z.object({ role: z.enum(['user', 'assistant']), text: z.string().trim().min(1).max(2000) }))
+    .array(z.object({ role: z.enum(['user', 'assistant']), text: z.string() }))
     .min(1)
-    .max(40),
+    .max(400),
   stream: z.boolean().optional(),
 });
+const MAX_TEXT = 2000;
 
 function failure(error: unknown): { status: number; error: string } {
   if (error instanceof AiNotConfiguredError) return { status: 503, error: 'Yordamchi hali ulanmagan.' };
@@ -36,7 +38,10 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: 'Xabar noto‘g‘ri.' }, { status: 400, headers });
 
   // Claude expects the conversation to start with the user: drop a leading greeting from the widget.
-  const history = parsed.data.messages.slice(-20);
+  const history = parsed.data.messages
+    .map((m) => ({ role: m.role, text: m.text.trim().slice(0, MAX_TEXT) }))
+    .filter((m) => m.text)
+    .slice(-20);
   while (history.length && history[0].role !== 'user') history.shift();
   if (!history.length || history[history.length - 1].role !== 'user') return NextResponse.json({ error: 'Xabar noto‘g‘ri.' }, { status: 400, headers });
 

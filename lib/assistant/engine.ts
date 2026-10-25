@@ -3,6 +3,7 @@ import 'server-only';
 import { AiFailedError, AiNotConfiguredError } from '@/lib/ai';
 import { geminiChat, geminiKey } from './gemini';
 import { agencyKnowledge, budgetHints } from './knowledge';
+import { agencyDateKey } from '@/lib/time';
 import { textLanguage } from './speech';
 import { runTool, toolsFor, type AssistantAction, type AssistantContext } from './tools';
 
@@ -40,7 +41,22 @@ const SALES = `Vazifang — mehmonga yordam berish va uni mijozga aylantirish:
 4. Hammasi tayyor bo‘lsa, qisqa takrorlab tasdiqlat va create_lead ni chaqir. Muvaffaqiyatli bo‘lsa: "Menejerimiz tez orada bog‘lanadi" de.
 Mehmon formani o‘zi to‘ldirmoqchi bo‘lsa — open_application_form.`;
 
-const STAFF = `Bu SUN MEDIA xodimi (ichki tizimga kirgan). Unga ishida yordam ber: vazifalari, s’yomkalar, kontent rejasi, loyihalar holati — asboblar orqali haqiqiy ma’lumotni ol va qisqa xulosa qil (eng muhimi va muddati yaqinlari birinchi). Ma’lumotni o‘zgartira olmaysan, faqat ko‘rasan; o‘zgartirish kerak bo‘lsa ilovadagi bo‘limni ayt. Matn yozishda (post g‘oyasi, caption, ssenariy) ham yordam berasan.`;
+const STAFF = `Bu SUN MEDIA ICHKI TIZIMI. Suhbatdosh — agentlik xodimi (tizimga kirgan). Sen agentlikning ichki yordamchisisan: tizimdagi haqiqiy ma’lumotni asboblar orqali olib, aniq, to‘liq va foydali javob berasan. Bu qoidalar yuqoridagi qisqalik qoidasidan ustun.
+
+Ma’lumot:
+- Odamlar, davomat (kim keldi, kim kelmadi, kim kechikdi), vazifalar, muddatlar, kontent, s’yomkalar, postlar, mijozlar, CRM lidlar, samaradorlik haqidagi har qanday savolda AVVAL tegishli asbobni chaqir, keyin javob ber. Hech narsani taxmin qilma va o‘ylab topma; asbob bermagan raqam yoki ismni aytma.
+- "Bugun kimlar keldi/kelmadi" → attendance. "Kamchiliklar", "muammolar", "nima yomon", "xavflar" → issues. "Bugungi holat", "umumiy holat" → overview. Bitta xodim haqida → team (ism bilan). Narsani topish → search.
+- Asbob "rolingizga ochiq emas" desa: bu ma’lumot suhbatdoshning roliga yopiq ekanini ayt va kimdan so‘rash mumkinligini (rahbar/admin) maslahat ber.
+- Ma’lumotni o‘zgartira olmaysan (faqat o‘qiysan). O‘zgartirish kerak bo‘lsa — tizimdagi bo‘limni ayt va show_link bilan tugmasini ko‘rsat.
+
+Javob tuzilishi (ichki savollarda):
+1. Bitta gapda xulosa raqamlar bilan (masalan: "Bugun 12 xodimdan 9 tasi keldi, 2 tasi kechikdi, 1 tasi kelmadi.").
+2. So‘ng aniq ro‘yxat: ism — holat/vaqt/kun (eng muhimi birinchi), 2–10 qisqa band.
+3. Oxirida 1–2 aniq tavsiya yoki keyingi qadam (kim nima qilishi kerak).
+Kamchiliklar so‘ralsa har bir muammoga kimda ekanini va nima qilish kerakligini yoz.
+Matn yozishda (post g‘oyasi, caption, ssenariy) ham yordam berasan.
+
+Tizim bo‘limlari (manzillar): Bosh sahifa /panel (bugungi holat); Chat /chat, mijozlar chati /chat/mijozlar; Kontent /work/content; Kalendar /work/calendar; S’yomkalar /work/shootings; S’yomka jihozlari /work/jihozlar; Vazifalar /work/tasks; Fayllar /work/files; Mijozlar /clients; Narxlar va to‘lovlar /clients/narxlar; Loyihalar /clients/projects; Tariflar /plans; Shartnomalar /clients/contracts; Mijoz tahlili /tahlil; Xodimlar /team; Davomat /team/attendance; Ish samaradorligi /team/performance; Rollar /roles; E’lonlar /workspace; CRM lidlar /crm, CRM hisobotlari /crm/reports; Sayt boshqaruvi /site, sayt arizalari /site/applications; Hisobotlar /reports, oylik natijalar /reports/monthly, xodimlar KPI /reports/team, agentlik statistikasi /reports/agency; Sozlamalar /settings. Xodim kabineti (ilova o‘rnida) /xodim. Har bir bo‘lim faqat ruxsati bor xodimga ochiq.`;
 
 const CLIENT = `Bu SUN MEDIA hamkori (mijoz, kabinetga kirgan). Unga loyihasi va kontent rejasi holatini asboblar orqali ko‘rib, sodda tilda tushuntir. Ichki xodim ma’lumotlarini (kim qancha ishlaydi va h.k.) muhokama qilma. Yangi xizmat yoki o‘zgartirish istasa — menejeriga kabinetdagi chat orqali yozishni tavsiya qil.`;
 
@@ -54,7 +70,7 @@ async function systemPrompt(ctx: AssistantContext, name: string | null, lastQues
   return [
     PERSONA,
     role,
-    `Hozir: ${now} (Toshkent).${name ? ` Suhbatdosh: ${name}.` : ''}`,
+    `Hozir: ${now} (Toshkent), bugungi sana ${agencyDateKey()}.${name ? ` Suhbatdosh: ${name}.` : ''}`,
     hints.length ? `Byudjetni bilmasa, tariflardan birini taklif qil: ${hints.join('; ')}.` : '',
     '# SUN MEDIA haqida bilimlar\n' + (await agencyKnowledge()),
     // Last, so it is fresh when the model starts writing: the knowledge above is Uzbek, the reply follows the visitor.
@@ -92,13 +108,14 @@ export async function assistantReply(
   const reply = await geminiChat(
     system,
     history,
-    toolsFor(ctx.audience),
+    toolsFor(ctx),
     async (tool, input) => {
       const result = await runTool(tool, input, ctx);
       if (result.action) actions.push(result.action);
       return result.content;
     },
-    { onText, signal },
+    // Internal answers list people and numbers: they get more room than a sales reply.
+    { onText, signal, maxTokens: ctx.audience === 'staff' ? 1600 : 900 },
   );
   return { reply, actions };
 }
@@ -106,7 +123,7 @@ export async function assistantReply(
 async function claudeReply(key: string, system: string, history: ChatTurn[], ctx: AssistantContext, signal?: AbortSignal): Promise<{ reply: string; actions: AssistantAction[] }> {
   const actions: AssistantAction[] = [];
   const model = process.env.ASSISTANT_MODEL || process.env.AI_MODEL || 'claude-sonnet-5-5';
-  const tools = toolsFor(ctx.audience);
+  const tools = toolsFor(ctx);
   const messages: Message[] = history.map((t) => ({ role: t.role, content: t.text }));
 
   for (let round = 0; round < 5; round++) {
@@ -117,7 +134,7 @@ async function claudeReply(key: string, system: string, history: ChatTurn[], ctx
         headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({
           model,
-          max_tokens: 700,
+          max_tokens: ctx.audience === 'staff' ? 1400 : 700,
           system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
           tools,
           messages,

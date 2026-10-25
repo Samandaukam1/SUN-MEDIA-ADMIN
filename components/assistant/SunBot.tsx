@@ -1,12 +1,13 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { RobotFace } from './RobotFace';
 import type { RobotCue } from './robot/Robot3D';
 import { store, stored } from './session';
-import type { ChatFace } from './SunBotChat';
+import type { ChatAudience, ChatFace } from './SunBotChat';
 import './sunbot.css';
 
 /**
@@ -39,7 +40,10 @@ function can3D(): boolean {
  * Sunny on every page: a floating robot that flies in, hovers over a neon ring and opens the chat. `audience` only changes
  * the greeting: the server decides what the person may see from their session.
  */
-export function SunBot({ audience = 'public' }: { audience?: 'public' | 'member' }) {
+export function SunBot({ audience: given = 'public' }: { audience?: 'public' | 'member' }) {
+  // Signed-in pages: a client's cabinet (/kabinet) or the team's system (the panel, the staff cabinet /xodim).
+  const path = usePathname() ?? '';
+  const audience: ChatAudience = given === 'public' ? 'public' : path.startsWith('/kabinet') ? 'client' : 'staff';
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [wanted, setWanted] = useState(false);
@@ -143,7 +147,7 @@ export function SunBot({ audience = 'public' }: { audience?: 'public' | 'member'
 
   return (
     <div className={`sb-root ${lite ? 'sb-lite' : ''}`}>
-      {wanted ? <SunBotChat audience={audience} open={open} closing={closing} onClose={close} onFace={setFace} onReplied={() => sendCue('replied')} /> : null}
+      {wanted ? <SunBotChat key={audience} audience={audience} open={open} closing={closing} onClose={close} onFace={setFace} onReplied={() => sendCue('replied')} /> : null}
 
       {!open && teaser ? (
         <button type="button" className="sb-teaser" onClick={show}>

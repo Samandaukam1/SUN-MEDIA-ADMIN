@@ -73,7 +73,16 @@ export async function POST(request: NextRequest) {
     body: ssml,
     signal: AbortSignal.any([request.signal, AbortSignal.timeout(20_000)]),
   }).catch(() => null);
-  if (!res?.ok || !res.body) return new NextResponse(null, { status: 204, headers });
+  if (!res?.ok || !res.body) {
+    // Azure over its monthly quota or down: Gemini speaks instead (when its key is set) rather than silence.
+    if (res) console.error('[assistant] Azure TTS', res.status);
+    if (request.signal.aborted || !geminiKey()) return new NextResponse(null, { status: 204, headers });
+    const live = stream ? await geminiSpeechStream(spoken, lang, request.signal) : null;
+    if (live) return new Response(live.stream, { headers: audioHeaders(`audio/pcm;rate=${live.rate}`) });
+    const audio = await geminiSpeech(spoken, lang);
+    if (!audio) return new NextResponse(null, { status: 204, headers });
+    return new NextResponse(new Uint8Array(audio.body), { headers: audioHeaders(audio.type) });
+  }
   if (stream) return new Response(res.body, { headers: audioHeaders('audio/pcm;rate=24000') });
   return new NextResponse(await res.arrayBuffer(), { headers: audioHeaders('audio/mpeg') });
 }

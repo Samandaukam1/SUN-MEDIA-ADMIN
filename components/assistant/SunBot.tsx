@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { RobotFace } from './RobotFace';
+import type { RobotCue } from './robot/Robot3D';
 import { store, stored } from './session';
 import type { ChatFace } from './SunBotChat';
 import './sunbot.css';
@@ -14,6 +15,25 @@ import './sunbot.css';
  * page is ready. Every page ships only the launcher.
  */
 const SunBotChat = dynamic(() => import('./SunBotChat').then((m) => m.SunBotChat), { ssr: false });
+/** The 3D robot (three.js, shared with the site's hero) loads the same way; the flat robot stands in until it is ready. */
+const Robot3D = dynamic(() => import('./robot/Robot3D'), { ssr: false });
+
+/**
+ * WebGL that a GPU draws (as for the hero): software renderers would take seconds per frame, so such devices, weak ones
+ * and data savers keep the flat robot.
+ */
+function can3D(): boolean {
+  const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
+  if ((nav.deviceMemory ?? 8) <= 2 || nav.connection?.saveData) return false;
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl2', { failIfMajorPerformanceCaveat: true }) || canvas.getContext('webgl', { failIfMajorPerformanceCaveat: true });
+    (gl as WebGLRenderingContext | null)?.getExtension('WEBGL_lose_context')?.loseContext();
+    return !!gl;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Sunny on every page: a floating robot that flies in, hovers over a neon ring and opens the chat. `audience` only changes
@@ -27,14 +47,36 @@ export function SunBot({ audience = 'public' }: { audience?: 'public' | 'member'
   const [flying, setFlying] = useState(true);
   const [lite, setLite] = useState(false);
   const [face, setFace] = useState<ChatFace>({ mood: 'idle' });
+  const [three, setThree] = useState<{ ok: boolean; ready: boolean; calm: boolean; compact: boolean; visible: boolean; landed: boolean }>({
+    ok: false,
+    ready: false,
+    calm: false,
+    compact: false,
+    visible: true,
+    landed: false,
+  });
+  const [cue, setCue] = useState<RobotCue | undefined>(undefined);
   const launcher = useRef<HTMLButtonElement>(null);
   const look = useRef(0);
+  const sendCue = useCallback((name: RobotCue['name']) => setCue((c) => ({ name, id: (c?.id ?? 0) + 1 })), []);
 
   useEffect(() => {
     const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
     // Weak devices and data saver get the same states with fewer layers (no glass blur, no glow trail).
     setLite((nav.hardwareConcurrency ?? 8) <= 4 || (nav.deviceMemory ?? 8) <= 2 || !!nav.connection?.saveData);
-    const landed = setTimeout(() => setFlying(false), 2600);
+    // The fly-in plays once per visit, not on every page.
+    const landedBefore = stored('sunbot:landed') === '1';
+    store('sunbot:landed', '1');
+    setThree((s) => ({
+      ...s,
+      ok: can3D(),
+      calm: matchMedia('(prefers-reduced-motion: reduce)').matches,
+      compact: matchMedia('(pointer: coarse)').matches || innerWidth < 640,
+      landed: landedBefore,
+    }));
+    const onVisibility = () => setThree((s) => ({ ...s, visible: document.visibilityState === 'visible' }));
+    document.addEventListener('visibilitychange', onVisibility);
+    const landed = setTimeout(() => setFlying(false), landedBefore ? 0 : 2600);
     const idle = (cb: () => void) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(cb, { timeout: 8000 }) : setTimeout(cb, 1000));
     const warm = setTimeout(() => idle(() => setWanted(true)), 3000);
     const t = stored('sunbot:teased') === '1' ? undefined : setTimeout(() => setTeaser(true), 5000);
@@ -42,6 +84,7 @@ export function SunBot({ audience = 'public' }: { audience?: 'public' | 'member'
       clearTimeout(t);
       clearTimeout(landed);
       clearTimeout(warm);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
 
@@ -50,6 +93,14 @@ export function SunBot({ audience = 'public' }: { audience?: 'public' | 'member'
     setTeaser(false);
     store('sunbot:teased', '1');
   }, [open]);
+
+  // 09 on every opening of the chat, a short farewell on closing.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (open === opened.current) return;
+    opened.current = open;
+    sendCue(open ? 'welcome' : 'farewell');
+  }, [open, sendCue]);
 
   /** Closes with a short fade (the panel unmounts after it). */
   const closingRef = useRef(false);
@@ -90,7 +141,7 @@ export function SunBot({ audience = 'public' }: { audience?: 'public' | 'member'
 
   return (
     <div className={`sb-root ${lite ? 'sb-lite' : ''}`}>
-      {wanted ? <SunBotChat audience={audience} open={open} closing={closing} onClose={close} onFace={setFace} /> : null}
+      {wanted ? <SunBotChat audience={audience} open={open} closing={closing} onClose={close} onFace={setFace} onReplied={() => sendCue('replied')} /> : null}
 
       {!open && teaser ? (
         <button type="button" className="sb-teaser" onClick={show}>
@@ -114,7 +165,7 @@ export function SunBot({ audience = 'public' }: { audience?: 'public' | 'member'
       <button
         ref={launcher}
         type="button"
-        className={`sb-launcher ${open ? 'is-open' : ''}`}
+        className={`sb-launcher ${open ? 'is-open' : ''} ${three.ready ? 'has-3d' : ''} ${three.landed ? 'sb-landed' : ''}`}
         onClick={() => (open ? close() : show())}
         onPointerEnter={() => setWanted(true)}
         onFocus={() => setWanted(true)}
@@ -125,7 +176,25 @@ export function SunBot({ audience = 'public' }: { audience?: 'public' | 'member'
       >
         <span className="sb-fly">
           <span className="sb-hover">
-            <RobotFace mood={open ? face.mood : flying ? 'happy' : 'idle'} sound={open ? face.sound : undefined} size={150} />
+            <RobotFace mood={open ? face.mood : flying ? 'happy' : 'idle'} sound={open && !three.ready ? face.sound : undefined} size={150} />
+            {wanted && three.ok ? (
+              <span className={`sb-3d ${three.ready ? 'ready' : ''}`} aria-hidden>
+                <Robot3D
+                  mood={open ? face.mood : 'idle'}
+                  sound={open ? face.sound : undefined}
+                  cue={cue}
+                  box={three.compact ? 112 : 150}
+                  room={three.compact ? 70 : 150}
+                  calm={three.calm}
+                  compact={three.compact}
+                  roam={!open}
+                  // On a phone the open chat covers the launcher: nothing to draw then.
+                  active={three.visible && !(open && three.compact)}
+                  onReady={() => setThree((s) => ({ ...s, ready: true }))}
+                  onFail={() => setThree((s) => ({ ...s, ok: false, ready: false }))}
+                />
+              </span>
+            ) : null}
           </span>
         </span>
         <span className="sb-ring" aria-hidden />

@@ -225,12 +225,12 @@ export async function geminiChat(
   return reply.trim() || NO_REPLY;
 }
 
-/** How Sunny sounds: a young man's voice, natural and warm, in the language of the text. */
+/** How Sunny sounds: a teenage boy's voice (about fifteen), bright and clear, a smart digital assistant. */
 const VOICE_STYLE: Record<string, string> = {
   'uz-UZ':
-    'Read aloud in Uzbek with native Tashkent pronunciation (clear oʻ, gʻ, q, x, h; natural word stress and sentence intonation), as a friendly, confident young man of about twenty: warm, clear, natural conversational pace, never robotic',
-  'ru-RU': 'Read aloud in Russian as a friendly, confident young man of about twenty: warm, clear, natural conversational pace',
-  'en-US': 'Read aloud in English as a friendly, confident young man of about twenty: warm, clear, natural conversational pace',
+    'Read aloud in Uzbek with native Tashkent pronunciation (clear oʻ, gʻ, q, x, h; natural word stress and question intonation), as a friendly, smart teenage boy of about fifteen with a slightly light voice: bright, clear, modern, natural pace',
+  'ru-RU': 'Read aloud in Russian as a friendly, smart teenage boy of about fifteen with a slightly light voice: bright, clear, natural pace',
+  'en-US': 'Read aloud in English as a friendly, smart teenage boy of about fifteen with a slightly light voice: bright, clear, natural pace',
 };
 // Free TTS quotas are tiny (10 requests a day per model): models that ran out are not asked again until they reset.
 const ttsModels = () => awake([process.env.ASSISTANT_GEMINI_TTS_MODEL, 'gemini-3.8-flash-lite-tts', 'gemini-2.5-flash-preview-tts'], { strict: true });

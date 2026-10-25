@@ -90,6 +90,58 @@ function mark(name: string) {
   }
 }
 
+/**
+ * Sunny's voice colour on top of the TTS voice: a little thinner (less chest), brighter consonants, a faint digital
+ * shimmer and soft compression — younger and slightly robotic, never metallic, every Uzbek sound still clear.
+ * input → high-pass → less chest → presence → air → (dry + short modulated comb) → compressor → output.
+ */
+function voiceColour(ac: AudioContext, input: AudioNode, output: AudioNode) {
+  const filter = (type: BiquadFilterType, frequency: number, gain = 0, q = 0.8) => {
+    const f = ac.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = frequency;
+    f.gain.value = gain;
+    f.Q.value = q;
+    return f;
+  };
+  const thin = filter('highpass', 150, 0, 0.6);
+  const chest = filter('peaking', 330, -2.5, 0.9);
+  const presence = filter('peaking', 3200, 3, 0.8);
+  const air = filter('highshelf', 7000, 2);
+  input.connect(thin).connect(chest).connect(presence).connect(air);
+
+  const comp = ac.createDynamicsCompressor();
+  comp.threshold.value = -22;
+  comp.knee.value = 18;
+  comp.ratio.value = 2.8;
+  comp.attack.value = 0.004;
+  comp.release.value = 0.2;
+  const dry = ac.createGain();
+  dry.gain.value = 0.92;
+  air.connect(dry).connect(comp);
+
+  // The robotic touch: a ~4.5 ms comb, slowly swept, mixed low.
+  const delay = ac.createDelay(0.02);
+  delay.delayTime.value = 0.0045;
+  const sweep = ac.createOscillator();
+  sweep.frequency.value = 0.35;
+  const depth = ac.createGain();
+  depth.gain.value = 0.0006;
+  sweep.connect(depth).connect(delay.delayTime);
+  const feedback = ac.createGain();
+  feedback.gain.value = 0.18;
+  const wet = ac.createGain();
+  wet.gain.value = 0.11;
+  air.connect(delay);
+  delay.connect(feedback).connect(delay);
+  delay.connect(wet).connect(comp);
+  sweep.start();
+
+  const makeup = ac.createGain();
+  makeup.gain.value = 1.12;
+  comp.connect(makeup).connect(output);
+}
+
 /** Mono float samples (any rate) → 16 kHz 16-bit WAV: small, and every speech service reads it. */
 function wav16k(chunks: Float32Array[], rate: number): Blob {
   const length = chunks.reduce((n, c) => n + c.length, 0);
@@ -196,7 +248,8 @@ export function useVoice() {
     const analyser = ac.createAnalyser();
     analyser.fftSize = 1024;
     analyser.smoothingTimeConstant = 0.5;
-    gain.connect(analyser).connect(ac.destination);
+    voiceColour(ac, gain, analyser);
+    analyser.connect(ac.destination);
     ctxRef.current = ac;
     outRef.current = { gain, analyser };
     return ac;

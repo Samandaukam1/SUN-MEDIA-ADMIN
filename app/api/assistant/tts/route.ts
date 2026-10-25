@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     return new NextResponse(new Uint8Array(audio.body), { headers: audioHeaders(audio.type) });
   }
 
-  const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${lang}"><voice name="${voice}"><prosody rate="${process.env.ASSISTANT_RATE || '+0%'}" pitch="${process.env.ASSISTANT_PITCH || '+0%'}">${escapeXml(spoken)}</prosody></voice></speak>`;
+  const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${lang}"><voice name="${voice}"><prosody rate="${process.env.ASSISTANT_RATE || '+4%'}" pitch="${process.env.ASSISTANT_PITCH || '+25%'}">${escapeXml(spoken)}</prosody></voice></speak>`;
   const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
     method: 'POST',
     headers: {

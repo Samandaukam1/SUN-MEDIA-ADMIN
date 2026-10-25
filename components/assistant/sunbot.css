@@ -188,6 +188,30 @@
   .sb-launcher:hover .sb-eyes { translate: calc(var(--px, 0) * 42px) calc(var(--py, 0) * 26px); }
 }
 
+/* The 3D robot: a transparent canvas larger than the robot's square (room to fly and turn), anchored at its bottom
+   right; it fades in over the flat robot once rendered and does its own floating. */
+.sb-3d {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 300px;
+  height: 300px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.7s ease;
+}
+.sb-3d.ready { opacity: 1; }
+.sb-3d canvas { display: block; }
+.sb-launcher.has-3d .sb-hover { animation: none; }
+.sb-launcher.has-3d .sb-robot { opacity: 0; transition: opacity 0.7s ease; }
+.sb-launcher.has-3d:hover .sb-robot { transform: none; filter: none; }
+/* After the first page of a visit the robot is simply there: no fly-in again. */
+.sb-launcher.sb-landed .sb-fly,
+.sb-launcher.sb-landed .sb-fly::after { animation: none; }
+.sb-launcher.sb-landed .sb-ring { animation: sb-ring-breathe 4.2s ease-in-out infinite; }
+.sb-launcher.sb-landed .sb-ring::before { animation-delay: 0s; }
+.sb-launcher.sb-landed .sb-hover { animation-delay: 0s; }
+
 /* Neon ring under the robot: glows brighter when the robot dips toward it. */
 .sb-ring {
   position: absolute;
@@ -294,6 +318,7 @@
   .sb-root:has(.sb-panel) .sb-launcher { display: none; }
   .sb-teaser { right: 108px; bottom: 80px; font-size: 13px; }
   .sb-launcher .sb-robot { width: 112px !important; height: 112px !important; }
+  .sb-3d { width: 182px; height: 182px; }
 }
 
 /* Weak devices and data saver: the same states, fewer expensive layers. */

@@ -137,12 +137,15 @@ export function SunBotChat({
   closing,
   onClose,
   onFace,
+  onReplied,
 }: {
   audience: 'public' | 'member';
   open: boolean;
   closing: boolean;
   onClose: () => void;
   onFace: (face: ChatFace) => void;
+  /** A reply was given (and spoken, if the voice is on): the 3D robot nods. */
+  onReplied?: () => void;
 }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
@@ -375,16 +378,17 @@ export function SunBotChat({
         setTimeout(() => setHappy(false), 4000);
       }
       if (final.actions?.some((a) => a.type === 'open_apply')) setTimeout(() => openApplication(), 600);
-      if (!speech) return;
+      if (!speech) return onReplied?.();
       if (!openRef.current) return speech.cancel();
       // The reply is the streamed bubble already on screen, or the one just added after the last rendered message.
       setSpoken(shown ? msgsRef.current.length - 1 : msgsRef.current.length);
       const spoke = await speech.finish(streamed || final.text);
+      if (live()) onReplied?.();
       // Conversation mode: a spoken question gets a spoken answer, then Sunny listens again (not after a silent reply:
       // the note about the missing voice stays readable).
       if (via === 'voice' && spoke && live() && openRef.current && !mutedRef.current) hearRef.current();
     },
-    [interrupt, lang, voice],
+    [interrupt, lang, onReplied, voice],
   );
 
   const hear = useCallback(async () => {

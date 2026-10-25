@@ -52,20 +52,29 @@ async function systemPrompt(ctx: AssistantContext, name: string | null): Promise
 /** One assistant reply: Claude with tools, looping until it answers in text (at most a few tool rounds). */
 export async function assistantReply(history: ChatTurn[], ctx: AssistantContext, name: string | null): Promise<{ reply: string; actions: AssistantAction[] }> {
   const key = process.env.ANTHROPIC_API_KEY;
-  const actions: AssistantAction[] = [];
-  // No Claude key: the free Gemini key (AI Studio) runs the same persona and tools.
-  if (!key) {
-    if (!geminiKey()) throw new AiNotConfiguredError();
-    const system = await systemPrompt(ctx, name);
-    const reply = await geminiChat(system, history, toolsFor(ctx.audience), async (tool, input) => {
-      const result = await runTool(tool, input, ctx);
-      if (result.action) actions.push(result.action);
-      return result.content;
-    });
-    return { reply, actions };
-  }
-  const model = process.env.ASSISTANT_MODEL || process.env.AI_MODEL || 'claude-sonnet-5-5';
+  if (!key && !geminiKey()) throw new AiNotConfiguredError();
   const system = await systemPrompt(ctx, name);
+  if (key) {
+    try {
+      return await claudeReply(key, system, history, ctx);
+    } catch (error) {
+      // Claude unavailable (no credit, limit, outage): the free Gemini key answers instead when it is set.
+      if (!geminiKey()) throw error;
+      console.error('[assistant] Claude failed, falling back to Gemini:', error instanceof Error ? error.message : error);
+    }
+  }
+  const actions: AssistantAction[] = [];
+  const reply = await geminiChat(system, history, toolsFor(ctx.audience), async (tool, input) => {
+    const result = await runTool(tool, input, ctx);
+    if (result.action) actions.push(result.action);
+    return result.content;
+  });
+  return { reply, actions };
+}
+
+async function claudeReply(key: string, system: string, history: ChatTurn[], ctx: AssistantContext): Promise<{ reply: string; actions: AssistantAction[] }> {
+  const actions: AssistantAction[] = [];
+  const model = process.env.ASSISTANT_MODEL || process.env.AI_MODEL || 'claude-sonnet-5-5';
   const tools = toolsFor(ctx.audience);
   const messages: Message[] = history.map((t) => ({ role: t.role, content: t.text }));
 
@@ -88,8 +97,9 @@ export async function assistantReply(history: ChatTurn[], ctx: AssistantContext,
       throw new AiFailedError('Ulanishda xato. Birozdan so‘ng qayta urinib ko‘ring.');
     }
     if (!response.ok) {
-      if (response.status === 429 || response.status >= 500) throw new AiFailedError('Hozir band ekanman, bir daqiqadan so‘ng yozing.');
-      throw new AiFailedError('So‘rovni bajarib bo‘lmadi.');
+      console.error('[assistant] Claude', response.status, (await response.text().catch(() => '')).slice(0, 400));
+      if (response.status === 429 || response.status >= 500) throw new AiFailedError(`Hozir band ekanman, bir daqiqadan so‘ng yozing. (C${response.status})`);
+      throw new AiFailedError(`So‘rovni bajarib bo‘lmadi. (C${response.status})`);
     }
     const data = (await response.json()) as { content: Block[]; stop_reason: string };
     const uses = data.content.filter((b): b is Extract<Block, { type: 'tool_use' }> => b.type === 'tool_use');

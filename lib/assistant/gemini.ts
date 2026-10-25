@@ -29,10 +29,15 @@ export async function geminiChat(
   tools: ToolDef[],
   run: (name: string, input: Record<string, unknown>) => Promise<string>,
 ): Promise<string> {
-  const model = process.env.ASSISTANT_GEMINI_MODEL || 'gemini-3.8-flash';
+  // The configured model first, then other free models (a retired or renamed model answers 404).
+  const models = [process.env.ASSISTANT_GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'].filter(
+    (m, i, all): m is string => !!m && all.indexOf(m) === i,
+  );
+  let modelIndex = 0;
   const contents: Content[] = history.map((t) => ({ role: t.role === 'user' ? 'user' : 'model', parts: [{ text: t.text }] }));
 
-  for (let round = 0; round < 5; round++) {
+  for (let round = 0; round < 8; round++) {
+    const model = models[modelIndex];
     let res: Response;
     try {
       res = await fetch(`${BASE}/models/${model}:generateContent`, {
@@ -47,12 +52,20 @@ export async function geminiChat(
         signal: AbortSignal.timeout(45_000),
       });
     } catch {
-      throw new AiFailedError('Ulanishda xato. Birozdan so‘ng qayta urinib ko‘ring.');
+      throw new AiFailedError('Ulanishda xato. Birozdan so‘ng qayta urinib ko‘ring. (GNET)');
     }
     if (!res.ok) {
-      if (res.status === 429) throw new AiFailedError('Bugungi bepul limit tugadi yoki band. Birozdan so‘ng yozing.');
-      if (res.status === 400 || res.status === 403) throw new AiFailedError('AI kaliti noto‘g‘ri yoki faol emas.');
-      throw new AiFailedError('Hozir band ekanman, bir daqiqadan so‘ng yozing.');
+      const detail = (await res.text().catch(() => '')).slice(0, 400);
+      console.error('[assistant] Gemini', model, res.status, detail);
+      // Model missing or over its own quota: try the next free model.
+      if ((res.status === 404 || res.status === 429 || res.status >= 500) && modelIndex < models.length - 1) {
+        modelIndex++;
+        continue;
+      }
+      if (res.status === 429) throw new AiFailedError('Bugungi bepul limit tugadi. Birozdan so‘ng yozing. (G429)');
+      if (res.status === 400 && /API key/i.test(detail)) throw new AiFailedError('AI kaliti noto‘g‘ri. (G400)');
+      if (res.status === 403) throw new AiFailedError('AI kaliti faol emas yoki bu hududda ruxsat yo‘q. (G403)');
+      throw new AiFailedError(`Hozir band ekanman, bir daqiqadan so‘ng yozing. (G${res.status})`);
     }
     const data = (await res.json()) as { candidates?: { content?: Content }[] };
     const parts = data.candidates?.[0]?.content?.parts ?? [];
@@ -112,23 +125,47 @@ export async function geminiSpeech(text: string): Promise<{ body: Buffer; type: 
   const model = process.env.ASSISTANT_GEMINI_TTS_MODEL || 'gemini-3.8-flash-lite-tts';
   const voice = process.env.ASSISTANT_GEMINI_VOICE || 'Puck';
   const style = 'a cheerful, friendly little robot assistant; warm and upbeat, clear pronunciation, natural pace';
-  const res = await fetch(`${BASE}/interactions`, {
-    method: 'POST',
-    headers: { 'x-goog-api-key': key, 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      input: [{ type: 'user_input', content: [{ type: 'text', text, annotations: [{ type: 'speech_metadata', style }] }] }],
-      response_format: { type: 'audio' },
-      generation_config: { speech_config: [{ voice }] },
-    }),
-    signal: AbortSignal.timeout(25_000),
-  }).catch(() => null);
-  if (!res?.ok) return null;
-  const audio = findAudio(await res.json().catch(() => null));
+  const say = `Say in a ${style} voice: ${text}`;
+  // Newer Interactions API first; the classic generateContent audio output as a fallback.
+  const attempts: [string, unknown][] = [
+    [
+      `${BASE}/interactions`,
+      {
+        model,
+        input: [{ type: 'user_input', content: [{ type: 'text', text, annotations: [{ type: 'speech_metadata', style }] }] }],
+        response_format: { type: 'audio' },
+        generation_config: { speech_config: [{ voice }] },
+      },
+    ],
+    [
+      `${BASE}/models/${model}:generateContent`,
+      { contents: [{ parts: [{ text: say }] }], generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } },
+    ],
+    [
+      `${BASE}/models/gemini-2.5-flash-preview-tts:generateContent`,
+      { contents: [{ parts: [{ text: say }] }], generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } },
+    ],
+  ];
+  let audio: { data: string; mime: string } | null = null;
+  for (const [url, body] of attempts) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'x-goog-api-key': key, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(25_000),
+    }).catch(() => null);
+    if (!res?.ok) {
+      console.error('[assistant] Gemini TTS', url.split('/').pop(), res?.status, (await res?.text().catch(() => ''))?.slice(0, 300));
+      continue;
+    }
+    audio = findAudio(await res.json().catch(() => null));
+    if (audio) break;
+  }
   if (!audio) return null;
   const bytes = Buffer.from(audio.data, 'base64');
   const isWav = bytes.subarray(0, 4).toString('ascii') === 'RIFF';
   if (isWav) return { body: bytes, type: 'audio/wav' };
+  const rate = Number(/rate=(\d+)/.exec(audio.mime)?.[1]) || 24000;
   if (audio.mime.includes('mpeg') || audio.mime.includes('mp3')) return { body: bytes, type: 'audio/mpeg' };
-  return { body: pcmToWav(bytes), type: 'audio/wav' };
+  return { body: pcmToWav(bytes, rate), type: 'audio/wav' };
 }

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { cache } from 'react';
 import { z } from 'zod';
 
 import { createClient } from '@/lib/supabase/server';
@@ -28,12 +29,13 @@ const chatSchema = z.object({
 });
 export type MyChat = z.infer<typeof chatSchema>;
 
-export async function loadMyChats(): Promise<MyChat[]> {
+/** Once per request: the layout's unread badge and the chat page read the same list. */
+export const loadMyChats = cache(async (): Promise<MyChat[]> => {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('get_my_chats');
   if (error) throw error;
   return z.array(chatSchema).parse(data ?? []);
-}
+});
 
 const clientConversationSchema = z.object({
   room_id: z.string(),

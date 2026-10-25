@@ -5,13 +5,17 @@ import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, typ
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-/** Rises out of a soft blur as it scrolls into view. */
+/**
+ * Rises out of a soft blur as it scrolls into view. Played by CSS (site.css: s-rise) so it never waits for the
+ * JavaScript bundle; an element below the fold stays paused until the site's reveal observer (reveal-script.ts) sees
+ * it enter the viewport. The blur is dropped once it is visible, so glass inside blurs the page again.
+ */
 export function Reveal({
   children,
   delay = 0,
   y = 28,
   className,
-  as = 'div',
+  as: Tag = 'div',
   onMount = false,
 }: {
   children: ReactNode;
@@ -22,23 +26,20 @@ export function Reveal({
   /** Above the fold (hero): play on load instead of waiting to scroll into view. */
   onMount?: boolean;
 }) {
-  const reduce = useReducedMotion();
-  const Tag = motion[as];
-  // filter: none once visible, so glass inside blurs the page again (a filtered parent becomes its backdrop root).
-  const shown = reduce ? { opacity: 1 } : { opacity: 1, y: 0, filter: 'blur(0px)', transitionEnd: { filter: 'none' } };
   return (
     <Tag
-      className={className}
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y, filter: 'blur(10px)' }}
-      {...(onMount ? { animate: shown } : { whileInView: shown, viewport: { once: true, margin: '0px 0px -12% 0px' } })}
-      transition={{ duration: 0.9, delay, ease: EASE }}
+      className={className ? `s-rise ${className}` : 's-rise'}
+      data-reveal={onMount ? undefined : ''}
+      // The observer marks the element (data-shown) before React takes over the page.
+      suppressHydrationWarning
+      style={{ ['--s-rise-y' as string]: `${y}px`, ['--s-rise-delay' as string]: `${delay}s` }}
     >
       {children}
     </Tag>
   );
 }
 
-/** Headline words slide up from behind a mask, one after another. */
+/** Headline words slide up from behind a mask, one after another (CSS: s-word, from the first paint). */
 export function SplitWords({
   runs,
   className,
@@ -52,7 +53,6 @@ export function SplitWords({
   delay?: number;
   as?: 'h1' | 'h2' | 'p';
 }) {
-  const reduce = useReducedMotion();
   let index = 0;
   return (
     <Tag className={className}>
@@ -62,14 +62,9 @@ export function SplitWords({
           const i = index++;
           return (
             <span key={`${r}-${w}`} className="inline-block overflow-hidden pb-[0.12em] align-bottom">
-              <motion.span
-                className={`inline-block ${run.accent ? accentClassName : ''}`}
-                initial={reduce ? { opacity: 0 } : { y: '110%', rotate: 4 }}
-                animate={reduce ? { opacity: 1 } : { y: '0%', rotate: 0 }}
-                transition={{ duration: 1.05, delay: delay + i * 0.07, ease: EASE }}
-              >
+              <span className={`s-word inline-block ${run.accent ? accentClassName : ''}`} style={{ ['--s-word-delay' as string]: `${delay + i * 0.07}s` }}>
                 {word}
-              </motion.span>
+              </span>
             </span>
           );
         }),

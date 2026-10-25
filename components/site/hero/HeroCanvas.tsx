@@ -22,17 +22,25 @@ class SceneBoundary extends Component<{ children: ReactNode; onError: () => void
   }
 }
 
+/**
+ * WebGL that a GPU draws. failIfMajorPerformanceCaveat refuses software renderers (no usable GPU): there the scene
+ * would take seconds per frame and freeze the page, so such devices keep the flat logo like those without WebGL.
+ */
 function webglAvailable(): boolean {
   try {
     const canvas = document.createElement('canvas');
-    return !!(canvas.getContext('webgl2') || canvas.getContext('webgl'));
+    const options: WebGLContextAttributes = { failIfMajorPerformanceCaveat: true };
+    const gl: WebGLRenderingContext | WebGL2RenderingContext | null = canvas.getContext('webgl2', options) || canvas.getContext('webgl', options);
+    // Only a probe: give its context back now rather than holding a GPU context until garbage collection.
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return !!gl;
   } catch {
     return false;
   }
 }
 
 /**
- * The hero's 3D stage. Until three.js has loaded (and on devices without WebGL) the flat logo floats in its
+ * The hero's 3D stage. Until three.js has loaded (and on devices without WebGL or a GPU) the flat logo floats in its
  * place; the scene stops rendering whenever the hero is off screen.
  */
 export function HeroCanvas({ partners }: { partners: BubblePartner[] }) {

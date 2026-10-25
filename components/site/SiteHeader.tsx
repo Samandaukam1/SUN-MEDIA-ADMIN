@@ -47,55 +47,58 @@ export function SiteHeader({ nav, ctaLabel, phone }: { nav: NavItem[]; ctaLabel:
   return (
     <>
       <motion.header
-        initial={{ y: -40, opacity: 0 }}
+        initial={false}
         animate={{ y: hidden && !open ? -110 : 0, opacity: 1 }}
         transition={{ duration: 0.7, ease: EASE }}
         className="fixed inset-x-0 top-3 z-50 px-3 sm:top-5 sm:px-5"
       >
-        <div
-          className={`lg mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 rounded-full pr-2 pl-5 transition-[background-color] duration-500 sm:h-[68px] sm:pl-6 ${
-            scrolled ? 'lg-strong' : ''
-          }`}
-        >
-          <Link href="/" aria-label="SUN MEDIA — bosh sahifa" className="shrink-0">
-            <Logo width={104} onDark compact />
-          </Link>
-
-          <nav aria-label="Asosiy" className="hidden items-center gap-1 lg:flex">
-            {nav.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active(item.href) ? 'page' : undefined}
-                className={`relative rounded-full px-4 py-2 text-[14px] font-medium transition-colors duration-300 ${
-                  active(item.href) ? 'text-white' : 'text-[#a8a8ac] hover:text-white'
-                }`}
-              >
-                {active(item.href) ? (
-                  <motion.span
-                    layoutId="nav-pill"
-                    className="absolute inset-0 rounded-full bg-white/[0.08] shadow-[inset_0_1px_0_rgb(255_255_255/0.14)]"
-                    transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-                  />
-                ) : null}
-                <span className="relative">{item.label}</span>
-              </Link>
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-2">
-            <Link href="/hamkorlar" className="s-btn s-btn-lime hidden h-11 px-5 text-[14px] sm:inline-flex">
-              {ctaLabel}
+        {/* The drop-in on arrival is CSS (s-header-enter) and plays from the first paint; motion keeps hide/show. */}
+        <div className="s-header-enter">
+          <div
+            className={`lg mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 rounded-full pr-2 pl-5 transition-[background-color] duration-500 sm:h-[68px] sm:pl-6 ${
+              scrolled ? 'lg-strong' : ''
+            }`}
+          >
+            <Link href="/" aria-label="SUN MEDIA — bosh sahifa" className="shrink-0">
+              <Logo width={104} onDark compact />
             </Link>
-            <button
-              type="button"
-              onClick={() => setOpen((v) => !v)}
-              aria-expanded={open}
-              aria-label={open ? 'Menyuni yopish' : 'Menyu'}
-              className="grid size-12 place-items-center rounded-full bg-white/[0.06] text-white transition-colors hover:bg-white/[0.12] lg:hidden"
-            >
-              <SiteIcon name={open ? 'close' : 'menu'} size={22} strokeWidth={1.8} />
-            </button>
+
+            <nav aria-label="Asosiy" className="hidden items-center gap-1 lg:flex">
+              {nav.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={active(item.href) ? 'page' : undefined}
+                  className={`relative rounded-full px-4 py-2 text-[14px] font-medium transition-colors duration-300 ${
+                    active(item.href) ? 'text-white' : 'text-[#a8a8ac] hover:text-white'
+                  }`}
+                >
+                  {active(item.href) ? (
+                    <motion.span
+                      layoutId="nav-pill"
+                      className="absolute inset-0 rounded-full bg-white/[0.08] shadow-[inset_0_1px_0_rgb(255_255_255/0.14)]"
+                      transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                    />
+                  ) : null}
+                  <span className="relative">{item.label}</span>
+                </Link>
+              ))}
+            </nav>
+
+            <div className="flex items-center gap-2">
+              <Link href="/hamkorlar" className="s-btn s-btn-lime hidden h-11 px-5 text-[14px] sm:inline-flex">
+                {ctaLabel}
+              </Link>
+              <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                aria-expanded={open}
+                aria-label={open ? 'Menyuni yopish' : 'Menyu'}
+                className="grid size-12 place-items-center rounded-full bg-white/[0.06] text-white transition-colors hover:bg-white/[0.12] lg:hidden"
+              >
+                <SiteIcon name={open ? 'close' : 'menu'} size={22} strokeWidth={1.8} />
+              </button>
+            </div>
           </div>
         </div>
       </motion.header>

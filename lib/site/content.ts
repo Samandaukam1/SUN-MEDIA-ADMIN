@@ -4,7 +4,8 @@ import type { Metadata } from 'next';
 import { unstable_cache } from 'next/cache';
 
 import { createAdminClient } from '@/lib/supabase/admin';
-import { siteContentSchema, type SiteContent, type SitePage, type SitePageKey, type SiteSection, type SiteSectionKey } from './types';
+import { siteContentSchema } from './schema';
+import type { SiteContent, SitePage, SitePageKey, SiteSection, SiteSectionKey } from './types';
 
 export const SITE_CONTENT_TAG = 'site-content';
 

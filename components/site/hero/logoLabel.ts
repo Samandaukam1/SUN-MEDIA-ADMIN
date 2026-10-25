@@ -121,12 +121,23 @@ function draw(img: HTMLImageElement | null, name: string): HTMLCanvasElement {
   return canvas;
 }
 
+/**
+ * The logo through the site's image optimizer at 640 px — more than the ≤ 350 px it is drawn at, a fraction of the
+ * uploaded file, and the same URL next/image uses for the partner strip, so it is usually in the cache already.
+ */
+const optimized = (url: string) => `/_next/image?url=${encodeURIComponent(url)}&w=640&q=75`;
+
 export async function loadLogoLabel(url: string, name: string): Promise<THREE.CanvasTexture> {
   let img: HTMLImageElement | null = null;
   try {
-    img = await loadImage(url);
+    img = await loadImage(optimized(url));
   } catch {
-    img = null;
+    // A logo the optimizer does not serve (another host): the original file.
+    try {
+      img = await loadImage(url);
+    } catch {
+      img = null;
+    }
   }
   let canvas: HTMLCanvasElement;
   try {

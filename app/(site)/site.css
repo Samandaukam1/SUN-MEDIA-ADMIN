@@ -233,6 +233,100 @@
   }
 
   /* ---------------------------------------------------------------------------
+   * Entrances, played by CSS from the first paint instead of after the JavaScript bundle: the same curve, durations
+   * and delays the motion versions had. With fill-mode backwards the element's own styles (no transform, no filter)
+   * return when they finish, so glass inside blurs the page again.
+   * ------------------------------------------------------------------------- */
+
+  /* Each page arrives with a short lift-and-focus (template.tsx). */
+  .s-page-enter {
+    animation: s-page-enter 0.7s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  @keyframes s-page-enter {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+      filter: blur(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      filter: blur(0);
+    }
+  }
+
+  /* The floating header drops in (SiteHeader). */
+  .s-header-enter {
+    animation: s-header-enter 0.7s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  @keyframes s-header-enter {
+    from {
+      opacity: 0;
+      transform: translateY(-40px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Reveal: rises out of a soft blur; [data-reveal] waits (paused at the start) until it scrolls into view. */
+  .s-rise {
+    animation: s-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) var(--s-rise-delay, 0s) backwards;
+  }
+
+  .s-rise[data-reveal]:not([data-shown]) {
+    animation-play-state: paused;
+  }
+
+  @keyframes s-rise {
+    from {
+      opacity: 0;
+      transform: translateY(var(--s-rise-y, 28px));
+      filter: blur(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      filter: blur(0);
+    }
+  }
+
+  /* SplitWords: headline words slide up from behind their mask. */
+  .s-word {
+    animation: s-word 1.05s cubic-bezier(0.22, 1, 0.36, 1) var(--s-word-delay, 0s) backwards;
+  }
+
+  @keyframes s-word {
+    from {
+      transform: translateY(110%) rotate(4deg);
+    }
+    to {
+      transform: translateY(0%) rotate(0deg);
+    }
+  }
+
+  @keyframes s-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* prefers-reduced-motion: the same entrances as a plain fade (the header kept its drop, as before). */
+  @media (prefers-reduced-motion: reduce) {
+    .s-page-enter,
+    .s-rise,
+    .s-word {
+      animation-name: s-fade-in;
+    }
+  }
+
+  /* ---------------------------------------------------------------------------
    * Motion helpers
    * ------------------------------------------------------------------------- */
   .s-marquee {
@@ -365,18 +459,20 @@
     inset: -2px auto -2px -40%;
     width: 35%;
     background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.55), transparent);
-    transform: skewX(-20deg) translateX(0);
+    transform: translateX(0) skewX(-20deg);
     animation: s-shine 4.5s var(--s-ease) infinite;
     pointer-events: none;
   }
 
+  /* From left -40% to 130% of the button, as a compositor-only move: 170% of the button = 170 / 35 of the 35%-wide
+     streak = 485.714% of its own width. */
   @keyframes s-shine {
     0%,
     60% {
-      left: -40%;
+      transform: translateX(0) skewX(-20deg);
     }
     100% {
-      left: 130%;
+      transform: translateX(485.7143%) skewX(-20deg);
     }
   }
 
@@ -429,17 +525,19 @@
     left: -70%;
     width: 45%;
     background: linear-gradient(100deg, transparent, rgb(255 255 255 / 0.09) 45%, rgb(255 255 255 / 0.16) 50%, rgb(255 255 255 / 0.09) 55%, transparent);
-    transform: skewX(-16deg);
+    transform: translateX(0) skewX(-16deg);
     animation: s-chrome 8s var(--s-ease) infinite;
   }
 
+  /* From left -70% to 140% of the card, compositor-only: 210% of the card = 210 / 45 of the 45%-wide light
+     = 466.667% of its own width. */
   @keyframes s-chrome {
     0%,
     58% {
-      left: -70%;
+      transform: translateX(0) skewX(-16deg);
     }
     100% {
-      left: 140%;
+      transform: translateX(466.6667%) skewX(-16deg);
     }
   }
 

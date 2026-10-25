@@ -38,6 +38,7 @@ export function useVoice() {
   const audio = useRef<HTMLAudioElement | null>(null);
   const ctx = useRef<AudioContext | null>(null);
   const stopSpeakRef = useRef<() => void>(() => undefined);
+  const generation = useRef(0);
 
   useEffect(() => setCanListen(!!recognitionCtor()), []);
 
@@ -82,19 +83,38 @@ export function useVoice() {
 
   const stopListening = useCallback(() => rec.current?.stop(), []);
 
-  const stopSpeaking = useCallback(() => stopSpeakRef.current(), []);
+  const stopSpeaking = useCallback(() => {
+    generation.current++;
+    stopSpeakRef.current();
+  }, []);
 
   const speak = useCallback(async (text: string, lang: VoiceLang): Promise<void> => {
     stopSpeakRef.current();
+    const mine = ++generation.current;
     const clean = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/[*_#`]/g, '').trim();
     if (!clean) return;
     setSpeaking(true);
     try {
-      const res = await fetch('/api/assistant/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: clean.slice(0, 900) }) });
-      if (res.status === 200) {
-        const url = URL.createObjectURL(await res.blob());
-        await playMeasured(url);
-        URL.revokeObjectURL(url);
+      // The first sentence is synthesised on its own so the robot starts talking sooner; the rest is fetched meanwhile.
+      const cut = clean.search(/[.!?…](\s|$)/);
+      const parts = cut > 0 && cut < clean.length - 12 ? [clean.slice(0, cut + 1), clean.slice(cut + 1).trim()] : [clean];
+      const fetches = parts.map((p) =>
+        fetch('/api/assistant/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: p.slice(0, 900) }) })
+          .then(async (r) => (r.status === 200 ? URL.createObjectURL(await r.blob()) : null))
+          .catch(() => null),
+      );
+      const first = await fetches[0];
+      if (generation.current !== mine) return;
+      if (first && generation.current === mine) {
+        await playMeasured(first);
+        URL.revokeObjectURL(first);
+        for (const next of fetches.slice(1)) {
+          const url = await next;
+          if (generation.current !== mine || !url) break;
+          setSpeaking(true);
+          await playMeasured(url);
+          URL.revokeObjectURL(url);
+        }
         return;
       }
     } catch {

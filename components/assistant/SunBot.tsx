@@ -83,6 +83,7 @@ export function SunBot({ audience = 'public' }: { audience?: 'public' | 'member'
   const [lang, setLang] = useState<VoiceLang>('uz-UZ');
   const [teaser, setTeaser] = useState(false);
   const [happy, setHappy] = useState(false);
+  const [flying, setFlying] = useState(true);
   const voice = useVoice();
   const scroller = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -93,6 +94,7 @@ export function SunBot({ audience = 'public' }: { audience?: 'public' | 'member'
 
   useEffect(() => {
     setMsgs(load() ?? [{ role: 'assistant', text: GREETING[audience] }]);
+    const landed = setTimeout(() => setFlying(false), 2600);
     const seen = (() => {
       try {
         return sessionStorage.getItem('sunbot:teased') === '1';
@@ -100,9 +102,12 @@ export function SunBot({ audience = 'public' }: { audience?: 'public' | 'member'
         return false;
       }
     })();
-    if (seen) return;
+    if (seen) return () => clearTimeout(landed);
     const t = setTimeout(() => setTeaser(true), 5000);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(landed);
+    };
   }, [audience]);
 
   useEffect(() => {
@@ -347,7 +352,12 @@ export function SunBot({ audience = 'public' }: { audience?: 'public' | 'member'
       ) : null}
 
       <button type="button" className={`sb-launcher ${open ? 'is-open' : ''}`} onClick={() => setOpen((o) => !o)} aria-label={open ? 'Yordamchini yopish' : 'AI yordamchi bilan gaplashish'} aria-expanded={open}>
-        <RobotFace mood={open ? mood : 'idle'} level={voice.level} size={92} />
+        <span className="sb-fly">
+          <span className="sb-hover">
+            <RobotFace mood={open ? mood : flying ? 'happy' : 'idle'} level={voice.level} size={150} />
+          </span>
+        </span>
+        <span className="sb-ring" aria-hidden />
       </button>
     </div>
   );

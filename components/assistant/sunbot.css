@@ -71,33 +71,120 @@
   50% { transform: translateX(7%); }
 }
 
-/* ---------- launcher ---------- */
+/* ---------- launcher: flies in, hovers over a neon ring ---------- */
 .sb-launcher {
+  position: relative;
   display: block;
   margin-left: auto;
-  padding: 0;
+  padding: 0 0 14px;
   background: none;
   border: 0;
   cursor: pointer;
-  animation: sb-float 3.8s ease-in-out infinite;
   -webkit-tap-highlight-color: transparent;
 }
-.sb-launcher::before {
+.sb-launcher:focus-visible { outline: 2px solid var(--sb-lime); outline-offset: 6px; border-radius: 32px; }
+.sb-fly {
+  position: relative;
+  display: block;
+  animation: sb-fly-in 1.9s cubic-bezier(0.2, 0.9, 0.25, 1) 0.5s both;
+}
+/* Engine trail while it flies in. */
+.sb-fly::after {
   content: '';
   position: absolute;
-  inset: 18% 14% 4%;
+  left: 50%;
+  top: 40%;
+  width: 46%;
+  height: 160%;
+  translate: -50% 0;
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgb(212 252 24 / 0.32), transparent);
-  filter: blur(10px);
-  z-index: -1;
-  animation: sb-halo 3.8s ease-in-out infinite;
+  background: radial-gradient(50% 50% at 50% 0%, rgb(212 252 24 / 0.55), rgb(212 252 24 / 0) 70%);
+  filter: blur(14px);
+  transform-origin: top;
+  rotate: -28deg;
+  opacity: 0;
+  animation: sb-trail 1.9s ease-out 0.5s both;
+  pointer-events: none;
 }
-.sb-launcher { position: relative; }
-.sb-launcher:hover .sb-robot { transform: rotate(-6deg) scale(1.05); }
-.sb-launcher .sb-robot { transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
-.sb-launcher:focus-visible { outline: 2px solid var(--sb-lime); outline-offset: 4px; border-radius: 24px; }
+.sb-hover {
+  position: relative;
+  z-index: 1;
+  display: block;
+  animation: sb-float 4.2s ease-in-out 2.4s infinite;
+}
+.sb-launcher .sb-robot { transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), filter 0.5s; }
+.sb-launcher:hover .sb-robot { transform: rotate(-7deg) scale(1.06); filter: drop-shadow(0 0 18px rgb(212 252 24 / 0.35)); }
+
+/* Neon ring under the robot: glows brighter when the robot dips toward it. */
+.sb-ring {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 74%;
+  height: 22px;
+  translate: -50% 0;
+  border-radius: 50%;
+  border: 2px solid var(--sb-lime);
+  background: radial-gradient(50% 50% at 50% 50%, rgb(212 252 24 / 0.28), rgb(212 252 24 / 0.04) 70%, transparent);
+  box-shadow: 0 0 10px rgb(212 252 24 / 0.9), 0 0 28px rgb(212 252 24 / 0.55), inset 0 0 12px rgb(212 252 24 / 0.6);
+  animation: sb-ring-in 0.9s ease-out 2s both, sb-ring-breathe 4.2s ease-in-out 2.4s infinite;
+  pointer-events: none;
+}
+.sb-ring::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 1.5px solid rgb(212 252 24 / 0.7);
+  animation: sb-ripple 2.8s ease-out 2.6s infinite;
+}
+.sb-ring::after {
+  /* light beam from the ring up to the robot */
+  content: '';
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: 50%;
+  height: 90px;
+  background: linear-gradient(to top, rgb(212 252 24 / 0.22), transparent);
+  filter: blur(6px);
+  border-radius: 50% 50% 0 0;
+  animation: sb-beam 4.2s ease-in-out 2.4s infinite;
+}
+.sb-launcher:hover .sb-ring { box-shadow: 0 0 14px var(--sb-lime), 0 0 44px rgb(212 252 24 / 0.75), inset 0 0 16px rgb(212 252 24 / 0.8); }
+.sb-launcher.is-open .sb-ring { opacity: 0.55; }
+
+@keyframes sb-fly-in {
+  0% { transform: translate(38vw, -75vh) rotate(-30deg) scale(0.45); opacity: 0; }
+  12% { opacity: 1; }
+  62% { transform: translate(-14px, 10px) rotate(9deg) scale(1.06); }
+  80% { transform: translate(4px, -6px) rotate(-4deg) scale(0.99); }
+  100% { transform: none; }
+}
+@keyframes sb-trail {
+  0% { opacity: 0.9; }
+  60% { opacity: 0.6; }
+  100% { opacity: 0; }
+}
 @keyframes sb-float {
-  50% { transform: translateY(-8px); }
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-12px) rotate(-2deg); }
+}
+@keyframes sb-ring-in {
+  from { opacity: 0; transform: scale(0.3); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes sb-ring-breathe {
+  0%, 100% { opacity: 1; scale: 1; }
+  50% { opacity: 0.62; scale: 0.84; }
+}
+@keyframes sb-ripple {
+  from { opacity: 0.8; transform: scale(1); }
+  to { opacity: 0; transform: scale(1.55, 1.9); }
+}
+@keyframes sb-beam {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.45; }
 }
 @keyframes sb-halo {
   50% { opacity: 0.55; transform: scale(0.9); }
@@ -105,8 +192,8 @@
 
 .sb-teaser {
   position: absolute;
-  right: 86px;
-  bottom: 58px;
+  right: 146px;
+  bottom: 112px;
   white-space: nowrap;
   padding: 10px 34px 10px 16px;
   border-radius: 18px 18px 4px 18px;
@@ -134,7 +221,7 @@
 .sb-panel {
   position: absolute;
   right: 0;
-  bottom: 104px;
+  bottom: 186px;
   width: min(400px, calc(100vw - 32px));
   height: min(620px, calc(100dvh - 140px));
   display: flex;
@@ -347,9 +434,10 @@
     border-radius: 26px;
   }
   .sb-root:has(.sb-panel) .sb-launcher { display: none; }
-  .sb-teaser { right: 78px; bottom: 50px; font-size: 13px; }
+  .sb-teaser { right: 108px; bottom: 80px; font-size: 13px; }
+  .sb-launcher .sb-robot { width: 112px !important; height: 112px !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sb-launcher, .sb-launcher::before, .sb-eye, .sb-eyes, .sb-panel, .sb-teaser { animation: none !important; }
+  .sb-fly, .sb-fly::after, .sb-hover, .sb-ring, .sb-ring::before, .sb-ring::after, .sb-eye, .sb-eyes, .sb-panel, .sb-teaser { animation: none !important; }
 }

@@ -2,11 +2,12 @@
 
 import { Environment, Lightformer, PerformanceMonitor } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import * as THREE from 'three';
 
 import type { SoundSubscribe } from '../voice';
-import { buildRobot, HEIGHT } from './model';
+import { buildRobot, FACE_URL, FRAME_OFFSET_Y, FRAME_WORLD, HEIGHT, IMAGE_URL, sculptPicture } from './model';
+import type { Sculpted } from './sculpt';
 import { MotionDirector, type MotionCue, type MotionMood } from './motion';
 
 const LIME = '#d4fc18';
@@ -16,9 +17,9 @@ type Props = {
   mood: MotionMood;
   sound?: SoundSubscribe;
   cue?: RobotCue;
-  /** Size of the robot's square on the page, px; the canvas is larger so it can fly and turn without clipping. */
+  /** Size of the robot's square on the page, px: the picture's frame, exactly where the flat robot is drawn. */
   box: number;
-  /** Room around the square (left and above), px. */
+  /** Room around the square (left and above), px, so it can fly and turn without clipping. */
   room: number;
   calm: boolean;
   compact: boolean;
@@ -51,9 +52,9 @@ function slerpTo(obj: THREE.Object3D, [x, y, z]: [number, number, number], t: nu
   obj.quaternion.slerp(quat, t);
 }
 
-function Robot({ mood, sound, cue, box, room, calm, compact, roam, shadows }: Omit<Props, 'active' | 'onReady' | 'onFail'> & { shadows: boolean }) {
-  const rig = useMemo(() => buildRobot(), []);
-  const { viewport, size, clock, gl, scene } = useThree();
+function Robot({ image, face, parts, mood, sound, cue, box, room, calm, compact, roam, shadows, onBuilt }: Omit<Props, 'active' | 'onReady' | 'onFail'> & { image: HTMLImageElement; face: HTMLImageElement; parts: Sculpted[]; shadows: boolean; onBuilt: () => void }) {
+  const rig = useMemo(() => buildRobot(image, face, parts), [image, face, parts]);
+  const { viewport, clock, gl, scene } = useThree();
   const envSet = useRef(false);
   const director = useMemo(() => new MotionDirector({ calm, compact, now: 0 }), [calm, compact]);
   const audio = useRef({ level: 0, shape: 0.5 });
@@ -61,6 +62,9 @@ function Robot({ mood, sound, cue, box, room, calm, compact, roam, shadows }: Om
   const light = useRef<THREE.PointLight>(null);
 
   useEffect(() => () => rig.dispose(), [rig]);
+  useEffect(() => {
+    onBuilt();
+  }, [rig, onBuilt]);
   useEffect(() => director.setRoam(roam, clock.elapsedTime), [director, roam, clock]);
   useEffect(() => director.setMood(mood, clock.elapsedTime), [director, mood, clock]);
   useEffect(() => {
@@ -84,10 +88,8 @@ function Robot({ mood, sound, cue, box, room, calm, compact, roam, shadows }: Om
     if (compact) return;
     const onMove = (e: PointerEvent) => {
       const r = gl.domElement.getBoundingClientRect();
-      const cx = r.right - box / 2;
-      const cy = r.bottom - box / 2;
-      const dx = e.clientX - cx;
-      const dy = e.clientY - cy;
+      const dx = e.clientX - (r.right - box / 2);
+      const dy = e.clientY - (r.bottom - box / 2);
       pointer.current = { x: Math.max(-1, Math.min(1, dx / 340)), y: Math.max(-1, Math.min(1, -dy / 300)), near: Math.hypot(dx, dy) < 420 };
     };
     const onLeave = () => (pointer.current.near = false);
@@ -99,12 +101,11 @@ function Robot({ mood, sound, cue, box, room, calm, compact, roam, shadows }: Om
     };
   }, [compact, gl, box]);
 
-  // Scale and resting place from the canvas size: the robot fills its square, which sits at the canvas' bottom right.
-  const unit = viewport.height / size.height;
-  const scale = (box * 0.86 * unit) / HEIGHT;
-  const rest = useMemo(() => new THREE.Vector3(viewport.width / 2 - (box / 2) * unit, -viewport.height / 2 + (box / 2) * unit, 0), [viewport.width, viewport.height, box, unit]);
-  const target = useMemo(() => new THREE.Vector3(), []);
+  // Orthographic, 1 unit = 1 CSS px: the picture's frame is exactly the robot's square at the canvas' bottom right.
+  const scale = box / FRAME_WORLD;
   const reach = HEIGHT * scale;
+  const rest = useMemo(() => new THREE.Vector3(viewport.width / 2 - box / 2, -viewport.height / 2 + box / 2 + FRAME_OFFSET_Y * scale, 0), [viewport.width, viewport.height, box, scale]);
+  const target = useMemo(() => new THREE.Vector3(), []);
 
   useEffect(() => {
     rig.root.position.copy(rest);
@@ -112,7 +113,7 @@ function Robot({ mood, sound, cue, box, room, calm, compact, roam, shadows }: Om
   }, [rig, rest, scale]);
 
   useFrame((_, rawDt) => {
-    // three.js applies envMapIntensity only to a material's own envMap: hand each one the studio once it exists.
+    // three.js applies envMapIntensity only to a material's own envMap: hand it the studio once it exists.
     if (!envSet.current && scene.environment) {
       for (const m of rig.pbr) {
         m.envMap = scene.environment;
@@ -136,10 +137,11 @@ function Robot({ mood, sound, cue, box, room, calm, compact, roam, shadows }: Om
     slerpTo(rig.armL, pose.armL, damp(9, dt));
     slerpTo(rig.armR, pose.armR, damp(9, dt));
 
-    // Face: blink fast, look smoothly, mouths cross-fade, the talking mouth follows the audio closely.
-    rig.eyes.scale.y = THREE.MathUtils.lerp(rig.eyes.scale.y, pose.eyeOpen, damp(pose.eyeOpen < 0.5 ? 40 : 14, dt));
-    rig.eyes.position.x = THREE.MathUtils.lerp(rig.eyes.position.x, pose.look[0] * 0.07, damp(12, dt));
-    rig.eyes.position.y = THREE.MathUtils.lerp(rig.eyes.position.y, 0.56 + pose.look[1] * 0.05, damp(12, dt));
+    // Face: each eye blinks about its own centre, both look together; mouths cross-fade; the talking mouth follows the
+    // audio with the 2D robot's proportions (30 px wide, 5–27 px tall on the picture).
+    for (const lid of rig.lids) lid.scale.y = THREE.MathUtils.lerp(lid.scale.y, pose.eyeOpen, damp(pose.eyeOpen < 0.5 ? 40 : 14, dt));
+    rig.eyes.position.x = THREE.MathUtils.lerp(rig.eyes.position.x, rig.eyeRest.x + pose.look[0] * 0.035, damp(12, dt));
+    rig.eyes.position.y = THREE.MathUtils.lerp(rig.eyes.position.y, rig.eyeRest.y + pose.look[1] * 0.025, damp(12, dt));
     const { smile, flat, talk } = rig.mats;
     smile.opacity = THREE.MathUtils.lerp(smile.opacity, pose.talk || pose.flat ? 0 : 1, damp(14, dt));
     flat.opacity = THREE.MathUtils.lerp(flat.opacity, pose.flat && !pose.talk ? 1 : 0, damp(14, dt));
@@ -147,14 +149,18 @@ function Robot({ mood, sound, cue, box, room, calm, compact, roam, shadows }: Om
     rig.mouth.smile.scale.y = THREE.MathUtils.lerp(rig.mouth.smile.scale.y, pose.smile, damp(10, dt));
     // sqrt: mid-loud syllables already open the mouth clearly; silence closes it to a slit.
     const loud = Math.sqrt(Math.min(1, pose.mouthOpen));
-    const open = 0.14 + loud * 1.2;
-    const wide = 0.72 + pose.mouthWide * 0.5 - loud * 0.12;
-    rig.mouth.talk.scale.set(THREE.MathUtils.lerp(rig.mouth.talk.scale.x, wide, damp(25, dt)), THREE.MathUtils.lerp(rig.mouth.talk.scale.y, open, damp(25, dt)), 1);
+    rig.mouth.talk.scale.set(
+      THREE.MathUtils.lerp(rig.mouth.talk.scale.x, 0.8 + pose.mouthWide * 0.3 - loud * 0.2, damp(25, dt)),
+      THREE.MathUtils.lerp(rig.mouth.talk.scale.y, 0.17 + loud * 0.75, damp(25, dt)),
+      1,
+    );
 
     // Light: eye halos, lime accents and the glow from the ring below follow `glow`; the energy field follows `energy`.
-    for (const h of rig.halos) (h.material as THREE.SpriteMaterial).opacity = THREE.MathUtils.lerp((h.material as THREE.SpriteMaterial).opacity, 0.22 + pose.glow * 0.55, damp(10, dt));
-    rig.mats.accent.emissiveIntensity = THREE.MathUtils.lerp(rig.mats.accent.emissiveIntensity, 0.8 + pose.glow * 2, damp(10, dt));
-    if (light.current) light.current.intensity = THREE.MathUtils.lerp(light.current.intensity, 1.2 + pose.glow * 2.5, damp(8, dt));
+    // The original face light at rest (glow 0.25), brighter as Sunny listens, speaks or lights up.
+    const bright = THREE.MathUtils.lerp(rig.mats.face.color.r, 0.875 + pose.glow * 0.5, damp(10, dt));
+    rig.mats.face.color.setScalar(bright);
+    rig.mats.smile.color.setScalar(bright);
+    if (light.current) light.current.intensity = THREE.MathUtils.lerp(light.current.intensity, 0.6 + pose.glow * 1.8, damp(8, dt));
     const pm = rig.particles.material as THREE.PointsMaterial;
     pm.opacity = THREE.MathUtils.lerp(pm.opacity, pose.energy * 0.9, damp(6, dt));
     rig.particles.visible = pm.opacity > 0.01;
@@ -169,8 +175,8 @@ function Robot({ mood, sound, cue, box, room, calm, compact, roam, shadows }: Om
   });
 
   // Soft shadow on the floor where the neon ring is: the key light from above draws the robot's real silhouette, blurred
-  // (variance shadow map), and it shifts as the robot floats, turns and waves.
-  const floor = rest.y - (box / 2 + 4) * unit;
+  // (variance shadow map); the floor leans toward the camera like the ring's ellipse so the shadow lies on it.
+  const floor = rest.y - box * 0.47;
   const shadowLight = useRef<THREE.DirectionalLight>(null);
   useEffect(() => {
     const l = shadowLight.current;
@@ -183,80 +189,102 @@ function Robot({ mood, sound, cue, box, room, calm, compact, roam, shadows }: Om
     cam.right = half;
     cam.top = half;
     cam.bottom = -half;
-    cam.near = 0.1;
+    cam.near = 1;
     cam.far = reach * 6;
     cam.updateProjectionMatrix();
-  }, [rest, floor, reach]);
+  }, [rest, floor, reach, shadows]);
 
   return (
     <>
       <primitive object={rig.root} />
+      <pointLight ref={light} position={[rest.x, rest.y - reach * 0.75, reach * 0.35]} color={LIME} intensity={0.6} distance={reach * 1.6} decay={0} />
       {shadows ? (
         <>
           <directionalLight
             ref={shadowLight}
             position={[rest.x - reach * 0.4, floor + reach * 3, reach * 0.9]}
-            intensity={0.6}
+            intensity={0.35}
             castShadow
             shadow-mapSize={[512, 512]}
             shadow-radius={9}
             shadow-blurSamples={16}
             shadow-bias={-0.0005}
           />
-          {/* Tilted toward the camera like the neon ring's ellipse (~11° from above), so the shadow lies where the ring is. */}
-          <mesh position={[rest.x, floor, 0]} rotation={[-Math.PI / 2 + 0.2, 0, 0]} receiveShadow>
+          <mesh position={[rest.x, floor, -reach * 0.2]} rotation={[-Math.PI / 2 + 0.2, 0, 0]} receiveShadow>
             <planeGeometry args={[reach * 2.4, reach * 2.4]} />
-            <shadowMaterial transparent opacity={0.45} />
+            <shadowMaterial transparent opacity={0.4} />
           </mesh>
         </>
       ) : null}
-      {/* The neon ring under the launcher lights the robot from below. */}
-      <pointLight ref={light} position={[rest.x, rest.y - reach * 0.75, reach * 0.35]} color={LIME} intensity={1.2} distance={reach * 1.6} decay={2} />
     </>
   );
 }
 
 /**
- * Sunny in real 3D (three.js via React Three Fiber, already used by the site's hero). Transparent canvas over the
- * launcher; renders only while visible, at a pixel ratio that drops on weak GPUs. Lighting is a static studio
- * environment (computed once): soft key light, a rim light from behind, lime from the ring below; no post-processing.
+ * Sunny in real 3D (three.js via React Three Fiber, already used by the site's hero), reconstructed from the original
+ * picture. Transparent canvas over the launcher; an orthographic camera so the front view at rest is the picture;
+ * renders only while visible, at a pixel ratio that drops on weak GPUs. No post-processing.
  */
 export default function Robot3D({ active, onReady, onFail, ...props }: Props) {
   const coarse = props.compact;
-  const [dpr, setDpr] = useState(() => Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, coarse ? 1.5 : 2));
+  // Sharp on every screen (up to 3× pixel ratio); only a GPU that cannot keep up drops to 1.5×.
+  const [dpr, setDpr] = useState(() => Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 3));
+  const [images, setImages] = useState<{ body: HTMLImageElement; face: HTMLImageElement; parts: Sculpted[] } | null>(null);
+  // The parent's callbacks may change on every render: the picture is loaded once and the robot built once regardless.
+  const handlers = useRef({ onReady, onFail });
+  handlers.current = { onReady, onFail };
+  const fail = useCallback(() => handlers.current.onFail(), []);
+  useEffect(() => {
+    const load = (src: string) =>
+      new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.decoding = 'async';
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+      });
+    Promise.all([load(IMAGE_URL), load(FACE_URL)])
+      .then(async ([body, face]) => setImages({ body, face, parts: await sculptPicture(body) }))
+      .catch(fail);
+  }, [fail]);
+  const announced = useRef(false);
+  const built = useCallback(() => {
+    if (announced.current) return;
+    announced.current = true;
+    requestAnimationFrame(() => requestAnimationFrame(() => handlers.current.onReady()));
+  }, []);
+  if (!images) return null;
   return (
-    <Boundary onFail={onFail}>
+    <Boundary onFail={fail}>
       <Canvas
         aria-hidden
         dpr={dpr}
+        orthographic
         frameloop={active ? 'always' : 'never'}
-        camera={{ position: [0, 0, 9], fov: 30 }}
+        camera={{ position: [0, 0, 2000], zoom: 1, near: 1, far: 6000 }}
         gl={{ antialias: true, alpha: true, powerPreference: 'default', premultipliedAlpha: true }}
         shadows={coarse ? false : 'variance'}
         onCreated={({ gl }) => {
           gl.setClearColor(0x000000, 0);
-          gl.toneMapping = THREE.ACESFilmicToneMapping;
-          gl.toneMappingExposure = 1.05;
-          gl.domElement.addEventListener('webglcontextlost', onFail, { once: true });
-          requestAnimationFrame(() => requestAnimationFrame(onReady));
+          gl.toneMapping = THREE.NoToneMapping;
+          gl.domElement.addEventListener('webglcontextlost', fail, { once: true });
         }}
         style={{ pointerEvents: 'none' }}
       >
-        <PerformanceMonitor onDecline={() => setDpr(1)} />
-        <ambientLight intensity={0.22} />
-        <directionalLight position={[-3, 4, 5]} intensity={1.6} color="#ffffff" />
-        <directionalLight position={[4, 2.5, -4]} intensity={2.2} color="#e8f0ff" />
-        {/* A bright studio, so the chrome reads as light silver like the rendered character, not as dark metal. */}
+        <PerformanceMonitor onDecline={() => setDpr((d) => Math.min(d, 1.5))} />
+        <ambientLight intensity={0.25} />
+        <directionalLight position={[-3, 4, 5]} intensity={1} />
+        <directionalLight position={[4, 2.5, -4]} intensity={1.2} color="#e8f0ff" />
+        {/* A soft studio for the sides and the back (the front shows the picture's own light). */}
         <Environment resolution={128} frames={1}>
-          <color attach="background" args={['#5a5c62']} />
-          <Lightformer intensity={4} rotation-x={Math.PI / 2} position={[0, 6, 0]} scale={[14, 8, 1]} />
-          <Lightformer intensity={2.2} position={[0, 0.5, 8]} scale={[14, 8, 1]} />
-          <Lightformer intensity={2} rotation-y={Math.PI / 2} position={[-7, 1, 0]} scale={[18, 2, 1]} />
-          <Lightformer intensity={1.8} rotation-y={-Math.PI / 2} position={[7, 0, 1]} scale={[18, 2.4, 1]} />
-          <Lightformer intensity={1.2} rotation-x={-Math.PI / 2} position={[0, -6, 0]} scale={[14, 6, 1]} />
-          <Lightformer form="ring" color={LIME} intensity={2.4} scale={2} position={[3, -3, 3]} target={[0, 0, 0]} />
+          <color attach="background" args={['#4a4c52']} />
+          <Lightformer intensity={3} rotation-x={Math.PI / 2} position={[0, 6, 0]} scale={[14, 8, 1]} />
+          <Lightformer intensity={1.8} position={[0, 0.5, 8]} scale={[14, 8, 1]} />
+          <Lightformer intensity={1.6} rotation-y={Math.PI / 2} position={[-7, 1, 0]} scale={[18, 2, 1]} />
+          <Lightformer intensity={1.4} rotation-y={-Math.PI / 2} position={[7, 0, 1]} scale={[18, 2.4, 1]} />
+          <Lightformer form="ring" color={LIME} intensity={2} scale={2} position={[3, -3, 3]} target={[0, 0, 0]} />
         </Environment>
-        <Robot {...props} shadows={!coarse} />
+        <Robot {...props} image={images.body} face={images.face} parts={images.parts} shadows={!coarse} onBuilt={built} />
       </Canvas>
     </Boundary>
   );

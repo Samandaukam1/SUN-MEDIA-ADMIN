@@ -71,8 +71,8 @@ export function restPose(): Pose {
     pos: [0, 0, 0],
     body: [0, 0, 0],
     head: [0, 0, 0],
-    armL: [0, 0, 0.12],
-    armR: [0, 0, -0.12],
+    armL: [0, 0, 0],
+    armR: [0, 0, 0],
     spin: 0,
     scale: 1,
     look: [0, 0],
@@ -266,8 +266,8 @@ export class MotionDirector {
       p.head[2] += 0.04 * Math.sin(0.9 * t + 1);
       p.body[1] += 0.05 * Math.sin(0.7 * t);
       p.scale = 1 + this.level * 0.012;
-      p.armL[0] += -0.45 * Math.min(1, this.slow * 2.2) * (0.5 + 0.5 * Math.sin(1.1 * t));
-      p.armL[2] += -0.2 * Math.min(1, this.slow * 2.2);
+      p.armL[0] += -0.25 * Math.min(1, this.slow * 2.2) * (0.5 + 0.5 * Math.sin(1.1 * t));
+      p.armL[2] += -0.1 * Math.min(1, this.slow * 2.2);
       p.smile = 0;
       p.talk = 1;
       p.mouthOpen = level;
@@ -304,19 +304,19 @@ export class MotionDirector {
       const q = clamp01((now - c.start) / CUE_SECONDS[c.name]);
       const w = envelope(q);
       if (c.name === 'welcome') {
-        // Turn to the visitor, raise the arm and wave twice, smile.
+        // Turn to the visitor and wave the raised (pointing) hand twice, smile. Arms are offsets from the picture's pose.
         p.body[1] = lerp(p.body[1], -0.22, w);
         p.head[1] = lerp(p.head[1], -0.1, w);
         p.head[2] += 0.08 * w;
-        p.armL[2] += -2.25 * w + 0.32 * Math.sin(q * Math.PI * 7) * w;
-        p.armL[0] += -0.25 * w;
+        p.armL[2] += -0.4 * w + 0.3 * Math.sin(q * Math.PI * 7) * w;
+        p.armL[0] += -0.15 * w;
         p.pos[1] += 0.05 * w;
         p.smile = Math.max(p.smile, 1 + 0.3 * w);
         p.eyeOpen = Math.max(p.eyeOpen, 1 + 0.1 * w);
         p.glow = Math.max(p.glow, 0.55 * w);
       } else if (c.name === 'farewell') {
         p.head[0] += 0.16 * Math.sin(Math.PI * q);
-        p.armL[2] += -1.4 * w + 0.25 * Math.sin(q * Math.PI * 4) * w;
+        p.armL[2] += -0.3 * w + 0.25 * Math.sin(q * Math.PI * 4) * w;
         p.smile = Math.max(p.smile, 1.15);
       } else if (c.name === 'replied') {
         p.pos[1] += 0.05 * Math.sin(Math.PI * q);

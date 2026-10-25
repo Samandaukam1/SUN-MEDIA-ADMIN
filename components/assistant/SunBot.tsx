@@ -59,6 +59,8 @@ export function SunBot({ audience = 'public' }: { audience?: 'public' | 'member'
   const launcher = useRef<HTMLButtonElement>(null);
   const look = useRef(0);
   const sendCue = useCallback((name: RobotCue['name']) => setCue((c) => ({ name, id: (c?.id ?? 0) + 1 })), []);
+  const on3dReady = useCallback(() => setThree((s) => (s.ready ? s : { ...s, ready: true })), []);
+  const on3dFail = useCallback(() => setThree((s) => ({ ...s, ok: false, ready: false })), []);
 
   useEffect(() => {
     const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
@@ -190,8 +192,8 @@ export function SunBot({ audience = 'public' }: { audience?: 'public' | 'member'
                   roam={!open}
                   // On a phone the open chat covers the launcher: nothing to draw then.
                   active={three.visible && !(open && three.compact)}
-                  onReady={() => setThree((s) => ({ ...s, ready: true }))}
-                  onFail={() => setThree((s) => ({ ...s, ok: false, ready: false }))}
+                  onReady={on3dReady}
+                  onFail={on3dFail}
                 />
               </span>
             ) : null}

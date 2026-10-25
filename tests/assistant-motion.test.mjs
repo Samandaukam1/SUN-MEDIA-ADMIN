@@ -103,18 +103,18 @@ test('welcome raises the arm and waves, then everything returns to rest', () => 
   const d = new MotionDirector({ calm: true });
   d.cue('welcome', 0);
   const mid = d.update(0.9);
-  assert.ok(mid.armL[2] < -1.5, 'arm up');
+  assert.ok(mid.armL[2] < -0.2, 'the pointing hand rises');
   const wave = run(d, 0.5, 1.3).map((p) => p.pose.armL[2]);
   assert.ok(Math.max(...wave) - Math.min(...wave) > 0.3, 'it waves');
   const done = d.update(2.1);
-  assert.ok(Math.abs(done.armL[2] - 0.12) < 1e-6 && done.body[1] === 0);
+  assert.ok(Math.abs(done.armL[2]) < 1e-6 && done.body[1] === 0, 'back to the picture pose');
 });
 
 test('gestures that would turn the robot away are ignored while it listens or speaks', () => {
   const d = new MotionDirector({ calm: true });
   d.setMood('speaking', 0);
   d.cue('welcome', 0.1);
-  assert.ok(d.update(1).armL[2] > -0.5);
+  assert.ok(d.update(1).armL[2] > -0.15);
 });
 
 test('with the chat open beside it the robot never flies; a flight in progress comes home', () => {

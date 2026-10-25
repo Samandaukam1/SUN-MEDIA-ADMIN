@@ -3,16 +3,64 @@ import 'server-only';
 import { AiFailedError } from '@/lib/ai';
 
 /**
- * Google Gemini (free tier with an AI Studio key, no card): the assistant's brain when no Claude key is set,
- * and its voice when no Azure key is set. Key: GEMINI_API_KEY (aistudio.google.com → Get API key).
+ * Google Gemini (free tier with an AI Studio key, no card): the assistant's brain when no Claude key is set, its voice
+ * when no Azure key is set, and its ears where the browser cannot recognise Uzbek. Key: GEMINI_API_KEY
+ * (aistudio.google.com → Get API key).
  */
 export const geminiKey = () => process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '';
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 type ToolDef = { name: string; description: string; input_schema: Record<string, unknown> };
-type Part = { text?: string; functionCall?: { name: string; args?: Record<string, unknown> }; functionResponse?: { name: string; response: Record<string, unknown> } };
+type Part = {
+  text?: string;
+  thought?: boolean;
+  functionCall?: { name: string; args?: Record<string, unknown> };
+  functionResponse?: { name: string; response: Record<string, unknown> };
+  inlineData?: { mimeType?: string; data?: string };
+};
 type Content = { role: 'user' | 'model'; parts: Part[] };
+type Chunk = { candidates?: { content?: Content; finishReason?: string }[]; error?: { code?: number; message?: string } };
+
+/**
+ * Models that just refused (free quota used up, or missing) are skipped until they are expected back, so a reply does not
+ * first wait for a refusal. Per server instance; a cold start simply tries them again.
+ */
+const resting = new Map<string, number>();
+function rest(model: string, status: number, detail: string) {
+  const retry = Number(/"retryDelay":\s*"(\d+)/.exec(detail)?.[1]);
+  const seconds = status === 404 ? 3600 : status >= 500 ? 60 : /PerDay/i.test(detail) ? Math.max(retry || 0, 1800) : retry > 0 ? retry : 120;
+  resting.set(model, Date.now() + Math.min(seconds, 3600) * 1000);
+}
+function awake(models: (string | undefined)[], { strict = false } = {}): string[] {
+  const list = models.filter((m, i, all): m is string => !!m && all.indexOf(m) === i);
+  const now = Date.now();
+  const ready = list.filter((m) => (resting.get(m) ?? 0) <= now);
+  // A reply is worth one more try on a tired model; a voice is not (the widget falls back at once).
+  return ready.length || strict ? ready : list;
+}
+
+/**
+ * The least thinking each model accepts: a sales chat needs a fast first word more than deliberation. Lite models take
+ * "minimal", the larger flash models start at "low" (they refuse "minimal"). A model that refuses a setting (400) moves to
+ * the next one, ending with the model's own default.
+ */
+const thinkingStep = new Map<string, number>();
+function thinkingFor(model: string): Record<string, unknown> | undefined {
+  const ladder: Record<string, unknown>[] = /^gemini-2\.5/.test(model)
+    ? [{ thinkingBudget: 0 }]
+    : /^gemini-\d.*-lite/.test(model)
+      ? [{ thinkingLevel: 'minimal' }, { thinkingLevel: 'low' }]
+      : /^gemini-\d/.test(model)
+        ? [{ thinkingLevel: 'low' }]
+        : [];
+  return ladder[thinkingStep.get(model) ?? 0];
+}
+function refusedThinking(model: string, status: number, detail: string): boolean {
+  if (status !== 400 || !/thinking/i.test(detail) || !thinkingFor(model)) return false;
+  thinkingStep.set(model, (thinkingStep.get(model) ?? 0) + 1);
+  return true;
+}
 
 /** Claude-style JSON schema → Gemini function declaration (Gemini rejects an empty `properties`). */
 function declaration(t: ToolDef) {
@@ -22,65 +70,148 @@ function declaration(t: ToolDef) {
     : { name: t.name, description: t.description };
 }
 
-/** One reply from Gemini with function calling; `run` executes a tool and returns its text result. */
+/** Server-sent events → parsed JSON chunks. */
+async function* events(body: ReadableStream<Uint8Array>): AsyncGenerator<Chunk> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const parse = (line: string): Chunk | null => {
+    const data = line.startsWith('data:') ? line.slice(5).trim() : '';
+    if (!data || data === '[DONE]') return null;
+    try {
+      return JSON.parse(data) as Chunk;
+    } catch {
+      return null;
+    }
+  };
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      for (let i = buffer.indexOf('\n'); i >= 0; i = buffer.indexOf('\n')) {
+        const chunk = parse(buffer.slice(0, i).trim());
+        buffer = buffer.slice(i + 1);
+        if (chunk) yield chunk;
+      }
+    }
+    const last = parse(buffer.trim());
+    if (last) yield last;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/** A signal that fires on the caller's abort, on `firstMs` without a first chunk, or on `totalMs` overall. */
+function deadline(outer: AbortSignal | undefined, firstMs: number, totalMs: number) {
+  const ctl = new AbortController();
+  const first = setTimeout(() => ctl.abort(), firstMs);
+  const total = setTimeout(() => ctl.abort(), totalMs);
+  const signal = outer ? AbortSignal.any([outer, ctl.signal]) : ctl.signal;
+  const done = () => (clearTimeout(first), clearTimeout(total));
+  return { signal, started: () => clearTimeout(first), done, abort: () => (done(), ctl.abort()) };
+}
+
+const NO_REPLY = 'Kechirasiz, javobni tayyorlay olmadim. Savolni boshqacha yozib ko‘ring.';
+
+/**
+ * One reply from Gemini with function calling, streamed: `onText` gets each piece of text as soon as it is written.
+ * `run` executes a tool and returns its text result. Returns the whole reply (everything that was streamed).
+ */
 export async function geminiChat(
   system: string,
   history: { role: 'user' | 'assistant'; text: string }[],
   tools: ToolDef[],
   run: (name: string, input: Record<string, unknown>) => Promise<string>,
+  { onText, signal }: { onText?: (delta: string) => void; signal?: AbortSignal } = {},
 ): Promise<string> {
-  // The configured model first, then other free models (a retired or renamed model answers 404).
-  const models = [process.env.ASSISTANT_GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-2.5-flash'].filter(
-    (m, i, all): m is string => !!m && all.indexOf(m) === i,
-  );
+  // The configured model first, then the free models fastest first: flash-lite answers in about a second and has the
+  // largest free quota; the bigger flash models (20 free requests a day, often "high demand") back it up.
+  const models = awake([process.env.ASSISTANT_GEMINI_MODEL, 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash']);
   let modelIndex = 0;
   const contents: Content[] = history.map((t) => ({ role: t.role === 'user' ? 'user' : 'model', parts: [{ text: t.text }] }));
+  let reply = '';
+  let gap = false;
+  const emit = (text: string) => {
+    if (!text) return;
+    // Text written before a tool call and the answer after it are separate paragraphs.
+    if (gap && reply) {
+      reply += '\n\n';
+      onText?.('\n\n');
+    }
+    gap = false;
+    reply += text;
+    onText?.(text);
+  };
+  const nextModel = () => modelIndex < models.length - 1 && !!++modelIndex;
 
-  for (let round = 0; round < 8; round++) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    if (signal?.aborted) break;
     const model = models[modelIndex];
+    const thinkingConfig = thinkingFor(model);
+    const timer = deadline(signal, 12_000, 40_000);
     let res: Response;
     try {
-      res = await fetch(`${BASE}/models/${model}:generateContent`, {
+      res = await fetch(`${BASE}/models/${model}:streamGenerateContent?alt=sse`, {
         method: 'POST',
         headers: { 'x-goog-api-key': geminiKey(), 'content-type': 'application/json' },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: system }] },
           contents,
           tools: [{ functionDeclarations: tools.map(declaration) }],
-          generationConfig: { maxOutputTokens: 900, temperature: 0.7 },
+          generationConfig: { maxOutputTokens: 900, temperature: 0.7, ...(thinkingConfig ? { thinkingConfig } : {}) },
         }),
-        signal: AbortSignal.timeout(12_000),
+        signal: timer.signal,
       });
     } catch {
+      timer.done();
+      if (signal?.aborted) break;
       // Slow or unreachable: the next (lighter) free model answers instead.
       console.error('[assistant] Gemini timeout', model);
-      if (modelIndex < models.length - 1) {
-        modelIndex++;
-        continue;
-      }
+      if (nextModel()) continue;
       throw new AiFailedError('Ulanishda xato. Birozdan so‘ng qayta urinib ko‘ring. (GNET)');
     }
-    if (!res.ok) {
-      const detail = (await res.text().catch(() => '')).slice(0, 400);
-      console.error('[assistant] Gemini', model, res.status, detail);
-      // Model missing or over its own quota: try the next free model.
-      if ((res.status === 404 || res.status === 429 || res.status >= 500) && modelIndex < models.length - 1) {
-        modelIndex++;
-        continue;
-      }
+    if (!res.ok || !res.body) {
+      timer.done();
+      const detail = (await res.text().catch(() => '')).slice(0, 600);
+      console.error('[assistant] Gemini', model, res.status, detail.slice(0, 400));
+      if (refusedThinking(model, res.status, detail)) continue;
+      if (res.status === 404 || res.status === 429 || res.status >= 500) rest(model, res.status, detail);
+      // Model missing, over its own quota or overloaded: try the next free model.
+      if ((res.status === 404 || res.status === 429 || res.status >= 500) && nextModel()) continue;
       if (res.status === 429) throw new AiFailedError('Bugungi bepul limit tugadi. Birozdan so‘ng yozing. (G429)');
       if (res.status === 400 && /API key/i.test(detail)) throw new AiFailedError('AI kaliti noto‘g‘ri. (G400)');
       if (res.status === 403) throw new AiFailedError('AI kaliti faol emas yoki bu hududda ruxsat yo‘q. (G403)');
       throw new AiFailedError(`Hozir band ekanman, bir daqiqadan so‘ng yozing. (G${res.status})`);
     }
-    const data = (await res.json()) as { candidates?: { content?: Content }[] };
-    const parts = data.candidates?.[0]?.content?.parts ?? [];
+
+    const parts: Part[] = [];
+    let wrote = false;
+    try {
+      for await (const chunk of events(res.body)) {
+        timer.started();
+        if (chunk.error) throw new Error(chunk.error.message ?? 'stream error');
+        for (const p of chunk.candidates?.[0]?.content?.parts ?? []) {
+          parts.push(p);
+          if (p.text && !p.thought) {
+            wrote = true;
+            emit(p.text);
+          }
+        }
+      }
+    } catch (error) {
+      if (signal?.aborted) break;
+      console.error('[assistant] Gemini stream broke', model, error instanceof Error ? error.message : error);
+      // Half an answer is still an answer; with nothing written yet, the next model starts over.
+      if (wrote) return reply.trim();
+      if (nextModel()) continue;
+      throw new AiFailedError('Ulanishda xato. Birozdan so‘ng qayta urinib ko‘ring. (GNET)');
+    } finally {
+      timer.done();
+    }
+
     const calls = parts.filter((p) => p.functionCall);
-    const text = parts
-      .map((p) => p.text ?? '')
-      .join('')
-      .trim();
-    if (!calls.length) return text;
+    if (!calls.length) return reply.trim() || NO_REPLY;
 
     contents.push({ role: 'model', parts });
     const responses: Part[] = [];
@@ -89,9 +220,25 @@ export async function geminiChat(
       responses.push({ functionResponse: { name: p.functionCall!.name, response: { result: out } } });
     }
     contents.push({ role: 'user', parts: responses });
+    gap = true;
   }
-  return 'Kechirasiz, javobni tayyorlay olmadim. Savolni boshqacha yozib ko‘ring.';
+  return reply.trim() || NO_REPLY;
 }
+
+/** How Sunny sounds: a young man's voice, natural and warm, in the language of the text. */
+const VOICE_STYLE: Record<string, string> = {
+  'uz-UZ':
+    'Read aloud in Uzbek with native Tashkent pronunciation (clear oʻ, gʻ, q, x, h; natural word stress and sentence intonation), as a friendly, confident young man of about twenty: warm, clear, natural conversational pace, never robotic',
+  'ru-RU': 'Read aloud in Russian as a friendly, confident young man of about twenty: warm, clear, natural conversational pace',
+  'en-US': 'Read aloud in English as a friendly, confident young man of about twenty: warm, clear, natural conversational pace',
+};
+// Free TTS quotas are tiny (10 requests a day per model): models that ran out are not asked again until they reset.
+const ttsModels = () => awake([process.env.ASSISTANT_GEMINI_TTS_MODEL, 'gemini-3.8-flash-lite-tts', 'gemini-2.5-flash-preview-tts'], { strict: true });
+const ttsVoice = () => process.env.ASSISTANT_GEMINI_VOICE || 'Puck';
+const ttsBody = (text: string, lang: string) => ({
+  contents: [{ parts: [{ text: `${VOICE_STYLE[lang] ?? VOICE_STYLE['uz-UZ']}:\n${text}` }] }],
+  generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: ttsVoice() } } } },
+});
 
 /** Finds the first base64 audio payload anywhere in the TTS response (the shape differs between API versions). */
 function findAudio(node: unknown): { data: string; mime: string } | null {
@@ -105,6 +252,8 @@ function findAudio(node: unknown): { data: string; mime: string } | null {
   }
   return null;
 }
+
+const rateOf = (mime: string) => Number(/rate=(\d+)/.exec(mime)?.[1]) || 24000;
 
 /** Raw 16-bit 24 kHz mono PCM → a WAV file the browser can play. */
 function pcmToWav(pcm: Buffer, rate = 24000): Buffer {
@@ -124,33 +273,99 @@ function pcmToWav(pcm: Buffer, rate = 24000): Buffer {
   return Buffer.concat([header, pcm]);
 }
 
-/** Speech from Gemini TTS (free tier) as a playable WAV, or null when it is unavailable or over quota. */
-export async function geminiSpeech(text: string): Promise<{ body: Buffer; type: string } | null> {
+/**
+ * Speech while it is being generated: raw 16-bit mono PCM (`rate` Hz), so the widget starts playing on the first chunk
+ * instead of waiting for the whole clip. Null when no TTS model streams (the caller then asks for a whole file).
+ */
+export async function geminiSpeechStream(text: string, lang: string, signal?: AbortSignal): Promise<{ stream: ReadableStream<Uint8Array>; rate: number } | null> {
   const key = geminiKey();
   if (!key) return null;
-  const model = process.env.ASSISTANT_GEMINI_TTS_MODEL || 'gemini-3.8-flash-lite-tts';
-  const voice = process.env.ASSISTANT_GEMINI_VOICE || 'Puck';
-  const style = 'a cheerful, friendly little robot assistant; warm and upbeat, clear pronunciation, natural pace';
-  const say = `Say in a ${style} voice: ${text}`;
-  // Newer Interactions API first; the classic generateContent audio output as a fallback.
-  const attempts: [string, unknown][] = [
-    [
-      `${BASE}/interactions`,
-      {
-        model,
-        input: [{ type: 'user_input', content: [{ type: 'text', text, annotations: [{ type: 'speech_metadata', style }] }] }],
-        response_format: { type: 'audio' },
-        generation_config: { speech_config: [{ voice }] },
+  for (const model of ttsModels()) {
+    const timer = deadline(signal, 15_000, 60_000);
+    const res = await fetch(`${BASE}/models/${model}:streamGenerateContent?alt=sse`, {
+      method: 'POST',
+      headers: { 'x-goog-api-key': key, 'content-type': 'application/json' },
+      body: JSON.stringify(ttsBody(text, lang)),
+      signal: timer.signal,
+    }).catch(() => null);
+    if (!res?.ok || !res.body) {
+      timer.done();
+      const detail = (await res?.text().catch(() => '')) ?? '';
+      console.error('[assistant] Gemini TTS stream', model, res?.status, detail.slice(0, 300));
+      if (res && (res.status === 404 || res.status === 429)) rest(model, res.status, detail);
+      if (signal?.aborted) return null;
+      continue;
+    }
+    const chunks = events(res.body);
+    // The first audio chunk decides: no audio in it means this model does not speak, try the next one.
+    let first: { data: string; mime: string } | null = null;
+    try {
+      while (!first) {
+        const next = await chunks.next();
+        if (next.done) break;
+        first = findAudio(next.value);
+      }
+    } catch {
+      first = null;
+    }
+    timer.started();
+    if (!first) {
+      timer.abort();
+      if (signal?.aborted) return null;
+      continue;
+    }
+    const head = first;
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        controller.enqueue(new Uint8Array(Buffer.from(head.data, 'base64')));
+        try {
+          for await (const chunk of chunks) {
+            const audio = findAudio(chunk);
+            if (audio) controller.enqueue(new Uint8Array(Buffer.from(audio.data, 'base64')));
+          }
+        } catch {
+          // the caller left or the stream broke: what was sent is still played
+        } finally {
+          timer.done();
+          try {
+            controller.close();
+          } catch {
+            // already cancelled
+          }
+        }
       },
-    ],
-    [
-      `${BASE}/models/${model}:generateContent`,
-      { contents: [{ parts: [{ text: say }] }], generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } },
-    ],
-    [
-      `${BASE}/models/gemini-2.5-flash-preview-tts:generateContent`,
-      { contents: [{ parts: [{ text: say }] }], generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } },
-    ],
+      // The listener stopped Sunny (or left): stop generating speech nobody will hear.
+      cancel: () => timer.abort(),
+    });
+    return { stream, rate: rateOf(head.mime) };
+  }
+  return null;
+}
+
+/** Speech from Gemini TTS (free tier) as a playable WAV, or null when it is unavailable or over quota. */
+export async function geminiSpeech(text: string, lang = 'uz-UZ'): Promise<{ body: Buffer; type: string } | null> {
+  const key = geminiKey();
+  if (!key) return null;
+  const style = VOICE_STYLE[lang] ?? VOICE_STYLE['uz-UZ'];
+  const [model] = ttsModels();
+  if (!model) return null;
+  // Newer Interactions API first (Gemini 3 TTS models only: older ones refuse speech annotations); the classic
+  // generateContent audio output as a fallback.
+  const attempts: [string, unknown][] = [
+    ...(/^gemini-3/.test(model)
+      ? [
+          [
+            `${BASE}/interactions`,
+            {
+              model,
+              input: [{ type: 'user_input', content: [{ type: 'text', text, annotations: [{ type: 'speech_metadata', style }] }] }],
+              response_format: { type: 'audio' },
+              generation_config: { speech_config: [{ voice: ttsVoice() }] },
+            },
+          ] as [string, unknown],
+        ]
+      : []),
+    ...ttsModels().map((m): [string, unknown] => [`${BASE}/models/${m}:generateContent`, ttsBody(text, lang)]),
   ];
   let audio: { data: string; mime: string } | null = null;
   for (const [url, body] of attempts) {
@@ -161,7 +376,10 @@ export async function geminiSpeech(text: string): Promise<{ body: Buffer; type: 
       signal: AbortSignal.timeout(25_000),
     }).catch(() => null);
     if (!res?.ok) {
-      console.error('[assistant] Gemini TTS', url.split('/').pop(), res?.status, (await res?.text().catch(() => ''))?.slice(0, 300));
+      const detail = (await res?.text().catch(() => '')) ?? '';
+      console.error('[assistant] Gemini TTS', url.split('/').pop(), res?.status, detail.slice(0, 300));
+      const used = /models\/([^:]+):/.exec(url)?.[1] ?? model;
+      if (res && (res.status === 404 || res.status === 429)) rest(used, res.status, detail);
       continue;
     }
     audio = findAudio(await res.json().catch(() => null));
@@ -171,7 +389,58 @@ export async function geminiSpeech(text: string): Promise<{ body: Buffer; type: 
   const bytes = Buffer.from(audio.data, 'base64');
   const isWav = bytes.subarray(0, 4).toString('ascii') === 'RIFF';
   if (isWav) return { body: bytes, type: 'audio/wav' };
-  const rate = Number(/rate=(\d+)/.exec(audio.mime)?.[1]) || 24000;
   if (audio.mime.includes('mpeg') || audio.mime.includes('mp3')) return { body: bytes, type: 'audio/mpeg' };
-  return { body: pcmToWav(bytes, rate), type: 'audio/wav' };
+  return { body: pcmToWav(bytes, rateOf(audio.mime)), type: 'audio/wav' };
+}
+
+const HEARD: Record<string, string> = {
+  'uz-UZ': 'The speaker talks Uzbek (sometimes mixed with Russian or English words). Write Uzbek in the Latin alphabet with oʻ, gʻ, sh, ch.',
+  'ru-RU': 'The speaker talks Russian. Write it in Cyrillic.',
+  'en-US': 'The speaker talks English.',
+};
+
+/**
+ * Speech → text with Gemini, for browsers whose own recognition has no Uzbek (Safari, iPhone, Firefox). The audio is
+ * only sent to Gemini and never stored. Empty string when nothing was said, null when no model could listen.
+ */
+export async function geminiTranscribe(audio: Buffer, mime: string, lang: string, signal?: AbortSignal): Promise<string | null> {
+  const key = geminiKey();
+  if (!key) return null;
+  const prompt = `Transcribe this voice message word for word, exactly as spoken. ${HEARD[lang] ?? HEARD['uz-UZ']} Brand names: SUN MEDIA. Output only the transcript, no quotes, notes or translation. If there is no intelligible speech, output a single dash: -`;
+  const models = awake([process.env.ASSISTANT_GEMINI_STT_MODEL, 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-2.5-flash']);
+  for (let i = 0, attempt = 0; i < models.length && attempt < 6; attempt++) {
+    const model = models[i];
+    const thinkingConfig = thinkingFor(model);
+    const res = await fetch(`${BASE}/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'x-goog-api-key': key, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ inlineData: { mimeType: mime, data: audio.toString('base64') } }, { text: prompt }] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 500, ...(thinkingConfig ? { thinkingConfig } : {}) },
+      }),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000),
+    }).catch(() => null);
+    if (!res) {
+      if (signal?.aborted) return null;
+      i++;
+      continue;
+    }
+    if (!res.ok) {
+      const detail = (await res.text().catch(() => '')).slice(0, 600);
+      console.error('[assistant] Gemini STT', model, res.status, detail.slice(0, 300));
+      if (refusedThinking(model, res.status, detail)) continue;
+      if (res.status === 404 || res.status === 429 || res.status >= 500) rest(model, res.status, detail);
+      i++;
+      continue;
+    }
+    const data = (await res.json().catch(() => null)) as { candidates?: { content?: Content }[] } | null;
+    const text = (data?.candidates?.[0]?.content?.parts ?? [])
+      .filter((p) => !p.thought)
+      .map((p) => p.text ?? '')
+      .join('')
+      .trim()
+      .replace(/^["«“]|["»”]$/g, '');
+    return text === '-' ? '' : text;
+  }
+  return null;
 }

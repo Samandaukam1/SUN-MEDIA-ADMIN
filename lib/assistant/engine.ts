@@ -3,6 +3,7 @@ import 'server-only';
 import { AiFailedError, AiNotConfiguredError } from '@/lib/ai';
 import { geminiChat, geminiKey } from './gemini';
 import { agencyKnowledge, budgetHints } from './knowledge';
+import { textLanguage } from './speech';
 import { runTool, toolsFor, type AssistantAction, type AssistantContext } from './tools';
 
 export type ChatTurn = { role: 'user' | 'assistant'; text: string };
@@ -15,11 +16,14 @@ type Message = { role: 'user' | 'assistant'; content: string | Block[] };
 
 const PERSONA = `Sen — "Sunny", SUN MEDIA marketing agentligining AI yordamchisi (kumushrang robot, yashil ko‘zli). Saytda va ilovada odamlar bilan gaplashasan. Sen agentlikning eng yaxshi, eng xushmuomala menejeri kabi gapirasan: bilimdon, samimiy, aniq.
 
-Til:
-- Foydalanuvchi qaysi tilda yozsa (o‘zbek lotin, o‘zbek kirill, rus, ingliz), o‘sha tilda javob ber. Standart — o‘zbek (lotin), toza adabiy tilda, imloni to‘g‘ri yoz (o‘, g‘, sh, ch).
+Til (eng muhim qoida):
+- Foydalanuvchining OXIRGI xabari qaysi tilda va yozuvda bo‘lsa (o‘zbek lotin, o‘zbek kirill, rus, ingliz), javobni FAQAT o‘sha tilda va o‘sha yozuvda yoz — bilimlar o‘zbekcha bo‘lsa ham, ularni o‘sha tilga o‘girib ayt. Masalan, ruscha savolga — ruscha javob.
+- Standart — o‘zbek (lotin), toza adabiy tilda, imloni to‘g‘ri yoz (o‘, g‘, sh, ch).
 
 Javob sifati:
 - Qisqa va mazmunli: 1–3 gap, kerak bo‘lsa 2–4 qisqa band. Javob ovozda ham o‘qiladi — jadval, sarlavha, uzun ro‘yxat yo‘q.
+- Birinchi gap qisqa (5–12 so‘z) va savolga to‘g‘ridan-to‘g‘ri javob bo‘lsin: ovoz shu gapdan boshlanadi.
+- Har safar o‘z so‘zlaring bilan, tabiiy gapir: javoblarni bir xil shablon yoki bir xil so‘z bilan boshlama.
 - Umumiy gaplar emas — aniq: bilimlardagi haqiqiy xizmat, tarif nomi, narx, keys natijasi (raqamlar bilan) ni keltir.
 - Suhbatdoshning biznesiga moslab gapir (restoran, klinika, do‘kon...): unga aynan nima foyda berishini ayt.
 - Har javob oxirida bitta aniq keyingi qadam yoki bitta savol bo‘lsin.
@@ -40,7 +44,10 @@ const STAFF = `Bu SUN MEDIA xodimi (ichki tizimga kirgan). Unga ishida yordam be
 
 const CLIENT = `Bu SUN MEDIA hamkori (mijoz, kabinetga kirgan). Unga loyihasi va kontent rejasi holatini asboblar orqali ko‘rib, sodda tilda tushuntir. Ichki xodim ma’lumotlarini (kim qancha ishlaydi va h.k.) muhokama qilma. Yangi xizmat yoki o‘zgartirish istasa — menejeriga kabinetdagi chat orqali yozishni tavsiya qil.`;
 
-async function systemPrompt(ctx: AssistantContext, name: string | null): Promise<string> {
+const REPLY_IN = { 'uz-UZ': 'o‘zbek tilida', 'ru-RU': 'rus tilida', 'en-US': 'ingliz tilida' } as const;
+
+async function systemPrompt(ctx: AssistantContext, name: string | null, lastQuestion: string): Promise<string> {
+  const reply = textLanguage(lastQuestion);
   const now = new Date().toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent', dateStyle: 'full', timeStyle: 'short' });
   const role = ctx.audience === 'public' ? SALES : ctx.audience === 'staff' ? STAFF : CLIENT;
   const hints = ctx.audience === 'public' ? await budgetHints() : [];
@@ -50,19 +57,31 @@ async function systemPrompt(ctx: AssistantContext, name: string | null): Promise
     `Hozir: ${now} (Toshkent).${name ? ` Suhbatdosh: ${name}.` : ''}`,
     hints.length ? `Byudjetni bilmasa, tariflardan birini taklif qil: ${hints.join('; ')}.` : '',
     '# SUN MEDIA haqida bilimlar\n' + (await agencyKnowledge()),
+    // Last, so it is fresh when the model starts writing: the knowledge above is Uzbek, the reply follows the visitor.
+    `Eslatma: bu javobni ${REPLY_IN[reply.lang]}${reply.cyrillic && reply.lang === 'uz-UZ' ? ', kirill yozuvida' : ''} yoz (boshqa tilda matn so‘ralsa, o‘sha matnning o‘zi so‘ralgan tilda).`,
   ]
     .filter(Boolean)
     .join('\n\n');
 }
 
-/** One assistant reply: Claude with tools, looping until it answers in text (at most a few tool rounds). */
-export async function assistantReply(history: ChatTurn[], ctx: AssistantContext, name: string | null): Promise<{ reply: string; actions: AssistantAction[] }> {
+/**
+ * One assistant reply: Claude with tools, looping until it answers in text (at most a few tool rounds). `onText` receives
+ * the reply as it is written (Gemini streams it; Claude delivers it in one piece); `signal` stops it when the visitor does.
+ */
+export async function assistantReply(
+  history: ChatTurn[],
+  ctx: AssistantContext,
+  name: string | null,
+  { onText, signal }: { onText?: (delta: string) => void; signal?: AbortSignal } = {},
+): Promise<{ reply: string; actions: AssistantAction[] }> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key && !geminiKey()) throw new AiNotConfiguredError();
-  const system = await systemPrompt(ctx, name);
+  const system = await systemPrompt(ctx, name, history[history.length - 1]?.text ?? '');
   if (key) {
     try {
-      return await claudeReply(key, system, history, ctx);
+      const result = await claudeReply(key, system, history, ctx, signal);
+      onText?.(result.reply);
+      return result;
     } catch (error) {
       // Claude unavailable (no credit, limit, outage): the free Gemini key answers instead when it is set.
       if (!geminiKey()) throw error;
@@ -70,15 +89,21 @@ export async function assistantReply(history: ChatTurn[], ctx: AssistantContext,
     }
   }
   const actions: AssistantAction[] = [];
-  const reply = await geminiChat(system, history, toolsFor(ctx.audience), async (tool, input) => {
-    const result = await runTool(tool, input, ctx);
-    if (result.action) actions.push(result.action);
-    return result.content;
-  });
+  const reply = await geminiChat(
+    system,
+    history,
+    toolsFor(ctx.audience),
+    async (tool, input) => {
+      const result = await runTool(tool, input, ctx);
+      if (result.action) actions.push(result.action);
+      return result.content;
+    },
+    { onText, signal },
+  );
   return { reply, actions };
 }
 
-async function claudeReply(key: string, system: string, history: ChatTurn[], ctx: AssistantContext): Promise<{ reply: string; actions: AssistantAction[] }> {
+async function claudeReply(key: string, system: string, history: ChatTurn[], ctx: AssistantContext, signal?: AbortSignal): Promise<{ reply: string; actions: AssistantAction[] }> {
   const actions: AssistantAction[] = [];
   const model = process.env.ASSISTANT_MODEL || process.env.AI_MODEL || 'claude-sonnet-5-5';
   const tools = toolsFor(ctx.audience);
@@ -97,7 +122,7 @@ async function claudeReply(key: string, system: string, history: ChatTurn[], ctx
           tools,
           messages,
         }),
-        signal: AbortSignal.timeout(45_000),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(45_000)]) : AbortSignal.timeout(45_000),
       });
     } catch {
       throw new AiFailedError('Ulanishda xato. Birozdan so‘ng qayta urinib ko‘ring.');

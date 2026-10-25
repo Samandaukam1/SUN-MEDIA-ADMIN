@@ -64,7 +64,7 @@ export async function agencyKnowledge(): Promise<string> {
   const pages = c.pages.filter((p) => p.is_published).map((p) => `${p.path} — ${p.nav_label || plainTitle(p.title)}`);
   if (pages.length) lines.push('', '## Sayt sahifalari', ...pages.map((p) => `- ${p}`));
 
-  return cut(lines.join('\n'), 28_000);
+  return cut(lines.join('\n'), 16_000);
 }
 
 /** Cheapest published tariff with a price: offered as a budget hint when the visitor does not know one. */

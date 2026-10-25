@@ -24,19 +24,21 @@ const LANGS: { key: VoiceLang; label: string }[] = [
   { key: 'ru-RU', label: 'RU' },
   { key: 'en-US', label: 'EN' },
 ];
-const STORE = 'sunbot:v1';
+const STORE = 'sunbot:v2';
 
 function load(): Msg[] | null {
   try {
     const raw = sessionStorage.getItem(STORE);
-    return raw ? (JSON.parse(raw) as Msg[]) : null;
+    // Errors are not kept: an old "not connected" or timeout message must not come back after a reload.
+    const msgs = raw ? (JSON.parse(raw) as Msg[]).filter((m) => !m.error) : [];
+    return msgs.length ? msgs : null;
   } catch {
     return null;
   }
 }
 function save(msgs: Msg[]) {
   try {
-    sessionStorage.setItem(STORE, JSON.stringify(msgs.slice(-30)));
+    sessionStorage.setItem(STORE, JSON.stringify(msgs.filter((m) => !m.error).slice(-30)));
   } catch {
     // storage blocked: the chat simply does not survive a reload
   }

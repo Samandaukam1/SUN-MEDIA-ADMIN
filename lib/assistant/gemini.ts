@@ -30,7 +30,7 @@ export async function geminiChat(
   run: (name: string, input: Record<string, unknown>) => Promise<string>,
 ): Promise<string> {
   // The configured model first, then other free models (a retired or renamed model answers 404).
-  const models = [process.env.ASSISTANT_GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'].filter(
+  const models = [process.env.ASSISTANT_GEMINI_MODEL, 'gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-2.5-flash'].filter(
     (m, i, all): m is string => !!m && all.indexOf(m) === i,
   );
   let modelIndex = 0;
@@ -49,7 +49,7 @@ export async function geminiChat(
           tools: [{ functionDeclarations: tools.map(declaration) }],
           generationConfig: { maxOutputTokens: 900, temperature: 0.7 },
         }),
-        signal: AbortSignal.timeout(16_000),
+        signal: AbortSignal.timeout(12_000),
       });
     } catch {
       // Slow or unreachable: the next (lighter) free model answers instead.

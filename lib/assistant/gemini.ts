@@ -34,8 +34,6 @@ export async function geminiChat(
     (m, i, all): m is string => !!m && all.indexOf(m) === i,
   );
   let modelIndex = 0;
-  // Short thinking keeps replies fast; dropped automatically for a model that does not accept it.
-  let thinking = true;
   const contents: Content[] = history.map((t) => ({ role: t.role === 'user' ? 'user' : 'model', parts: [{ text: t.text }] }));
 
   for (let round = 0; round < 8; round++) {
@@ -49,20 +47,22 @@ export async function geminiChat(
           systemInstruction: { parts: [{ text: system }] },
           contents,
           tools: [{ functionDeclarations: tools.map(declaration) }],
-          generationConfig: { maxOutputTokens: 900, temperature: 0.7, ...(thinking ? { thinkingConfig: { thinkingLevel: 'low' } } : {}) },
+          generationConfig: { maxOutputTokens: 900, temperature: 0.7 },
         }),
-        signal: AbortSignal.timeout(45_000),
+        signal: AbortSignal.timeout(16_000),
       });
     } catch {
+      // Slow or unreachable: the next (lighter) free model answers instead.
+      console.error('[assistant] Gemini timeout', model);
+      if (modelIndex < models.length - 1) {
+        modelIndex++;
+        continue;
+      }
       throw new AiFailedError('Ulanishda xato. Birozdan so‘ng qayta urinib ko‘ring. (GNET)');
     }
     if (!res.ok) {
       const detail = (await res.text().catch(() => '')).slice(0, 400);
       console.error('[assistant] Gemini', model, res.status, detail);
-      if (res.status === 400 && thinking && /thinking/i.test(detail)) {
-        thinking = false;
-        continue;
-      }
       // Model missing or over its own quota: try the next free model.
       if ((res.status === 404 || res.status === 429 || res.status >= 500) && modelIndex < models.length - 1) {
         modelIndex++;

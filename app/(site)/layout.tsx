@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Unbounded } from 'next/font/google';
 
+import { SunBot } from '@/components/assistant/SunBot';
 import { ApplicationDialog } from '@/components/site/ApplicationDialog';
 import { CursorGlow } from '@/components/site/CursorGlow';
 import { SiteFooter, socialLinks } from '@/components/site/SiteFooter';
@@ -60,6 +61,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       <SiteFooter settings={settings} nav={nav} />
       <ApplicationDialog labels={settings} budgets={budgetOptions(content.plans)} />
       <CursorGlow />
+      <SunBot audience="public" />
       <div className="s-grain" aria-hidden />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organization).replace(/</g, '\\u003c') }} />
       {/* After the page's markup: starts the scroll reveals without waiting for the JavaScript bundle. */}

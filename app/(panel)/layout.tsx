@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 
+import { SunBot } from '@/components/assistant/SunBot';
 import type { CreateItem } from '@/components/panel/CreateMenu';
 import { PanelShell } from '@/components/panel/PanelShell';
 import { can, canUsePanel, requireStaff } from '@/lib/auth';
@@ -36,6 +37,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
       }}
     >
       {children}
+      <SunBot audience="member" />
     </PanelShell>
   );
 }

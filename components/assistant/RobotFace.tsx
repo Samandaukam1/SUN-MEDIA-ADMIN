@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 
 import type { SoundSubscribe } from './voice';
 
-export type RobotMood = 'idle' | 'listening' | 'thinking' | 'speaking' | 'happy' | 'error' | 'offline';
+export type RobotMood = 'idle' | 'listening' | 'thinking' | 'working' | 'speaking' | 'happy' | 'error' | 'offline';
 
 /**
  * Sunny, the SUN MEDIA robot. The body is the rendered picture with its screen wiped clean; the eyes and mouth are

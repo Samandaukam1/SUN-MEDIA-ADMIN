@@ -36,7 +36,7 @@ export async function assistantContext(request: NextRequest): Promise<{ ctx: Ass
         db = client;
         userId = data.user.id;
       }
-    } else if (request.cookies.getAll().some((c) => c.name.startsWith('sb-'))) {
+    } else if (request.cookies.getAll().some((c) => c.name.startsWith('sb-')) && sameSite(request)) {
       const client = await createClient();
       const { data } = await client.auth.getClaims();
       if (data?.claims?.sub) {
@@ -57,6 +57,22 @@ export async function assistantContext(request: NextRequest): Promise<{ ctx: Ass
   const name = me.profile?.full_name ? `${me.profile.full_name}${me.roles[0] ? ` (${me.roles[0].name})` : ''}${audience === 'client' && me.clients[0] ? `, ${me.clients[0].name}` : ''}` : null;
   const owner = me.roles.some((r) => r.key === 'system_owner');
   return { ctx: { ...base, audience, db, userId, permissions: me.permissions, owner }, name, ipKey: userId };
+}
+
+/**
+ * The browser's session cookie counts only for requests from the site itself: another site cannot make Sunny act for a
+ * signed-in visitor (cross-site requests are answered as a public visitor). The app uses its token, not cookies.
+ */
+export function sameSite(request: Pick<NextRequest, 'headers'>): boolean {
+  const fetchSite = request.headers.get('sec-fetch-site');
+  if (fetchSite) return fetchSite === 'same-origin' || fetchSite === 'none';
+  const origin = request.headers.get('origin');
+  if (!origin) return true;
+  try {
+    return new URL(origin).host === request.headers.get('host');
+  } catch {
+    return false;
+  }
 }
 
 /** A small per-instance limiter: enough to stop one visitor from running up the AI bill. */

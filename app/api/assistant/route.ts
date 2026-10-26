@@ -30,7 +30,8 @@ export function OPTIONS(request: NextRequest) {
 /**
  * POST { messages: [{ role, text }] } → { reply, actions }. The conversation lives in the browser/app, not here.
  * With `stream: true` the reply arrives as it is written, one JSON object per line:
- * { t: 'delta', text } …, then { t: 'done', reply, actions } or { t: 'error', error }.
+ * { t: 'delta', text } and { t: 'step', phase: 'start' | 'end', name, … } (an action running) …, then { t: 'done', reply, actions }
+ * or { t: 'error', error }.
  */
 export async function POST(request: NextRequest) {
   const headers = { ...corsHeaders(request), 'Cache-Control': 'no-store' };
@@ -72,7 +73,12 @@ export async function POST(request: NextRequest) {
         }
       };
       try {
-        const result = await assistantReply(history, ctx, name, { onText: (text) => send({ t: 'delta', text }), signal: request.signal });
+        const result = await assistantReply(history, ctx, name, {
+          onText: (text) => send({ t: 'delta', text }),
+          // Live progress of actions: the widget shows "Vazifa yaratilmoqda…" and Sunny works, then ✓/✕ from the system.
+          onStep: (step) => send({ t: 'step', ...step }),
+          signal: request.signal,
+        });
         send({ t: 'done', ...result, audience: ctx.audience });
       } catch (error) {
         send({ t: 'error', error: failure(error).error });

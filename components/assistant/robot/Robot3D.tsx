@@ -11,6 +11,26 @@ import type { Sculpted } from './sculpt';
 import { MotionDirector, type MotionCue, type MotionMood } from './motion';
 
 const LIME = '#d4fc18';
+/** Eyes and smile under the warning light: the lime turns amber (a failed action, an error). */
+const ALARM = new THREE.Color(1, 0.5, 0.42);
+const tint = new THREE.Color();
+
+/** The picture, the face atlas and the sculpted parts, loaded once per page: a second robot (the chat header) reuses them. */
+let picture: Promise<{ body: HTMLImageElement; face: HTMLImageElement; parts: Sculpted[] }> | null = null;
+function loadPicture() {
+  const load = (src: string) =>
+    new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+  picture ??= Promise.all([load(IMAGE_URL), load(FACE_URL)]).then(async ([body, face]) => ({ body, face, parts: await sculptPicture(body) }));
+  // A failed load is tried again by the next robot, not remembered.
+  picture.catch(() => (picture = null));
+  return picture;
+}
 
 export type RobotCue = { name: MotionCue; id: number };
 type Props = {
@@ -60,6 +80,8 @@ function Robot({ image, face, parts, mood, sound, cue, box, room, calm, compact,
   const audio = useRef({ level: 0, shape: 0.5 });
   const pointer = useRef({ x: 0, y: 0, near: false });
   const light = useRef<THREE.PointLight>(null);
+  const alarm = useRef(0);
+  const brightness = useRef(0.875 + 0.25 * 0.5);
 
   useEffect(() => () => rig.dispose(), [rig]);
   useEffect(() => {
@@ -157,9 +179,11 @@ function Robot({ image, face, parts, mood, sound, cue, box, room, calm, compact,
 
     // Light: eye halos, lime accents and the glow from the ring below follow `glow`; the energy field follows `energy`.
     // The original face light at rest (glow 0.25), brighter as Sunny listens, speaks or lights up.
-    const bright = THREE.MathUtils.lerp(rig.mats.face.color.r, 0.875 + pose.glow * 0.5, damp(10, dt));
-    rig.mats.face.color.setScalar(bright);
-    rig.mats.smile.color.setScalar(bright);
+    brightness.current = THREE.MathUtils.lerp(brightness.current, 0.875 + pose.glow * 0.5, damp(10, dt));
+    alarm.current = THREE.MathUtils.lerp(alarm.current, pose.alarm, damp(10, dt));
+    tint.setScalar(1).lerp(ALARM, alarm.current).multiplyScalar(brightness.current);
+    rig.mats.face.color.copy(tint);
+    rig.mats.smile.color.copy(tint);
     if (light.current) light.current.intensity = THREE.MathUtils.lerp(light.current.intensity, 0.6 + pose.glow * 1.8, damp(8, dt));
     const pm = rig.particles.material as THREE.PointsMaterial;
     pm.opacity = THREE.MathUtils.lerp(pm.opacity, pose.energy * 0.9, damp(6, dt));
@@ -235,17 +259,13 @@ export default function Robot3D({ active, onReady, onFail, ...props }: Props) {
   handlers.current = { onReady, onFail };
   const fail = useCallback(() => handlers.current.onFail(), []);
   useEffect(() => {
-    const load = (src: string) =>
-      new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new Image();
-        img.decoding = 'async';
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = src;
-      });
-    Promise.all([load(IMAGE_URL), load(FACE_URL)])
-      .then(async ([body, face]) => setImages({ body, face, parts: await sculptPicture(body) }))
-      .catch(fail);
+    let live = true;
+    loadPicture()
+      .then((p) => live && setImages(p))
+      .catch(() => live && fail());
+    return () => {
+      live = false;
+    };
   }, [fail]);
   const announced = useRef(false);
   const built = useCallback(() => {

@@ -8,13 +8,17 @@
  *   2. idle cinematics — 360° turn (02), orbital flight (08) or a glance around, one at a time, only when nothing else
  *      happens; any other layer cancels them with a smooth blend-out;
  *   3. interaction — curious look at the pointer (07), attention on a tap;
- *   4. chat state — listening (04), thinking (03), speaking (05), happy (06), error, offline;
- *   5. cues — welcome (09) on opening, farewell on closing, a small happy nod after a reply;
+ *   4. chat state — listening (04), thinking (03), working (an action running in the system), speaking (05), happy (06),
+ *      error, offline;
+ *   5. cues — welcome (09) on opening, farewell on closing, a small happy nod after a reply, and the outcome of an action
+ *      once the system confirmed it: success (a hop with a raised hand) or fail (a head shake, warning-coloured eyes);
  *   + energy (10) — a burst when an answer is ready after thinking.
  */
 
-export type MotionMood = 'idle' | 'listening' | 'thinking' | 'speaking' | 'happy' | 'error' | 'offline';
-export type MotionCue = 'welcome' | 'farewell' | 'replied' | 'tap';
+export type MotionMood = 'idle' | 'listening' | 'thinking' | 'working' | 'speaking' | 'happy' | 'error' | 'offline';
+export type MotionCue = 'welcome' | 'farewell' | 'replied' | 'tap' | 'success' | 'fail';
+/** Cues that report something to the person: they play in every state (the others wait for a free robot). */
+const NEWS: MotionCue[] = ['replied', 'success', 'fail'];
 export type IdleAct = 'spin' | 'orbit' | 'glance';
 export type Vec3 = [number, number, number];
 
@@ -41,9 +45,11 @@ export type Pose = {
   /** Lime light on the eyes and accents, and the particle/energy field. */
   glow: number;
   energy: number;
+  /** Warning colour on the eyes (a failed action, an error), 0–1. */
+  alarm: number;
 };
 
-const CUE_SECONDS: Record<MotionCue, number> = { welcome: 1.9, farewell: 1.1, replied: 0.9, tap: 0.6 };
+const CUE_SECONDS: Record<MotionCue, number> = { welcome: 1.9, farewell: 1.1, replied: 0.9, tap: 0.6, success: 2.2, fail: 1.7 };
 const IDLE_SECONDS: Record<IdleAct, number> = { spin: 2.8, orbit: 4.6, glance: 2.4 };
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
@@ -84,6 +90,7 @@ export function restPose(): Pose {
     flat: 0,
     glow: 0.25,
     energy: 0,
+    alarm: 0,
   };
 }
 
@@ -100,14 +107,20 @@ export class MotionDirector {
   private readonly random: () => number;
   private readonly calm: boolean;
   private readonly compact: boolean;
+  private readonly float: number;
   private roam = true;
 
-  constructor({ calm = false, compact = false, random = Math.random, now = 0 }: { calm?: boolean; compact?: boolean; random?: () => number; now?: number } = {}) {
+  /**
+   * `calm` (reduced motion): no turns or flights, a gentle float only; the chat states still show. `float` scales the
+   * floating (tests set 0 to look at one movement alone).
+   */
+  constructor({ calm = false, compact = false, float, random = Math.random, now = 0 }: { calm?: boolean; compact?: boolean; float?: number; random?: () => number; now?: number } = {}) {
     this.calm = calm;
     this.compact = compact;
+    this.float = float ?? (calm ? 0.35 : 1);
     this.random = random;
-    // The first cinematic comes after the visitor has had a moment with the page.
-    this.nextIdle = now + 9 + random() * 6;
+    // The first cinematic comes soon, so the robot is seen to be alive, not a picture.
+    this.nextIdle = now + 4 + random() * 3;
   }
 
   /** The idle cinematic running now (null while none, or while one is blending out). */
@@ -121,18 +134,18 @@ export class MotionDirector {
     if (this.mood === 'thinking' && (mood === 'speaking' || mood === 'idle' || mood === 'happy')) this.burst = now;
     this.mood = mood;
     this.since = now;
-    if (mood === 'idle') this.nextIdle = Math.max(this.nextIdle, now + 10 + this.random() * 8);
+    if (mood === 'idle') this.nextIdle = Math.max(this.nextIdle, now + 6 + this.random() * 5);
     else this.stopIdle(now);
     // Listening and speaking own the robot: gestures that would turn it away are dropped.
-    if (mood === 'listening' || mood === 'speaking') this.cues = this.cues.filter((c) => c.name === 'replied');
+    if (mood === 'listening' || mood === 'speaking') this.cues = this.cues.filter((c) => NEWS.includes(c.name));
   }
 
   cue(name: MotionCue, now: number) {
-    if ((this.mood === 'listening' || this.mood === 'speaking') && name !== 'replied') return;
+    if ((this.mood === 'listening' || this.mood === 'speaking') && !NEWS.includes(name)) return;
     this.cues = this.cues.filter((c) => c.name !== name && !(name === 'farewell' && c.name === 'welcome') && !(name === 'welcome' && c.name === 'farewell'));
     this.cues.push({ name, start: now });
     this.stopIdle(now);
-    this.nextIdle = Math.max(this.nextIdle, now + 8);
+    this.nextIdle = Math.max(this.nextIdle, now + 6);
   }
 
   /** Pointer relative to the robot (−1…1 each way); `near` when it is close enough to be looked at. */
@@ -159,7 +172,7 @@ export class MotionDirector {
       const over = this.idle.abortAt !== undefined ? now - this.idle.abortAt > 0.5 : now - this.idle.start > IDLE_SECONDS[this.idle.act];
       if (over) {
         this.idle = null;
-        this.nextIdle = now + 14 + this.random() * 14;
+        this.nextIdle = now + 9 + this.random() * 7;
       }
       return;
     }
@@ -181,7 +194,7 @@ export class MotionDirector {
     const m = this.mood;
 
     // 01 — anti-gravity float: rise and fall with a little drift, tilt and turn; the head trails the body.
-    const amp = this.calm ? 0 : m === 'listening' ? 0.45 : m === 'thinking' ? 0.65 : m === 'offline' ? 0.35 : 1;
+    const amp = this.float * (m === 'listening' ? 0.45 : m === 'thinking' || m === 'working' ? 0.6 : m === 'offline' ? 0.35 : 1);
     p.pos[1] += amp * (0.055 * Math.sin(0.95 * t) + 0.02 * Math.sin(2.3 * t + 1.3));
     p.pos[0] += amp * 0.025 * Math.sin(0.41 * t + 0.7);
     p.body = [amp * 0.035 * Math.sin(0.8 * t + 0.4), amp * 0.09 * Math.sin(0.33 * t), amp * 0.045 * Math.sin(0.57 * t + 1.1)];
@@ -259,6 +272,24 @@ export class MotionDirector {
       p.flat = 1;
       p.energy = 0.3 + 0.12 * Math.sin(3 * t);
       p.glow = 0.3 + 0.2 * Math.sin(3 * t);
+    } else if (m === 'working') {
+      // Doing it in the system: turned a little to an unseen console, head down to it, hands typing, eyes scanning
+      // fast, the energy ring spinning — clearly not just thinking.
+      const k = ease(clamp01(phase / 0.4));
+      p.body[1] += -0.2 * k;
+      p.body[0] += 0.07 * k;
+      p.head[0] += 0.14 * k;
+      p.head[1] += -0.12 * k;
+      p.armL[0] += (0.12 * Math.sin(9 * t)) * k;
+      p.armR[0] += (0.12 * Math.sin(9 * t + Math.PI)) * k;
+      p.armL[2] += -0.16 * k;
+      p.armR[2] += 0.16 * k;
+      p.eyeOpen = Math.min(p.eyeOpen, 0.85);
+      p.look = [-0.45 + 0.3 * Math.sin(5 * t), 0.35];
+      p.smile = 0;
+      p.flat = 1;
+      p.energy = (0.55 + 0.25 * Math.sin(6 * t)) * k;
+      p.glow = 0.45 + 0.25 * Math.sin(6 * t);
     } else if (m === 'speaking') {
       // 05 — the head nods on loud syllables, sways gently; one arm gestures with the flow of the speech.
       p.head[0] += -0.03 + this.level * 0.09;
@@ -291,6 +322,7 @@ export class MotionDirector {
       p.smile = 0;
       p.flat = 1;
       p.glow = 0.1;
+      p.alarm = 0.6;
     } else if (m === 'offline') {
       p.head[0] += 0.18;
       p.eyeOpen = Math.min(p.eyeOpen, 0.55);
@@ -323,6 +355,29 @@ export class MotionDirector {
         p.head[0] += -0.07 * Math.sin(Math.PI * q);
         p.smile = Math.max(p.smile, 1 + 0.2 * w);
         p.glow = Math.max(p.glow, 0.4 * w);
+      } else if (c.name === 'success') {
+        // Done, and the system confirmed it: a hop with a twist, the pointing hand raised, smiling eyes, a flare.
+        p.pos[1] += 0.2 * Math.sin(Math.PI * clamp01(q / 0.55));
+        p.body[1] += 0.32 * Math.sin(2 * Math.PI * clamp01(q / 0.7)) * w;
+        p.armL[2] += -0.65 * w;
+        p.armR[2] += 0.3 * w;
+        p.head[0] += -0.08 * w;
+        p.smile = Math.max(p.smile, 1 + 0.4 * w);
+        p.flat *= 1 - w;
+        p.talk *= 1 - w * 0.5;
+        p.eyeOpen = Math.min(p.eyeOpen, 1 - 0.15 * w);
+        p.glow = Math.max(p.glow, 0.95 * w);
+        p.energy = Math.max(p.energy, (1 - q) * w);
+      } else if (c.name === 'fail') {
+        // The system refused or failed: a slow head shake, eyes down and warning-coloured, the light dims.
+        p.head[1] += 0.3 * Math.sin(q * Math.PI * 6) * (1 - q) * w;
+        p.head[0] += 0.13 * w;
+        p.eyeOpen = Math.min(p.eyeOpen, 1 - 0.25 * w);
+        p.smile *= 1 - w;
+        p.flat = Math.max(p.flat, w);
+        p.glow = Math.min(p.glow, 0.1 + 0.9 * (1 - w));
+        p.energy *= 1 - w;
+        p.alarm = Math.max(p.alarm, w);
       } else {
         p.head[2] += 0.13 * Math.sin(Math.PI * q);
         p.eyeOpen = Math.max(p.eyeOpen, 1 + 0.2 * w);

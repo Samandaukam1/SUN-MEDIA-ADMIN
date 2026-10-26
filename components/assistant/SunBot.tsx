@@ -60,11 +60,18 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
     landed: false,
   });
   const [cue, setCue] = useState<RobotCue | undefined>(undefined);
+  // The header robot (phones): its own ready / failed state; it falls back to the flat robot on its own.
+  const [head3d, setHead3d] = useState<'loading' | 'ready' | 'failed'>('loading');
   const launcher = useRef<HTMLButtonElement>(null);
   const look = useRef(0);
   const sendCue = useCallback((name: RobotCue['name']) => setCue((c) => ({ name, id: (c?.id ?? 0) + 1 })), []);
   const on3dReady = useCallback(() => setThree((s) => (s.ready ? s : { ...s, ready: true })), []);
   const on3dFail = useCallback(() => setThree((s) => ({ ...s, ok: false, ready: false })), []);
+  const onHeadReady = useCallback(() => setHead3d('ready'), []);
+  const onHeadFail = useCallback(() => setHead3d('failed'), []);
+  const onReplied = useCallback(() => sendCue('replied'), [sendCue]);
+  // Only after the server confirmed the change (or refused it): never from the chat's own guess.
+  const onOutcome = useCallback((ok: boolean) => sendCue(ok ? 'success' : 'fail'), [sendCue]);
 
   useEffect(() => {
     const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
@@ -147,7 +154,41 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
 
   return (
     <div className={`sb-root ${lite ? 'sb-lite' : ''}`}>
-      {wanted ? <SunBotChat key={audience} audience={audience} open={open} closing={closing} onClose={close} onFace={setFace} onReplied={() => sendCue('replied')} /> : null}
+      {wanted ? (
+        <SunBotChat
+          key={audience}
+          audience={audience}
+          open={open}
+          closing={closing}
+          onClose={close}
+          onFace={setFace}
+          onReplied={onReplied}
+          onOutcome={onOutcome}
+          head={
+            // On a phone the open chat covers the launcher: the same 3D robot lives in the header instead.
+            three.ok && three.compact && head3d !== 'failed' ? (
+              <span className={`sb-head-3d ${head3d === 'ready' ? 'ready' : ''}`} aria-hidden>
+                <RobotFace mood={face.mood} sound={face.sound} size={76} className="sb-head-robot" />
+                <span className="sb-head-canvas">
+                  <Robot3D
+                    mood={face.mood}
+                    sound={face.sound}
+                    cue={cue}
+                    box={76}
+                    room={12}
+                    calm={three.calm}
+                    compact
+                    roam={false}
+                    active={open && three.visible}
+                    onReady={onHeadReady}
+                    onFail={onHeadFail}
+                  />
+                </span>
+              </span>
+            ) : undefined
+          }
+        />
+      ) : null}
 
       {!open && teaser ? (
         <button type="button" className="sb-teaser" onClick={show}>

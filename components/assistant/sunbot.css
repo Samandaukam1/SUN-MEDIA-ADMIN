@@ -64,6 +64,9 @@
 /* thinking: narrowed eyes look from side to side while a thin arc circles the head */
 .sb-mood-thinking .sb-eyes { animation: sb-look 1.8s ease-in-out infinite; }
 .sb-mood-thinking .sb-eye { animation: none; transform: scaleY(0.72); }
+/* working (an action running in the system): faster scanning eyes and a faster, brighter arc */
+.sb-mood-working .sb-eyes { animation: sb-look 0.9s ease-in-out infinite; }
+.sb-mood-working .sb-eye { animation: none; transform: scaleY(0.8); }
 
 /* speaking: the mouth moves with the real audio (set from JS), the eyes lift slightly on loud syllables */
 .sb-mood-speaking .sb-eyes { transform: translateY(calc(var(--lvl) * -3%)); }
@@ -76,10 +79,12 @@
 .sb-mood-offline .sb-eye { animation: none; transform: scaleY(0.55); }
 
 .sb-mood-thinking .sb-smile,
+.sb-mood-working .sb-smile,
 .sb-mood-error .sb-smile,
 .sb-mood-offline .sb-smile,
 .sb-mood-speaking .sb-smile { opacity: 0; }
 .sb-mood-thinking .sb-flat,
+.sb-mood-working .sb-flat,
 .sb-mood-error .sb-flat,
 .sb-mood-offline .sb-flat,
 .sb-mood-speaking .sb-talk { opacity: 1; }
@@ -120,6 +125,11 @@
   opacity: 1;
   animation: sb-spin 1.5s linear infinite;
 }
+.sb-mood-working .sb-orbit {
+  opacity: 1;
+  animation: sb-spin 0.7s linear infinite;
+}
+.sb-mood-working .sb-halo { opacity: 0.6; transform: scale(0.95); }
 
 @keyframes sb-blink {
   0%, 44%, 47.5%, 90%, 93.5%, 95%, 98.5%, 100% { transform: scaleY(1); }
@@ -331,7 +341,7 @@
 @media (prefers-reduced-motion: reduce) {
   .sb-fly, .sb-fly::after, .sb-hover, .sb-ring, .sb-ring::before, .sb-ring::after, .sb-eye, .sb-eyes, .sb-face, .sb-panel, .sb-teaser, .sb-eq i, .sb-stop, .sb-issue,
   .sb-msg.streaming .sb-bubble::after { animation: none !important; }
-  .sb-mood-thinking .sb-orbit { animation: none; opacity: 0.6; }
+  .sb-mood-thinking .sb-orbit, .sb-mood-working .sb-orbit { animation: none; opacity: 0.6; }
   .sb-halo, .sb-eyes, .sb-launcher .sb-robot { transition: none !important; }
   .sb-mood-listening .sb-halo, .sb-mood-speaking .sb-halo { transform: scale(0.95); }
 }

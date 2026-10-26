@@ -171,6 +171,42 @@ button.sb-chip { background: none; cursor: pointer; font: inherit; font-size: 13
 }
 .sb-chip:hover { background: rgb(212 252 24 / 0.1); }
 .sb-chip.done { border-color: transparent; background: rgb(212 252 24 / 0.14); }
+.sb-chip.fail { border-color: transparent; color: #ffb4b4; background: rgb(255 138 138 / 0.12); }
+.sb-chip.done, .sb-chip.fail { animation: sb-in 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* A change waiting for the person: what exactly will happen, and two buttons. */
+.sb-confirm {
+  flex: 1 1 100%;
+  box-sizing: border-box;
+  width: 300px;
+  max-width: 100%;
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgb(212 252 24 / 0.35);
+  background: rgb(212 252 24 / 0.06);
+  font-size: 14px;
+  animation: sb-in 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sb-confirm.cancelled, .sb-confirm.done, .sb-confirm.failed { border-color: rgb(255 255 255 / 0.1); background: rgb(255 255 255 / 0.03); }
+.sb-confirm-buttons { display: flex; gap: 8px; }
+.sb-confirm-buttons button { flex: 1; min-height: 40px; padding: 0 12px; white-space: nowrap; border-radius: 12px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.sb-confirm-yes { border: none; color: #050506; background: var(--sb-lime); }
+.sb-confirm-no { border: 1px solid rgb(255 255 255 / 0.18); color: var(--sb-text); background: none; }
+.sb-confirm-yes:focus-visible, .sb-confirm-no:focus-visible { outline: 2px solid var(--sb-lime); outline-offset: 2px; }
+.sb-confirm-state { font-size: 13px; color: var(--sb-muted); }
+.sb-confirm.done .sb-confirm-state { color: var(--sb-lime); }
+.sb-confirm.failed .sb-confirm-state { color: #ffb4b4; }
+.sb-confirm.running .sb-confirm-state { animation: sb-pulse 1s infinite; }
+
+/* Phones: the 3D robot sits in the header (the launcher is under the panel); the flat one shows until it is drawn. */
+.sb-head-3d { position: relative; flex: none; width: 76px; height: 76px; }
+.sb-head-3d .sb-robot { transition: opacity 0.6s ease; }
+.sb-head-3d.ready .sb-robot { opacity: 0; }
+.sb-head-canvas { position: absolute; right: 0; bottom: 0; width: 88px; height: 88px; pointer-events: none; opacity: 0; transition: opacity 0.6s ease; }
+.sb-head-3d.ready .sb-head-canvas { opacity: 1; }
+.sb-head-canvas canvas { display: block; }
 .sb-typing { display: flex; gap: 5px; padding: 14px 16px; }
 .sb-typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--sb-muted); animation: sb-dots 1.2s infinite; }
 .sb-typing i:nth-child(2) { animation-delay: 0.15s; }
@@ -266,6 +302,10 @@ button.sb-chip { background: none; cursor: pointer; font: inherit; font-size: 13
 .sb-send:disabled { opacity: 0.35; cursor: default; }
 .sb-mic:disabled { opacity: 0.5; cursor: progress; }
 .sb-stop { animation: sb-in 0.2s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-confirm, .sb-chip.done, .sb-chip.fail, .sb-confirm.running .sb-confirm-state { animation: none; }
+}
 
 @media (max-width: 639px) {
   .sb-panel {

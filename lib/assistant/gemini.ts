@@ -145,7 +145,7 @@ export async function geminiChat(
   };
   const nextModel = () => modelIndex < models.length - 1 && !!++modelIndex;
 
-  for (let attempt = 0; attempt < 10; attempt++) {
+  for (let attempt = 0; attempt < 14; attempt++) {
     if (signal?.aborted) break;
     const model = models[modelIndex];
     const thinkingConfig = thinkingFor(model);

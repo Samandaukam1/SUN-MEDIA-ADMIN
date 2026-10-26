@@ -1,28 +1,49 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { openApplication } from '@/components/site/ApplyButton';
 import { RobotFace, type RobotMood } from './RobotFace';
+import { answers } from './answers';
 import { store, stored } from './session';
 import { ISSUE_TEXT, useVoice, type SoundSubscribe, type VoiceLang } from './voice';
 import './sunbot-chat.css';
 
-type Action = { type: 'lead_created' } | { type: 'link'; href: string; label: string } | { type: 'open_apply' };
+type Action =
+  | { type: 'lead_created' }
+  | { type: 'link'; href: string; label: string }
+  | { type: 'open_apply' }
+  /** A change waiting for the person: shown as a card; only their click (or "ha") sends the token back. */
+  | { type: 'confirm'; token: string; text: string; state?: 'pending' | 'running' | 'done' | 'failed' | 'cancelled' }
+  /** A change the system made (ok) or refused, as the server reported it after checking the database. */
+  | { type: 'did'; name: string; ok: boolean; message: string };
 type Msg = { role: 'user' | 'assistant'; text: string; actions?: Action[]; error?: boolean; streaming?: boolean; retry?: string };
 type Done = { reply?: string; actions?: Action[] };
+type Step = { phase: 'start'; name: string; label: string } | { phase: 'end'; name: string; ok: boolean; write: boolean };
+/** How an action's result reads on its chip: done / not done. */
+const DID: Record<string, [string, string]> = {
+  check_in: ['Davomat belgilandi', 'Davomat belgilanmadi'],
+  create_task: ['Vazifa yaratildi', 'Vazifa yaratilmadi'],
+  update_task: ['Vazifa yangilandi', 'Vazifa yangilanmadi'],
+  set_content_status: ['Kontent holati o‘zgardi', 'Kontent holati o‘zgarmadi'],
+  send_message: ['Xabar yuborildi', 'Xabar yuborilmadi'],
+  edit_message: ['Xabar tahrirlandi', 'Xabar tahrirlanmadi'],
+  delete_message: ['Xabar o‘chirildi', 'Xabar o‘chirilmadi'],
+};
 
 /** Who the chat is for: the public site, the team's internal system, or a client's cabinet. */
 export type ChatAudience = 'public' | 'staff' | 'client';
 const GREETING: Record<ChatAudience, string> = {
   public: 'Salom! Men Sunny — SUN MEDIA yordamchisiman. Biznesingiz haqida aytib bering, qaysi xizmat mos kelishini topamiz.',
-  staff: 'Salom! Men Sunny — ichki yordamchingiz. Davomat, bugungi holat, kamchiliklar, vazifalar, kontent yoki CRM haqida so‘rang: tizimdan topib beraman.',
+  staff:
+    'Salom! Men Sunny — ichki yordamchingiz. So‘rang yoki buyuring: davomatni belgilayman, vazifa yarataman, chatga yozaman, kontent holatini o‘zgartiraman — hammasi sizning huquqlaringiz doirasida.',
   client: 'Salom! Men Sunny. Loyihangiz, kontent rejasi va s’yomkalar holati haqida so‘rang — tezda topib beraman.',
 };
 const SUGGESTIONS: Record<ChatAudience, string[]> = {
   public: ['Qanday xizmatlaringiz bor?', 'Tariflar narxi qancha?', 'Restoran uchun keyslar bormi?', 'Konsultatsiyaga yozilmoqchiman'],
-  staff: ['Bugun kimlar keldi, kimlar kelmadi?', 'Bugungi kamchiliklar va xavflar', 'Muddati o‘tgan vazifalar kimda?', 'Bugungi umumiy holat'],
+  staff: ['Keldimni belgila', 'Bugungi vazifalarim', 'Bugun kimlar keldi, kimlar kelmadi?', 'Bugungi kamchiliklar va xavflar'],
   client: ['Bu oy kontent holati', 'Yaqin s’yomkalar', 'Loyihamiz holati', 'Menejerga qanday yozaman?'],
 };
 /** What is sent with each question: the recent part of the chat, each message within the server's limit. */
@@ -146,6 +167,8 @@ export function SunBotChat({
   onClose,
   onFace,
   onReplied,
+  onOutcome,
+  head,
 }: {
   audience: ChatAudience;
   open: boolean;
@@ -154,6 +177,10 @@ export function SunBotChat({
   onFace: (face: ChatFace) => void;
   /** A reply was given (and spoken, if the voice is on): the 3D robot nods. */
   onReplied?: () => void;
+  /** The system confirmed (or refused) a change: the 3D robot celebrates or shakes its head. Never before the server says so. */
+  onOutcome?: (ok: boolean) => void;
+  /** The robot in the header (the 3D one on phones, where the launcher is covered); the flat robot otherwise. */
+  head?: ReactNode;
 }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
@@ -166,6 +193,9 @@ export function SunBotChat({
   const [failed, setFailed] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [spoken, setSpoken] = useState<number | null>(null);
+  const [working, setWorking] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<'success' | 'fail' | null>(null);
+  const router = useRouter();
   const voice = useVoice();
   const scroller = useRef<HTMLDivElement>(null);
   const msgsRef = useRef(msgs);
@@ -216,6 +246,20 @@ export function SunBotChat({
   }, [failed]);
 
   useEffect(() => {
+    if (!outcome) return;
+    const t = setTimeout(() => setOutcome(null), 3500);
+    return () => clearTimeout(t);
+  }, [outcome]);
+
+  const outcomeRef = useRef(onOutcome);
+  outcomeRef.current = onOutcome;
+  /** An action's result, as the server reported it: the robot reacts and the open page shows the change. */
+  const report = useCallback((ok: boolean) => {
+    setOutcome(ok ? 'success' : 'fail');
+    outcomeRef.current?.(ok);
+  }, []);
+
+  useEffect(() => {
     if (msgs.length) save(audience, msgs);
   }, [msgs, audience]);
   // The newest line stays in view, including a "Qayta urinish" button that appears when the connection returns.
@@ -250,6 +294,7 @@ export function SunBotChat({
         busyRef.current = false;
         setBusy(false);
         setMsgs((m) => m.map((x) => (x.streaming ? { ...x, streaming: false } : x)));
+        setWorking(null);
       }
       const wasTalking = voice.speaking || voice.preparing;
       voice.stopSpeaking();
@@ -267,6 +312,17 @@ export function SunBotChat({
       if (lastSent.current.text === text && now - lastSent.current.at < 800) return;
       lastSent.current = { text, at: now };
       voice.unlock();
+      // "Ha" / "yo‘q" (typed or said) right after a confirmation card answers that card, nothing else.
+      const list = base ?? msgsRef.current;
+      const last = list.length - 1;
+      const card = list[last]?.role === 'assistant' ? (list[last].actions ?? []).findIndex((a) => a.type === 'confirm' && (a.state ?? 'pending') === 'pending') : -1;
+      const answer = card >= 0 ? answers(text) : null;
+      if (answer) {
+        setMsgs([...list, { role: 'user', text }]);
+        setInput('');
+        void decideRef.current(last, card, answer === 'yes', via);
+        return;
+      }
       // A new question while the last one is still being answered replaces it.
       if (busyRef.current) interrupt(false);
       voice.stopSpeaking();
@@ -342,7 +398,7 @@ export function SunBotChat({
               const line = buffer.slice(0, i).trim();
               buffer = buffer.slice(i + 1);
               if (!line) continue;
-              let ev: { t: string; text?: string; error?: string } & Done;
+              let ev: { t: string; text?: string; error?: string; phase?: Step['phase']; label?: string; ok?: boolean; write?: boolean } & Done;
               try {
                 ev = JSON.parse(line);
               } catch {
@@ -352,6 +408,13 @@ export function SunBotChat({
                 streamed += ev.text;
                 show(streamed);
                 speech?.update(streamed);
+              } else if (ev.t === 'step') {
+                // A tool running in the system: Sunny works; a change it made or that was refused shows at once.
+                if (ev.phase === 'start') setWorking(ev.label ?? 'Bajarilmoqda');
+                else {
+                  setWorking(null);
+                  if (ev.write) report(!!ev.ok);
+                }
               } else if (ev.t === 'done') done = ev;
               else if (ev.t === 'error') error = ev.error ?? 'Xatolik yuz berdi.';
             }
@@ -367,7 +430,10 @@ export function SunBotChat({
           ? { role: 'assistant', text: streamed }
           : { role: 'assistant', text: navigator.onLine ? 'Internet bilan bog‘lanib bo‘lmadi. Qayta urinib ko‘ring.' : OFFLINE, error: true, retry: text };
       } finally {
-        if (live()) setReconnecting(false);
+        if (live()) {
+          setReconnecting(false);
+          setWorking(null);
+        }
       }
       if (!live() || !reply) return;
 
@@ -386,6 +452,8 @@ export function SunBotChat({
         setTimeout(() => setHappy(false), 4000);
       }
       if (final.actions?.some((a) => a.type === 'open_apply')) setTimeout(() => openApplication(), 600);
+      // Something changed in the system: the page behind the chat shows it without a reload.
+      if (final.actions?.some((a) => a.type === 'did' && a.ok)) router.refresh();
       if (!speech) return onReplied?.();
       if (!openRef.current) return speech.cancel();
       // The reply is the streamed bubble already on screen, or the one just added after the last rendered message.
@@ -396,8 +464,52 @@ export function SunBotChat({
       // the note about the missing voice stays readable).
       if (via === 'voice' && spoke && live() && openRef.current && !mutedRef.current) hearRef.current();
     },
-    [interrupt, lang, onReplied, voice],
+    [interrupt, lang, onReplied, report, router, voice],
   );
+
+  /** The person's answer to a confirmation card: only a "yes" sends its token, and the server runs the action. */
+  const decide = useCallback(
+    async (i: number, j: number, yes: boolean, via: 'text' | 'voice' = 'text') => {
+      const card = msgsRef.current[i]?.actions?.[j];
+      if (!card || card.type !== 'confirm' || (card.state ?? 'pending') !== 'pending') return;
+      const mark = (state: NonNullable<Extract<Action, { type: 'confirm' }>['state']>) =>
+        setMsgs((m) => m.map((x, k) => (k === i ? { ...x, actions: x.actions?.map((a, n) => (n === j && a.type === 'confirm' ? { ...a, state } : a)) } : x)));
+      voice.unlock();
+      voice.stopSpeaking();
+      const say = (text: string) => {
+        if (!mutedRef.current && openRef.current) void voice.speak(text, lang);
+      };
+      if (!yes) {
+        mark('cancelled');
+        const text = 'Bekor qilindi — tizimda hech narsa o‘zgarmadi.';
+        setMsgs((m) => [...m, { role: 'assistant', text }]);
+        if (via === 'voice') say(text);
+        return;
+      }
+      mark('running');
+      setWorking('Bajarilmoqda');
+      let data: { ok?: boolean; name?: string; message?: string; link?: { href: string; label: string } | null };
+      try {
+        const res = await fetch('/api/assistant/confirm', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: card.token }) });
+        data = await res.json().catch(() => ({ ok: false, message: 'Xatolik yuz berdi.' }));
+      } catch {
+        data = { ok: false, message: navigator.onLine ? 'Internet bilan bog‘lanib bo‘lmadi. Qayta urinib ko‘ring.' : OFFLINE };
+      }
+      setWorking(null);
+      const ok = !!data.ok;
+      mark(ok ? 'done' : 'failed');
+      report(ok);
+      const text = data.message || (ok ? 'Bajarildi.' : 'Bajarilmadi.');
+      const actions: Action[] = [{ type: 'did', name: data.name ?? '', ok, message: text }];
+      if (data.link) actions.push({ type: 'link', ...data.link });
+      setMsgs((m) => [...m, { role: 'assistant', text, actions }]);
+      say(text);
+      if (ok) router.refresh();
+    },
+    [lang, report, router, voice],
+  );
+  const decideRef = useRef(decide);
+  decideRef.current = decide;
 
   const hear = useCallback(async () => {
     voice.unlock();
@@ -448,13 +560,15 @@ export function SunBotChat({
       ? 'listening'
       : voice.speaking
         ? 'speaking'
-        : voice.transcribing || busy || voice.preparing
-          ? 'thinking'
-          : failed
-            ? 'error'
-            : happy
-              ? 'happy'
-              : 'idle';
+        : working
+          ? 'working'
+          : voice.transcribing || busy || voice.preparing
+            ? 'thinking'
+            : failed || outcome === 'fail'
+              ? 'error'
+              : happy || outcome === 'success'
+                ? 'happy'
+                : 'idle';
   const status = !online
     ? 'Internet yo‘q'
     : reconnecting
@@ -463,7 +577,9 @@ export function SunBotChat({
         ? 'Tinglayapman…'
         : voice.transcribing
           ? 'Eshitganimni yozyapman…'
-          : busy && msgs[msgs.length - 1]?.streaming
+          : working
+            ? `${working}…`
+            : busy && msgs[msgs.length - 1]?.streaming
             ? 'Javob yozilmoqda…'
             : busy
               ? 'O‘ylayapman…'
@@ -471,7 +587,11 @@ export function SunBotChat({
                 ? 'Ovoz tayyorlanmoqda…'
                 : voice.speaking
                   ? 'Gapiryapman…'
-                  : (note ?? (failed ? 'Xatolik — qayta urinib ko‘ring' : 'SUN MEDIA AI yordamchisi'));
+                  : outcome === 'success'
+                    ? 'Bajarildi ✓'
+                    : outcome === 'fail'
+                      ? 'Bajarilmadi'
+                      : (note ?? (failed ? 'Xatolik — qayta urinib ko‘ring' : 'SUN MEDIA AI yordamchisi'));
   const showSuggestions = msgs.filter((m) => m.role === 'user').length === 0 && !busy;
 
   useEffect(() => onFace({ mood, sound: voice.subscribe }), [mood, onFace, voice.subscribe]);
@@ -481,7 +601,7 @@ export function SunBotChat({
       {open ? (
         <section className={`sb-panel ${closing ? 'closing' : ''}`} role="dialog" aria-label="SUN MEDIA yordamchisi" data-lenis-prevent>
           <header className="sb-head">
-            <RobotFace mood={mood} sound={voice.subscribe} size={76} className="sb-head-robot" />
+            {head ?? <RobotFace mood={mood} sound={voice.subscribe} size={76} className="sb-head-robot" />}
             <div className="sb-head-text">
               <p className="sb-title">Sunny</p>
               <p className={`sb-status ${mood}`} role="status">
@@ -563,6 +683,28 @@ export function SunBotChat({
                         <span key={j} className="sb-chip done">
                           ✓ Ariza yuborildi
                         </span>
+                      ) : a.type === 'did' ? (
+                        <span key={j} className={`sb-chip ${a.ok ? 'done' : 'fail'}`} title={a.message}>
+                          {a.ok ? '✓' : '✕'} {DID[a.name]?.[a.ok ? 0 : 1] ?? (a.ok ? 'Bajarildi' : 'Bajarilmadi')}
+                        </span>
+                      ) : a.type === 'confirm' ? (
+                        <div key={j} className={`sb-confirm ${a.state ?? 'pending'}`} role="group" aria-label="Tasdiqlash">
+                          <p>{a.text}</p>
+                          {(a.state ?? 'pending') === 'pending' ? (
+                            <div className="sb-confirm-buttons">
+                              <button type="button" className="sb-confirm-yes" onClick={() => void decide(i, j, true)}>
+                                Tasdiqlash
+                              </button>
+                              <button type="button" className="sb-confirm-no" onClick={() => void decide(i, j, false)}>
+                                Bekor qilish
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="sb-confirm-state">
+                              {a.state === 'running' ? 'Bajarilmoqda…' : a.state === 'done' ? '✓ Bajarildi' : a.state === 'failed' ? '✕ Bajarilmadi' : 'Bekor qilindi'}
+                            </span>
+                          )}
+                        </div>
                       ) : null,
                     )}
                   </div>

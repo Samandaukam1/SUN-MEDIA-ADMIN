@@ -1,12 +1,16 @@
 import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { revalidatePath } from 'next/cache';
 
 import { commandCenterSchema } from '@/lib/schemas/command-center';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { gateSecret } from '@/lib/site/gate-token';
 import { normalizePhone } from '@/lib/site/normalize';
 import { agencyDateKey, formatTime } from '@/lib/time';
 import type { Database } from '@/types/database';
+import { ACTION_LABELS, confirmToken, isAction, isWrite, offeredActions, runAction } from './agent';
+import { rateLimited } from './request';
 
 /** Who is talking to the assistant. Public visitors get sales tools; signed-in people get read-only work tools (RLS). */
 export type AssistantAudience = 'public' | 'staff' | 'client';
@@ -22,13 +26,28 @@ export type AssistantContext = {
   /** The signed-in person's permissions (which internal tools are offered); the database checks them again. */
   permissions: string[];
   owner: boolean;
+  /** Set once other people's text (chat messages) was read in this turn: later changes then wait for the person. */
+  tainted?: boolean;
 };
 
 /** Something the widget does after the reply (show a button, mark the lead as sent). */
-export type AssistantAction = { type: 'lead_created' } | { type: 'link'; href: string; label: string } | { type: 'open_apply' };
+export type AssistantAction =
+  | { type: 'lead_created' }
+  | { type: 'link'; href: string; label: string }
+  | { type: 'open_apply' }
+  /** A change that waits for the person: the widget shows the card; the token goes to /api/assistant/confirm. */
+  | { type: 'confirm'; token: string; text: string }
+  /** A change was made (or refused) in the system: the widget refreshes the page and Sunny shows the result. */
+  | { type: 'did'; name: string; ok: boolean; message: string };
 
 type ToolDef = { name: string; description: string; input_schema: Record<string, unknown> };
-type ToolResult = { content: string; action?: AssistantAction };
+type ToolResult = { content: string; action?: AssistantAction; actions?: AssistantAction[]; ok?: boolean; write?: boolean };
+
+/** What the widget shows while a tool runs. */
+export const toolLabel = (name: string) =>
+  ACTION_LABELS[name] ??
+  ({ team: 'Jamoa ma’lumoti o‘qilmoqda', attendance: 'Davomat o‘qilmoqda', overview: 'Umumiy holat o‘qilmoqda', issues: 'Kamchiliklar tekshirilmoqda', crm: 'CRM o‘qilmoqda', performance: 'KPI o‘qilmoqda', search: 'Qidirilmoqda', create_lead: 'Ariza yuborilmoqda' } as Record<string, string>)[name] ??
+  'Tizim tekshirilmoqda';
 
 const str = (description: string) => ({ type: 'string', description });
 
@@ -151,7 +170,14 @@ export function toolsFor(ctx: Pick<AssistantContext, 'audience' | 'permissions' 
   const link = PUBLIC_TOOLS.filter((t) => t.name === 'show_link');
   if (ctx.audience === 'client') return WORK_TOOLS.filter((t) => t.name !== 'my_tasks').concat(link);
   const allowed = (t: { needs?: string[] }) => !t.needs || ctx.owner || t.needs.some((p) => ctx.permissions.includes(p));
-  return [...STAFF_TOOLS.filter(allowed).map(({ name, description, input_schema }) => ({ name, description, input_schema })), ...WORK_TOOLS, ...link];
+  // Staff: the read tools, then the actions (list_tasks replaces my_tasks).
+  const actions = offeredActions(ctx).map(({ name, description, params }) => ({ name, description, input_schema: params }));
+  return [
+    ...STAFF_TOOLS.filter(allowed).map(({ name, description, input_schema }) => ({ name, description, input_schema })),
+    ...actions,
+    ...WORK_TOOLS.filter((t) => t.name !== 'my_tasks'),
+    ...link,
+  ];
 }
 
 const SAFE_PATH = /^\/[A-Za-z0-9/_-]*(#[A-Za-z0-9_-]+)?$/;
@@ -202,7 +228,12 @@ async function attendanceDay(db: SupabaseClient<Database>, date: string) {
 
 export async function runTool(name: string, input: Record<string, unknown>, ctx: AssistantContext): Promise<ToolResult> {
   const allowed = toolsFor(ctx).some((t) => t.name === name);
-  if (!allowed) return { content: 'Bu amal sizga ochiq emas.' };
+  if (!allowed) {
+    const message = 'Bu amal sizning rolingizga ochiq emas.';
+    // A change asked for but not this person's to make is reported as not done, like any refusal.
+    if (isWrite(name)) return { content: JSON.stringify({ holat: 'BAJARILMADI', xabar: message }), actions: [{ type: 'did', name, ok: false, message }], ok: false, write: true };
+    return { content: message, ok: false };
+  }
   const text = (key: string) => String(input[key] ?? '').trim();
 
   switch (name) {
@@ -254,6 +285,11 @@ export async function runTool(name: string, input: Record<string, unknown>, ctx:
 
   const db = ctx.db;
   if (!db || !ctx.userId) return { content: 'Avval tizimga kiring.' };
+
+  if (isAction(name)) return agentAction(name, input, { ...ctx, db, userId: ctx.userId }, ctx);
+  // Text written by people outside the team (site applications, leads, anything search finds) is about to enter the
+  // conversation: from here on, every change in this turn waits for the person's click.
+  if (UNTRUSTED.has(name)) ctx.tainted = true;
 
   switch (name) {
     case 'my_tasks': {
@@ -415,4 +451,39 @@ export async function runTool(name: string, input: Record<string, unknown>, ctx:
     }
   }
   return { content: 'Noma’lum amal.' };
+}
+
+const UNTRUSTED = new Set(['issues', 'crm', 'search', 'overview']);
+
+/**
+ * One agent action for the model: runs it as the signed-in person and reports the outcome in words the model cannot
+ * misread (BAJARILDI / BAJARILMADI / TASDIQ KUTILMOQDA). A change waiting for confirmation becomes a signed card.
+ */
+async function agentAction(name: string, input: Record<string, unknown>, ctx: AssistantContext & { db: SupabaseClient<Database>; userId: string }, turn: AssistantContext): Promise<ToolResult> {
+  const write = isWrite(name);
+  if (write && rateLimited(`act:${ctx.userId}`, 40, 10 * 60_000)) {
+    return { content: JSON.stringify({ holat: 'BAJARILMADI', xabar: 'Juda ko‘p amal: bir necha daqiqadan so‘ng davom eting.' }), ok: false, write };
+  }
+  const out = await runAction(name, input, ctx, { tainted: !!turn.tainted });
+  // Other people's words entered the conversation: from here on, every change in this turn needs the person's click.
+  if (out.ok && (name === 'read_chat' || name === 'list_chats')) turn.tainted = true;
+
+  const actions: AssistantAction[] = [];
+  if (out.confirm) {
+    const secret = gateSecret();
+    if (!secret) return { content: JSON.stringify({ holat: 'BAJARILMADI', xabar: 'Tasdiqlash tizimi sozlanmagan: bu amalni panelda o‘zingiz bajaring.' }), ok: false, write };
+    actions.push({ type: 'confirm', token: confirmToken(secret, ctx.userId, name, out.input), text: out.confirm });
+    return { content: JSON.stringify({ holat: 'TASDIQ KUTILMOQDA', xabar: out.message, amal: out.confirm }), actions, ok: true, write: false };
+  }
+  if (out.link) actions.push({ type: 'link', ...out.link });
+  if (write) actions.push({ type: 'did', name, ok: out.ok, message: out.message });
+  if (out.ok) for (const path of out.revalidate ?? []) {
+    try {
+      revalidatePath(path);
+    } catch {
+      // outside a request (tests): nothing cached to refresh
+    }
+  }
+  const content = JSON.stringify({ holat: out.ok ? (write ? 'BAJARILDI' : 'OK') : 'BAJARILMADI', xabar: out.message, ...(out.data !== undefined ? { malumot: out.data } : {}) });
+  return { content: content.slice(0, 14_000), actions, ok: out.ok, write };
 }

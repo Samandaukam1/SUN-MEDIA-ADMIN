@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { CabinetHeader } from '@/components/cabinet/CabinetHeader';
+import { AppBadge } from '@/components/pwa/AppBadge';
 import { PartnerLogoImage } from '@/components/site/PartnerLogoImage';
 import { SiteIcon } from '@/components/site/SiteIcon';
 import { partnerHref, type PartnerScope } from '@/lib/cabinet/partner-context';
@@ -34,7 +35,27 @@ export async function PartnerFrame({ scope, title, subtitle, actions, children }
 
   return (
     <>
-      <CabinetHeader name={scope.context.profile?.full_name || scope.context.profile?.email || ''} role={scope.roleLabel} home={partnerHref(scope, '/kabinet')} />
+      <CabinetHeader
+        name={scope.context.profile?.full_name || scope.context.profile?.email || ''}
+        role={scope.roleLabel}
+        home={partnerHref(scope, '/kabinet')}
+        extra={
+          scope.preview ? undefined : (
+            <Link
+              href={partnerHref(scope, '/kabinet/bildirishnomalar')}
+              aria-label="Bildirishnoma sozlamalari"
+              title="Bildirishnomalar"
+              className="lg grid size-10 shrink-0 place-items-center rounded-full text-[#d9d9de] transition-colors hover:text-[#d4fc18]"
+            >
+              <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+              </svg>
+              <AppBadge />
+            </Link>
+          )
+        }
+      />
       <PartnerTabs tabs={tabs} />
       <main className="mx-auto max-w-6xl space-y-7 px-4 pt-7 pb-20 sm:px-8 sm:pt-10">
         {scope.preview ? (

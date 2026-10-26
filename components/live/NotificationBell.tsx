@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { AppBadge } from '@/components/pwa/AppBadge';
 import { getBrowserClient } from '@/lib/supabase/client';
 
 type Item = { id: string; title: string; body: string | null; created_at: string; read_at: string | null; data: Record<string, unknown> | null };
@@ -58,7 +59,9 @@ export function NotificationBell({ userId, area, tone = 'panel' }: { userId: str
       channel = supabase
         .channel(`user:${userId}`, { config: { private: true } })
         .on('broadcast', { event: 'change' }, ({ payload }) => {
-          if ((payload as { table?: string })?.table === 'notifications') void load();
+          if ((payload as { table?: string })?.table !== 'notifications') return;
+          void load();
+          window.dispatchEvent(new Event('sm:badge'));
         })
         .subscribe();
     });
@@ -87,6 +90,7 @@ export function NotificationBell({ userId, area, tone = 'panel' }: { userId: str
     setItems((list) => list.map((i) => (ids.includes(i.id) ? { ...i, read_at: i.read_at ?? new Date().toISOString() } : i)));
     setUnread((n) => Math.max(0, n - ids.length));
     await getBrowserClient().rpc('mark_notifications_read', { p_ids: ids });
+    window.dispatchEvent(new Event('sm:badge'));
   };
 
   const openItem = async (item: Item) => {
@@ -97,8 +101,10 @@ export function NotificationBell({ userId, area, tone = 'panel' }: { userId: str
   };
 
   const dark = tone === 'dark';
+  const settingsHref = area === 'staff' ? '/xodim/bildirishnomalar' : '/profil#bildirishnomalar';
   return (
     <div ref={box} className="relative">
+      <AppBadge />
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -155,6 +161,13 @@ export function NotificationBell({ userId, area, tone = 'panel' }: { userId: str
               </li>
             ))}
           </ul>
+          <a
+            href={settingsHref}
+            onClick={() => setOpen(false)}
+            className={`block border-t px-4 py-3 text-center text-[12.5px] font-medium ${dark ? 'border-white/10 text-[#a8a8ac] hover:text-[#d4fc18]' : 'border-line text-muted hover:text-ink'}`}
+          >
+            Bildirishnoma sozlamalari va push
+          </a>
         </div>
       ) : null}
     </div>

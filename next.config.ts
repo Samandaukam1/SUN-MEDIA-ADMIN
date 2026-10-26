@@ -47,8 +47,13 @@ const securityHeaders = [
   ...(isDev ? [] : [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }]),
 ];
 
+// One value per deployment: the installed app's service worker is registered under it, so each release installs a new
+// worker (which waits for the "Yangilash" button) and old caches are dropped.
+const appVersion = (process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || `local-${Date.now()}`).slice(0, 40);
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  env: { NEXT_PUBLIC_APP_VERSION: appVersion },
   // Keep the dev-only indicator away from the sidebar's account controls.
   devIndicators: { position: 'bottom-right' },
   poweredByHeader: false,
@@ -56,7 +61,11 @@ const nextConfig: NextConfig = {
   experimental: { serverActions: { bodySizeLimit: '3mb' } },
   images: { remotePatterns: storagePattern, formats: ['image/avif', 'image/webp'] },
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      // The worker itself is always checked for a new version; it controls the whole site.
+      { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'no-cache, max-age=0' }, { key: 'Service-Worker-Allowed', value: '/' }] },
+    ];
   },
 };
 

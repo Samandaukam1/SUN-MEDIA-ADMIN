@@ -304,3 +304,19 @@ cp dist/index.html dist/404.html && touch dist/.nojekyll && rm -f dist/_redirect
 
 O'z domeniga ko'chirishda `EXPO_WEB_BASE_URL` bermang (ildiz), domenni Supabase redirect ro'yxatiga va Google
 origins'ga qo'shing.
+
+## 7. Ilova (PWA) va Web Push bildirishnomalar
+
+Ilova qismi (o‘rnatish, ikonka, offline sahifa, yangilanish) deploy bilan o‘zi ishlaydi. Telefon/kompyuterga **push**
+yuborish uchun loyiha egasi bir marta quyidagini bajaradi (tartib muhim):
+
+1. `npx supabase functions deploy push-dispatch --project-ref vpxqviyacraeymgegvll` — yangi funksiya eski va yangi
+   bazani ham tushunadi.
+2. `npx supabase db push` — `20261026100000_web_push.sql` (web qurilmalar, sokin soatlar, maxfiy preview, vazifa vaqti
+   o‘zgarishi/bekor qilinishi bildirishnomalari).
+3. `node scripts/push/vapid-keys.mjs` — chiqqan buyruqni ishga tushiring (maxfiy kalit faqat Supabase secret'ida) va
+   `VAPID_PUBLIC_KEY` ni Vercel'ning ikkala loyihasiga (Production) qo‘shib, qayta deploy qiling.
+
+Shundan keyin: Profil / Xodim kabineti / Hamkor kabineti → 🔔 → «Bildirishnoma sozlamalari» → «Bildirishnomalarni
+yoqish». iPhone/iPad'da avval Safari → Ulashish → «Bosh ekranga qo‘shish» (iOS 16.4+), so‘ng ilovaning ichida yoqiladi.
+Kalitlar qo‘yilmaguncha sozlamalarda «serverda hali yoqilmagan» deb ko‘rinadi — hech narsa buzilmaydi.

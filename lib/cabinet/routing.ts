@@ -43,6 +43,8 @@ export function cleanNext(value: unknown): string | null {
 /** A requested page is only honoured inside the account's own area. */
 function allowed(home: Home, path: string): boolean {
   if (['/login', '/parol', '/auth'].some((p) => under(path, p))) return false;
+  // A notification or app shortcut: /open finds the page in the account's own area.
+  if (under(path, '/open')) return true;
   if (home === '/kabinet') return under(path, '/kabinet');
   if (home === '/xodim') return under(path, '/xodim');
   return !under(path, '/xodim') && !under(path, '/kabinet');

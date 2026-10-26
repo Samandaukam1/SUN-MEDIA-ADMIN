@@ -5,11 +5,11 @@ import { getPublicEnv } from '@/lib/env';
 import type { Database } from '@/types/database';
 
 /** Pages anyone may open without signing in (auth return links, the "no access" notice). */
-const OPEN_PATHS = ['/auth/callback', '/no-access', '/api/assistant'];
+const OPEN_PATHS = ['/auth/callback', '/no-access', '/api/assistant', '/api/push', '/app'];
 
 /** The public website: the landing page, its pages and the files search engines ask for. */
 const SITE_PATHS = ['/xizmatlar', '/keyslar', '/hamkorlar', '/tariflar', '/biz-haqimizda', '/aloqa'];
-const SITE_FILES = ['/robots.txt', '/sitemap.xml', '/manifest.webmanifest', '/opengraph-image'];
+const SITE_FILES = ['/robots.txt', '/sitemap.xml', '/manifest.webmanifest', '/opengraph-image', '/sw.js', '/offline.html'];
 
 const under = (path: string, prefix: string) => path === prefix || path.startsWith(`${prefix}/`);
 
@@ -51,8 +51,12 @@ export async function updateSession(request: NextRequest) {
   };
 
   if (under(path, '/login')) return redirect(signedIn ? '/panel' : '/');
-  // Not signed in: the site's home page, as for every visitor. The sign-in window opens only from the footer buttons.
-  if (!signedIn && !OPEN_PATHS.some((p) => under(path, p))) return redirect('/');
+  // Not signed in: the site's home page, as for every visitor, with the sign-in window open and the page asked for
+  // remembered (a notification or a link from the installed app opens it right after signing in).
+  if (!signedIn && !OPEN_PATHS.some((p) => under(path, p))) {
+    const next = `${path}${request.nextUrl.search}`;
+    return redirect('/', `?kirish=1${next.length <= 300 ? `&next=${encodeURIComponent(next)}` : ''}`);
+  }
   // Signed-in pages are personal: never stored by the browser or a shared cache.
   response.headers.set('Cache-Control', 'private, no-store, max-age=0');
   return response;

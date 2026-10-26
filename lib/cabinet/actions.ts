@@ -8,6 +8,7 @@ import { getSessionContext } from '@/lib/auth';
 import { getPublicEnv } from '@/lib/env';
 import { toUserMessage } from '@/lib/errors';
 import { passwordProblem } from '@/lib/password-policy';
+import { revokeThisDevice } from '@/lib/pwa/server';
 import { currentVisitor, loginKey } from '@/lib/site/visitor';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
@@ -138,6 +139,7 @@ export async function cabinetSession(): Promise<{ name: string; to: string; area
 /** "Boshqa akkaunt bilan kirish": ends this browser's session only. */
 export async function cabinetSignOut(): Promise<void> {
   const supabase = await createClient();
+  await revokeThisDevice(supabase);
   await supabase.auth.signOut({ scope: 'local' });
 }
 

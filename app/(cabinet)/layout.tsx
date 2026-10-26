@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Unbounded } from 'next/font/google';
 
 import { SunBot } from '@/components/assistant/SunBot';
+import { InstallBanner } from '@/components/pwa/InstallGuide';
 import '../(site)/site.css';
 
 const unbounded = Unbounded({ subsets: ['latin', 'latin-ext', 'cyrillic'], variable: '--font-unbounded', display: 'swap' });
@@ -18,6 +19,7 @@ export default function CabinetLayout({ children }: { children: React.ReactNode 
       <div className="relative">{children}</div>
       <div className="s-grain" aria-hidden />
       <SunBot audience="member" />
+      <InstallBanner tone="dark" />
     </div>
   );
 }

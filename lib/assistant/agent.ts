@@ -610,7 +610,7 @@ export const ACTIONS: AnyDef[] = [
       if (error) return { ok: false, message: error.code === '42501' ? 'Bu chatga yozish huquqingiz yo‘q (faqat kuzatasiz).' : dbError(error) };
       const { data: check } = await ctx.db.from('messages').select('id').eq('room_id', room.id).eq('sender_id', ctx.userId).eq('body', i.text).gte('created_at', since).limit(1);
       if (!check?.length) return { ok: false, message: 'Xabar yuborilganini tasdiqlab bo‘lmadi.' };
-      return { ok: true, message: `Xabar “${room.name}” chatiga yuborildi.`, data: { chat: room.name, id: check[0].id }, link: { href: `/chat/${room.id}`, label: 'Chatni ochish' }, revalidate: ['/chat', '/xodim/chat'] };
+      return { ok: true, message: `Xabar “${room.name}” chatiga yuborildi.`, data: { chat: room.name, id: check[0].id }, link: { href: `/open?r=${encodeURIComponent(`/chat/${room.id}`)}`, label: 'Chatni ochish' }, revalidate: ['/chat', '/xodim/chat'] };
     },
   }),
   define({

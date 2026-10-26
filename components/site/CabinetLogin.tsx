@@ -21,6 +21,20 @@ const EASE = [0.22, 1, 0.36, 1] as const;
  */
 export function CabinetEntrances({ staffLabel }: { staffLabel: string }) {
   const [audience, setAudience] = useState<Audience | null>(null);
+  const [next, setNext] = useState<string | null>(null);
+
+  // A private page, a notification or the installed app sent a signed-out visitor here (?kirish=1&next=…): the
+  // sign-in opens by itself and, once signed in, that page opens.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (!params.has('kirish')) return;
+    const asked = params.get('next');
+    setNext(asked && asked.startsWith('/') && !asked.startsWith('//') ? asked : null);
+    setAudience(params.get('kirish') === 'hamkor' ? 'partner' : 'staff');
+    params.delete('kirish');
+    params.delete('next');
+    history.replaceState(null, '', `${location.pathname}${params.size ? `?${params}` : ''}${location.hash}`);
+  }, []);
 
   const button = 'text-[11px] tracking-[0.08em] text-[#6e6e76] uppercase transition-colors hover:text-[#d4fc18]';
   return (
@@ -34,14 +48,14 @@ export function CabinetEntrances({ staffLabel }: { staffLabel: string }) {
           Hamkorlar uchun
         </button>
       </div>
-      <CabinetDialog audience={audience} onClose={() => setAudience(null)} />
+      <CabinetDialog audience={audience} next={next} onClose={() => setAudience(null)} />
     </>
   );
 }
 
 type Session = { name: string; to: string; area: string };
 
-function CabinetDialog({ audience, onClose }: { audience: Audience | null; onClose: () => void }) {
+function CabinetDialog({ audience, next, onClose }: { audience: Audience | null; next: string | null; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [view, setView] = useState<'checking' | 'form' | Session>('checking');
   const [leaving, startLeaving] = useTransition();
@@ -115,7 +129,7 @@ function CabinetDialog({ audience, onClose }: { audience: Audience | null; onClo
                 <span className="sr-only">Tekshirilmoqda…</span>
               </div>
             ) : view === 'form' ? (
-              <LoginForm key={formKey} />
+              <LoginForm key={formKey} next={next} />
             ) : (
               <div className="mt-7 space-y-4">
                 <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3.5 text-center">
@@ -123,7 +137,7 @@ function CabinetDialog({ audience, onClose }: { audience: Audience | null; onClo
                   <p className="mt-0.5 text-[15.5px] font-semibold break-words text-white">{view.name}</p>
                   <p className="mt-0.5 text-[13px] text-[#a8a8ac]">{view.area}</p>
                 </div>
-                <a href={view.to} className="s-btn s-btn-lime w-full">
+                <a href={next ?? view.to} className="s-btn s-btn-lime w-full">
                   Kabinetga o‘tish <SiteIcon name="arrowRight" size={18} />
                 </a>
                 <button
@@ -149,7 +163,7 @@ function CabinetDialog({ audience, onClose }: { audience: Audience | null; onClo
   );
 }
 
-function LoginForm() {
+function LoginForm({ next }: { next: string | null }) {
   const [state, action, pending] = useActionState<CabinetLoginState, FormData>(cabinetSignIn, { status: 'idle' });
   const [show, setShow] = useState(false);
   const [wait, setWait] = useState(0);
@@ -184,6 +198,7 @@ function LoginForm() {
 
   return (
     <form action={action} className="mt-7 space-y-4" noValidate>
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       <div>
         <label htmlFor={ids.email} className="mb-1.5 block text-[13px] font-medium text-[#d9d9de]">
           Email (login)

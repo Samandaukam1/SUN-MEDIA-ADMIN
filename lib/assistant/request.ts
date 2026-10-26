@@ -4,11 +4,14 @@ import { createClient as createSupabase, type SupabaseClient } from '@supabase/s
 import type { NextRequest } from 'next/server';
 
 import { getPublicEnv } from '@/lib/env';
+import { sameSite } from '@/lib/security/same-site';
 import { gateSecret, visitorKey } from '@/lib/site/gate-token';
 import { createClient } from '@/lib/supabase/server';
 import { myContextSchema } from '@/types/app';
 import type { Database } from '@/types/database';
 import type { AssistantContext } from './tools';
+
+export { sameSite };
 
 /**
  * Who sent this request. The mobile app sends its Supabase access token (Authorization: Bearer); the website uses its
@@ -57,22 +60,6 @@ export async function assistantContext(request: NextRequest): Promise<{ ctx: Ass
   const name = me.profile?.full_name ? `${me.profile.full_name}${me.roles[0] ? ` (${me.roles[0].name})` : ''}${audience === 'client' && me.clients[0] ? `, ${me.clients[0].name}` : ''}` : null;
   const owner = me.roles.some((r) => r.key === 'system_owner');
   return { ctx: { ...base, audience, db, userId, permissions: me.permissions, owner }, name, ipKey: userId };
-}
-
-/**
- * The browser's session cookie counts only for requests from the site itself: another site cannot make Sunny act for a
- * signed-in visitor (cross-site requests are answered as a public visitor). The app uses its token, not cookies.
- */
-export function sameSite(request: Pick<NextRequest, 'headers'>): boolean {
-  const fetchSite = request.headers.get('sec-fetch-site');
-  if (fetchSite) return fetchSite === 'same-origin' || fetchSite === 'none';
-  const origin = request.headers.get('origin');
-  if (!origin) return true;
-  try {
-    return new URL(origin).host === request.headers.get('host');
-  } catch {
-    return false;
-  }
 }
 
 /** A small per-instance limiter: enough to stop one visitor from running up the AI bill. */

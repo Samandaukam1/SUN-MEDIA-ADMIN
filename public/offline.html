@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#050506">
+<meta name="robots" content="noindex">
+<title>Internet yo‘q · Sun Media</title>
+<!-- Shown by the service worker when there is no connection: one self-contained file (no scripts from the server). -->
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    min-height: 100dvh; display: grid; place-items: center; padding: 24px;
+    padding-top: max(24px, env(safe-area-inset-top)); padding-bottom: max(24px, env(safe-area-inset-bottom));
+    background: radial-gradient(60% 50% at 50% 0%, rgb(212 252 24 / 0.08), transparent 70%), #050506;
+    color: #f4f4f5; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; text-align: center;
+  }
+  main { max-width: 360px; display: grid; gap: 16px; justify-items: center; }
+  img { width: 72px; height: 72px; border-radius: 18px; box-shadow: 0 0 40px rgb(212 252 24 / 0.18); }
+  h1 { margin: 10px 0 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  p { margin: 0; font-size: 15px; line-height: 1.5; color: #a8a8ac; }
+  button { margin-top: 8px; min-height: 48px; padding: 0 28px; border-radius: 999px; border: 0; background: #d4fc18; color: #050506; font: 600 15px/1 inherit; cursor: pointer; }
+  button:focus-visible { outline: 2px solid #d4fc18; outline-offset: 3px; }
+</style>
+</head>
+<body>
+<main>
+  <img src="/pwa/icon-192.png" alt="Sun Media">
+  <h1>Internet yo‘q</h1>
+  <p>Ulanish tiklangach sahifa ochiladi. Internetsiz xabar yuborilmaydi, vazifa saqlanmaydi va davomat belgilanmaydi — bu amallar faqat ulanish bor paytda bajariladi.</p>
+  <button type="button" onclick="location.reload()">Qayta urinish</button>
+</main>
+<script>addEventListener('online', function () { location.reload(); });</script>
+</body>
+</html>

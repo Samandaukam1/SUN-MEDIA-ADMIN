@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { SunBot } from '@/components/assistant/SunBot';
 import type { CreateItem } from '@/components/panel/CreateMenu';
 import { PanelShell } from '@/components/panel/PanelShell';
+import { InstallBanner } from '@/components/pwa/InstallGuide';
 import { can, canUsePanel, requireStaff } from '@/lib/auth';
 import { loadMyChats, unreadTotal } from '@/lib/chat';
 import { navigationFor } from '@/lib/navigation';
@@ -38,6 +39,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
     >
       {children}
       <SunBot audience="member" />
+      <InstallBanner />
     </PanelShell>
   );
 }

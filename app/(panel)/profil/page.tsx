@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 import { MyProfileForm } from '@/components/accounts/MyProfileForm';
 import { PageHeader } from '@/components/panel/PageHeader';
+import { NotificationSettings } from '@/components/pwa/NotificationSettings';
 import { Card } from '@/components/ui/Card';
 import { requireStaff } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
@@ -29,6 +30,10 @@ export default async function MyProfilePage() {
           .
         </p>
       </Card>
+      <section id="bildirishnomalar" className="mt-8 max-w-2xl scroll-mt-24">
+        <h2 className="mb-3 text-lg font-semibold">Bildirishnomalar va ilova</h2>
+        <NotificationSettings userId={context.userId} />
+      </section>
     </div>
   );
 }

@@ -15,6 +15,8 @@ const body = z.object({
     .min(1)
     .max(400),
   stream: z.boolean().optional(),
+  /** Qitmir mode (the widget's switch): Sunny's manner only. */
+  mode: z.enum(['qitmir']).optional(),
 });
 const MAX_TEXT = 2000;
 
@@ -28,7 +30,7 @@ export function OPTIONS(request: NextRequest) {
 }
 
 /**
- * POST { messages: [{ role, text }] } → { reply, actions }. The conversation lives in the browser/app, not here.
+ * POST { messages: [{ role, text }], mode? } → { reply, actions }. The conversation lives in the browser/app, not here.
  * With `stream: true` the reply arrives as it is written, one JSON object per line:
  * { t: 'delta', text } and { t: 'step', phase: 'start' | 'end', name, … } (an action running) …, then { t: 'done', reply, actions }
  * or { t: 'error', error }.
@@ -54,7 +56,7 @@ export async function POST(request: NextRequest) {
 
   if (!parsed.data.stream) {
     try {
-      const result = await assistantReply(history, ctx, name, { signal: request.signal });
+      const result = await assistantReply(history, ctx, name, { signal: request.signal, mode: parsed.data.mode });
       return NextResponse.json({ ...result, audience: ctx.audience }, { headers });
     } catch (error) {
       const { status, error: message } = failure(error);
@@ -78,6 +80,7 @@ export async function POST(request: NextRequest) {
           // Live progress of actions: the widget shows "Vazifa yaratilmoqda…" and Sunny works, then ✓/✕ from the system.
           onStep: (step) => send({ t: 'step', ...step }),
           signal: request.signal,
+          mode: parsed.data.mode,
         });
         send({ t: 'done', ...result, audience: ctx.audience });
       } catch (error) {

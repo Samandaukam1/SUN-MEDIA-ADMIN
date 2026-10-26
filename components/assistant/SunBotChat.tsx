@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { openApplication } from '@/components/site/ApplyButton';
 import { RobotFace, type RobotMood } from './RobotFace';
 import { answers } from './answers';
+import { quip } from './qitmir/quips';
 import { store, stored } from './session';
 import { ISSUE_TEXT, useVoice, type SoundSubscribe, type VoiceLang } from './voice';
 import './sunbot-chat.css';
@@ -75,6 +76,9 @@ function save(audience: ChatAudience, msgs: Msg[]) {
     // storage blocked: the chat simply does not survive a reload
   }
 }
+
+/** The voice's manner: playful in Qitmir mode, Sunny's usual one otherwise. */
+const voiceStyle = (qitmir: boolean) => (qitmir ? ('qitmir' as const) : undefined);
 
 /** Light markdown: **bold** and [label](/path) links, nothing else. */
 function Rich({ text }: { text: string }) {
@@ -162,6 +166,7 @@ export type ChatFace = { mood: RobotMood; sound?: SoundSubscribe };
  */
 export function SunBotChat({
   audience,
+  qitmir = false,
   open,
   closing,
   onClose,
@@ -171,6 +176,8 @@ export function SunBotChat({
   head,
 }: {
   audience: ChatAudience;
+  /** Qitmir mode: the same assistant and the same rules, a playful voice and wit (never on errors). */
+  qitmir?: boolean;
   open: boolean;
   closing: boolean;
   onClose: () => void;
@@ -202,6 +209,8 @@ export function SunBotChat({
   msgsRef.current = msgs;
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
+  const qitmirRef = useRef(qitmir);
+  qitmirRef.current = qitmir;
   const openRef = useRef(open);
   openRef.current = open;
   const busyRef = useRef(false);
@@ -344,7 +353,7 @@ export function SunBotChat({
         // user timing unavailable
       }
 
-      const speech = mutedRef.current ? null : voice.speech(lang);
+      const speech = mutedRef.current ? null : voice.speech(lang, voiceStyle(qitmirRef.current));
       const live = () => request.current.id === id;
       let streamed = '';
       let shown = false;
@@ -364,7 +373,11 @@ export function SunBotChat({
         fetch('/api/assistant', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ messages: history.slice(-HISTORY).map(({ role, text }) => ({ role, text: text.slice(0, MAX_TEXT) })), stream: true }),
+          body: JSON.stringify({
+            messages: history.slice(-HISTORY).map(({ role, text }) => ({ role, text: text.slice(0, MAX_TEXT) })),
+            stream: true,
+            ...(qitmirRef.current ? { mode: 'qitmir' } : {}),
+          }),
           signal: ctl.signal,
         });
 
@@ -477,11 +490,12 @@ export function SunBotChat({
       voice.unlock();
       voice.stopSpeaking();
       const say = (text: string) => {
-        if (!mutedRef.current && openRef.current) void voice.speak(text, lang);
+        if (!mutedRef.current && openRef.current) void voice.speak(text, lang, voiceStyle(qitmirRef.current));
       };
       if (!yes) {
         mark('cancelled');
-        const text = 'Bekor qilindi — tizimda hech narsa o‘zgarmadi.';
+        const plain = 'Bekor qilindi — tizimda hech narsa o‘zgarmadi.';
+        const text = qitmirRef.current ? quip(plain, 'cancelled', true) : plain;
         setMsgs((m) => [...m, { role: 'assistant', text }]);
         if (via === 'voice') say(text);
         return;
@@ -499,8 +513,10 @@ export function SunBotChat({
       const ok = !!data.ok;
       mark(ok ? 'done' : 'failed');
       report(ok);
-      const text = data.message || (ok ? 'Bajarildi.' : 'Bajarilmadi.');
-      const actions: Action[] = [{ type: 'did', name: data.name ?? '', ok, message: text }];
+      const message = data.message || (ok ? 'Bajarildi.' : 'Bajarilmadi.');
+      // Qitmir: the system's message first, word for word, then a short joke — and only when it worked.
+      const text = qitmirRef.current ? quip(message, data.name ?? '', ok) : message;
+      const actions: Action[] = [{ type: 'did', name: data.name ?? '', ok, message }];
       if (data.link) actions.push({ type: 'link', ...data.link });
       setMsgs((m) => [...m, { role: 'assistant', text, actions }]);
       say(text);
@@ -550,7 +566,7 @@ export function SunBotChat({
     voice.unlock();
     interrupt(false);
     setSpoken(i);
-    void voice.speak(text, lang);
+    void voice.speak(text, lang, voiceStyle(qitmirRef.current));
   };
 
   const talking = voice.speaking || voice.preparing;
@@ -591,7 +607,7 @@ export function SunBotChat({
                     ? 'Bajarildi ✓'
                     : outcome === 'fail'
                       ? 'Bajarilmadi'
-                      : (note ?? (failed ? 'Xatolik — qayta urinib ko‘ring' : 'SUN MEDIA AI yordamchisi'));
+                      : (note ?? (failed ? 'Xatolik — qayta urinib ko‘ring' : qitmir ? 'Qitmir rejim 😏' : 'SUN MEDIA AI yordamchisi'));
   const showSuggestions = msgs.filter((m) => m.role === 'user').length === 0 && !busy;
 
   useEffect(() => onFace({ mood, sound: voice.subscribe }), [mood, onFace, voice.subscribe]);

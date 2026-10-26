@@ -180,3 +180,15 @@ export function speechChunks(text: string, max = 600): string[] {
   if (current.trim()) chunks.push(current.trim());
   return chunks.filter((c) => /\p{L}|\d/u.test(c));
 }
+
+const escapeXml = (s: string) => s.replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' })[c]!);
+
+/**
+ * The SSML Azure reads. `playful` (Qitmir mode) keeps the same voice and makes it livelier: the caller passes a touch
+ * more rate and pitch, and short comic pauses follow each sentence (a longer one after an exclamation).
+ */
+export function speechSsml(text: string, { lang, voice, rate, pitch, playful = false }: { lang: SpeechLang; voice: string; rate: string; pitch: string; playful?: boolean }): string {
+  let body = escapeXml(text);
+  if (playful) body = body.replace(/([.!?…])\s+(?=\S)/g, (_, end: string) => `${end}<break time="${end === '!' ? 280 : 200}ms"/> `);
+  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${lang}"><voice name="${voice}"><prosody rate="${rate}" pitch="${pitch}">${body}</prosody></voice></speak>`;
+}

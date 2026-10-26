@@ -232,11 +232,15 @@ const VOICE_STYLE: Record<string, string> = {
   'ru-RU': 'Read aloud in Russian as a friendly, smart teenage boy of about fifteen with a slightly light voice: bright, clear, natural pace',
   'en-US': 'Read aloud in English as a friendly, smart teenage boy of about fifteen with a slightly light voice: bright, clear, natural pace',
 };
+/** Qitmir mode: the same voice and pronunciation, in a livelier mood. */
+const QITMIR_MOOD =
+  ', in a playful, mischievous mood: a sly smile in the voice, lively, a little dramatic, with short comic pauses — still clear, natural and not squeaky';
+const styleFor = (lang: string, playful = false) => (VOICE_STYLE[lang] ?? VOICE_STYLE['uz-UZ']) + (playful ? QITMIR_MOOD : '');
 // Free TTS quotas are tiny (10 requests a day per model): models that ran out are not asked again until they reset.
 const ttsModels = () => awake([process.env.ASSISTANT_GEMINI_TTS_MODEL, 'gemini-3.8-flash-lite-tts', 'gemini-2.5-flash-preview-tts'], { strict: true });
 const ttsVoice = () => process.env.ASSISTANT_GEMINI_VOICE || 'Puck';
-const ttsBody = (text: string, lang: string) => ({
-  contents: [{ parts: [{ text: `${VOICE_STYLE[lang] ?? VOICE_STYLE['uz-UZ']}:\n${text}` }] }],
+const ttsBody = (text: string, lang: string, playful = false) => ({
+  contents: [{ parts: [{ text: `${styleFor(lang, playful)}:\n${text}` }] }],
   generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: ttsVoice() } } } },
 });
 
@@ -277,7 +281,7 @@ function pcmToWav(pcm: Buffer, rate = 24000): Buffer {
  * Speech while it is being generated: raw 16-bit mono PCM (`rate` Hz), so the widget starts playing on the first chunk
  * instead of waiting for the whole clip. Null when no TTS model streams (the caller then asks for a whole file).
  */
-export async function geminiSpeechStream(text: string, lang: string, signal?: AbortSignal): Promise<{ stream: ReadableStream<Uint8Array>; rate: number } | null> {
+export async function geminiSpeechStream(text: string, lang: string, signal?: AbortSignal, playful = false): Promise<{ stream: ReadableStream<Uint8Array>; rate: number } | null> {
   const key = geminiKey();
   if (!key) return null;
   for (const model of ttsModels()) {
@@ -285,7 +289,7 @@ export async function geminiSpeechStream(text: string, lang: string, signal?: Ab
     const res = await fetch(`${BASE}/models/${model}:streamGenerateContent?alt=sse`, {
       method: 'POST',
       headers: { 'x-goog-api-key': key, 'content-type': 'application/json' },
-      body: JSON.stringify(ttsBody(text, lang)),
+      body: JSON.stringify(ttsBody(text, lang, playful)),
       signal: timer.signal,
     }).catch(() => null);
     if (!res?.ok || !res.body) {
@@ -343,10 +347,10 @@ export async function geminiSpeechStream(text: string, lang: string, signal?: Ab
 }
 
 /** Speech from Gemini TTS (free tier) as a playable WAV, or null when it is unavailable or over quota. */
-export async function geminiSpeech(text: string, lang = 'uz-UZ'): Promise<{ body: Buffer; type: string } | null> {
+export async function geminiSpeech(text: string, lang = 'uz-UZ', playful = false): Promise<{ body: Buffer; type: string } | null> {
   const key = geminiKey();
   if (!key) return null;
-  const style = VOICE_STYLE[lang] ?? VOICE_STYLE['uz-UZ'];
+  const style = styleFor(lang, playful);
   const [model] = ttsModels();
   if (!model) return null;
   // Newer Interactions API first (Gemini 3 TTS models only: older ones refuse speech annotations); the classic
@@ -365,7 +369,7 @@ export async function geminiSpeech(text: string, lang = 'uz-UZ'): Promise<{ body
           ] as [string, unknown],
         ]
       : []),
-    ...ttsModels().map((m): [string, unknown] => [`${BASE}/models/${m}:generateContent`, ttsBody(text, lang)]),
+    ...ttsModels().map((m): [string, unknown] => [`${BASE}/models/${m}:generateContent`, ttsBody(text, lang, playful)]),
   ];
   let audio: { data: string; mime: string } | null = null;
   for (const [url, body] of attempts) {

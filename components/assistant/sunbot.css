@@ -324,8 +324,78 @@
   line-height: 1;
 }
 
+/* ---------- Qitmir mode: a small switch beside the launcher ---------- */
+.sb-qm {
+  position: absolute;
+  right: calc(100% + 2px);
+  bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgb(20 20 23 / 0.82);
+  border: 1px solid rgb(255 255 255 / 0.1);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 28px -14px rgb(0 0 0 / 0.8);
+  animation: sb-in 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+.sb-qm.on {
+  border-color: rgb(255 51 72 / 0.32);
+  box-shadow: 0 10px 28px -14px rgb(0 0 0 / 0.8), 0 0 18px -8px rgb(255 51 72 / 0.55);
+}
+.sb-qm button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--sb-muted);
+  cursor: pointer;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.25s ease, background-color 0.25s ease;
+}
+.sb-qm button:hover { color: var(--sb-text); background: rgb(255 255 255 / 0.06); }
+.sb-qm button:focus-visible { outline: 2px solid var(--sb-lime); outline-offset: 1px; }
+.sb-qm-switch {
+  min-width: 26px;
+  padding: 0 4px;
+  font-size: 10.5px !important;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+/* Compact: the eyes alone; the name slides out on hover or keyboard focus (and is always the button's name). */
+.sb-qm-label {
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.4s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease, margin 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.sb-qm:hover .sb-qm-label,
+.sb-qm-switch:focus-visible .sb-qm-label { max-width: 110px; margin: 0 4px 0 6px; opacity: 1; }
+.sb-qm.on .sb-qm-switch { color: #ffd6da; }
+.sb-qm-eyes { flex: none; color: #8a8a90; transition: color 0.35s ease, filter 0.35s ease; }
+.sb-qm.on .sb-qm-eyes { color: #ff3348; filter: drop-shadow(0 0 3px rgb(255 51 72 / 0.85)); }
+.sb-qm-tool { width: 26px; animation: sb-in 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
+.sb-qm-tool[aria-pressed='true'] { color: #ffd6da; background: rgb(255 51 72 / 0.14); }
+
+/* The robot is out playing: its pad (the ring) stays, the launcher robot steps aside. */
+.sb-launcher.sb-out .sb-3d { opacity: 0; transition: opacity 0.18s ease; }
+/* Qitmir mode on the flat robot (no 3D on this device): the same red eyes. */
+.sb-qitmir .sb-robot:not(.sb-mood-offline):not(.sb-mood-error) { --sb-eye: #ff3348; }
+
 @media (max-width: 639px) {
-  .sb-root:has(.sb-panel) .sb-launcher { display: none; }
+  .sb-root:has(.sb-panel) .sb-launcher,
+  .sb-root:has(.sb-panel) .sb-qm { display: none; }
+  .sb-qm { right: calc(100% - 4px); }
   .sb-teaser { right: 108px; bottom: 80px; font-size: 13px; }
   .sb-launcher .sb-robot { width: 112px !important; height: 112px !important; }
   .sb-3d { width: 182px; height: 182px; }
@@ -333,13 +403,14 @@
 
 /* Weak devices and data saver: the same states, fewer expensive layers. */
 .sb-lite .sb-panel,
+.sb-lite .sb-qm,
 .sb-lite .sb-teaser { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgb(16 16 18 / 0.97); }
 .sb-lite .sb-fly::after,
 .sb-lite .sb-ring::after { display: none; }
 .sb-lite .sb-robot-img { filter: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .sb-fly, .sb-fly::after, .sb-hover, .sb-ring, .sb-ring::before, .sb-ring::after, .sb-eye, .sb-eyes, .sb-face, .sb-panel, .sb-teaser, .sb-eq i, .sb-stop, .sb-issue,
+  .sb-fly, .sb-fly::after, .sb-hover, .sb-ring, .sb-ring::before, .sb-ring::after, .sb-eye, .sb-eyes, .sb-face, .sb-panel, .sb-teaser, .sb-eq i, .sb-stop, .sb-issue, .sb-qm, .sb-qm-tool,
   .sb-msg.streaming .sb-bubble::after { animation: none !important; }
   .sb-mood-thinking .sb-orbit, .sb-mood-working .sb-orbit { animation: none; opacity: 0.6; }
   .sb-halo, .sb-eyes, .sb-launcher .sb-robot { transition: none !important; }

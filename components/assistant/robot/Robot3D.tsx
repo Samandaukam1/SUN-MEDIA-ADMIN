@@ -5,6 +5,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import * as THREE from 'three';
 
+import { QITMIR_LIGHT, QITMIR_RED, QITMIR_REST, qitmirTurns, smirked, squinted } from '../qitmir/face';
 import type { SoundSubscribe } from '../voice';
 import { buildRobot, FACE_URL, FRAME_OFFSET_Y, FRAME_WORLD, HEIGHT, IMAGE_URL, sculptPicture } from './model';
 import type { Sculpted } from './sculpt';
@@ -13,11 +14,12 @@ import { MotionDirector, type MotionCue, type MotionMood } from './motion';
 const LIME = '#d4fc18';
 /** Eyes and smile under the warning light: the lime turns amber (a failed action, an error). */
 const ALARM = new THREE.Color(1, 0.5, 0.42);
+const LIME_LIGHT = new THREE.Color(LIME);
 const tint = new THREE.Color();
 
 /** The picture, the face atlas and the sculpted parts, loaded once per page: a second robot (the chat header) reuses them. */
 let picture: Promise<{ body: HTMLImageElement; face: HTMLImageElement; parts: Sculpted[] }> | null = null;
-function loadPicture() {
+export function loadPicture() {
   const load = (src: string) =>
     new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
@@ -46,12 +48,14 @@ type Props = {
   /** No flight while the chat panel is open next to it. */
   roam: boolean;
   active: boolean;
+  /** Qitmir mode: red eyes and a sly look, eased in and out (the robot itself is unchanged). */
+  qitmir?: boolean;
   onReady: () => void;
   onFail: () => void;
 };
 
 /** WebGL errors (lost context, shader failure) hand the launcher back to the 2D robot instead of breaking the page. */
-class Boundary extends Component<{ onFail: () => void; children: ReactNode }, { failed: boolean }> {
+export class Boundary extends Component<{ onFail: () => void; children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };
@@ -72,7 +76,7 @@ function slerpTo(obj: THREE.Object3D, [x, y, z]: [number, number, number], t: nu
   obj.quaternion.slerp(quat, t);
 }
 
-function Robot({ image, face, parts, mood, sound, cue, box, room, calm, compact, roam, shadows, onBuilt }: Omit<Props, 'active' | 'onReady' | 'onFail'> & { image: HTMLImageElement; face: HTMLImageElement; parts: Sculpted[]; shadows: boolean; onBuilt: () => void }) {
+function Robot({ image, face, parts, mood, sound, cue, box, room, calm, compact, roam, qitmir = false, shadows, onBuilt }: Omit<Props, 'active' | 'onReady' | 'onFail'> & { image: HTMLImageElement; face: HTMLImageElement; parts: Sculpted[]; shadows: boolean; onBuilt: () => void }) {
   const rig = useMemo(() => buildRobot(image, face, parts), [image, face, parts]);
   const { viewport, clock, gl, scene } = useThree();
   const envSet = useRef(false);
@@ -82,6 +86,7 @@ function Robot({ image, face, parts, mood, sound, cue, box, room, calm, compact,
   const light = useRef<THREE.PointLight>(null);
   const alarm = useRef(0);
   const brightness = useRef(0.875 + 0.25 * 0.5);
+  const red = useRef(qitmir ? 1 : 0);
 
   useEffect(() => () => rig.dispose(), [rig]);
   useEffect(() => {
@@ -161,14 +166,19 @@ function Robot({ image, face, parts, mood, sound, cue, box, room, calm, compact,
 
     // Face: each eye blinks about its own centre, both look together; mouths cross-fade; the talking mouth follows the
     // audio with the 2D robot's proportions (30 px wide, 5–27 px tall on the picture).
-    for (const lid of rig.lids) lid.scale.y = THREE.MathUtils.lerp(lid.scale.y, pose.eyeOpen, damp(pose.eyeOpen < 0.5 ? 40 : 14, dt));
+    red.current = THREE.MathUtils.lerp(red.current, qitmir ? 1 : 0, damp(4, dt));
+    const q = red.current < 0.002 ? 0 : red.current;
+    const squint = QITMIR_REST.squint * q;
+    const smirk = QITMIR_REST.smirk * q;
+    if (q || rig.lids[0].rotation.z) qitmirTurns(rig, squint, smirk);
+    rig.lids.forEach((lid, i) => (lid.scale.y = THREE.MathUtils.lerp(lid.scale.y, squinted(pose.eyeOpen, squint, smirk, i), damp(pose.eyeOpen < 0.5 ? 40 : 14, dt))));
     rig.eyes.position.x = THREE.MathUtils.lerp(rig.eyes.position.x, rig.eyeRest.x + pose.look[0] * 0.035, damp(12, dt));
     rig.eyes.position.y = THREE.MathUtils.lerp(rig.eyes.position.y, rig.eyeRest.y + pose.look[1] * 0.025, damp(12, dt));
     const { smile, flat, talk } = rig.mats;
     smile.opacity = THREE.MathUtils.lerp(smile.opacity, pose.talk || pose.flat ? 0 : 1, damp(14, dt));
     flat.opacity = THREE.MathUtils.lerp(flat.opacity, pose.flat && !pose.talk ? 1 : 0, damp(14, dt));
     talk.opacity = THREE.MathUtils.lerp(talk.opacity, pose.talk, damp(14, dt));
-    rig.mouth.smile.scale.y = THREE.MathUtils.lerp(rig.mouth.smile.scale.y, pose.smile, damp(10, dt));
+    rig.mouth.smile.scale.y = THREE.MathUtils.lerp(rig.mouth.smile.scale.y, smirked(pose.smile, smirk), damp(10, dt));
     // sqrt: mid-loud syllables already open the mouth clearly; silence closes it to a slit.
     const loud = Math.sqrt(Math.min(1, pose.mouthOpen));
     rig.mouth.talk.scale.set(
@@ -181,10 +191,15 @@ function Robot({ image, face, parts, mood, sound, cue, box, room, calm, compact,
     // The original face light at rest (glow 0.25), brighter as Sunny listens, speaks or lights up.
     brightness.current = THREE.MathUtils.lerp(brightness.current, 0.875 + pose.glow * 0.5, damp(10, dt));
     alarm.current = THREE.MathUtils.lerp(alarm.current, pose.alarm, damp(10, dt));
-    tint.setScalar(1).lerp(ALARM, alarm.current).multiplyScalar(brightness.current);
+    tint.setScalar(1).lerp(ALARM, alarm.current);
+    if (q) tint.lerp(QITMIR_RED, q * (1 - alarm.current));
+    tint.multiplyScalar(brightness.current);
     rig.mats.face.color.copy(tint);
     rig.mats.smile.color.copy(tint);
-    if (light.current) light.current.intensity = THREE.MathUtils.lerp(light.current.intensity, 0.6 + pose.glow * 1.8, damp(8, dt));
+    if (light.current) {
+      light.current.intensity = THREE.MathUtils.lerp(light.current.intensity, 0.6 + pose.glow * 1.8, damp(8, dt));
+      light.current.color.copy(LIME_LIGHT).lerp(QITMIR_LIGHT, q);
+    }
     const pm = rig.particles.material as THREE.PointsMaterial;
     pm.opacity = THREE.MathUtils.lerp(pm.opacity, pose.energy * 0.9, damp(6, dt));
     rig.particles.visible = pm.opacity > 0.01;
@@ -244,6 +259,25 @@ function Robot({ image, face, parts, mood, sound, cue, box, room, calm, compact,
   );
 }
 
+/** The lights and the soft studio reflected on the sides and the back (the front shows the picture's own light). */
+export function Studio() {
+  return (
+    <>
+      <ambientLight intensity={0.25} />
+      <directionalLight position={[-3, 4, 5]} intensity={1} />
+      <directionalLight position={[4, 2.5, -4]} intensity={1.2} color="#e8f0ff" />
+      <Environment resolution={128} frames={1}>
+        <color attach="background" args={['#4a4c52']} />
+        <Lightformer intensity={3} rotation-x={Math.PI / 2} position={[0, 6, 0]} scale={[14, 8, 1]} />
+        <Lightformer intensity={1.8} position={[0, 0.5, 8]} scale={[14, 8, 1]} />
+        <Lightformer intensity={1.6} rotation-y={Math.PI / 2} position={[-7, 1, 0]} scale={[18, 2, 1]} />
+        <Lightformer intensity={1.4} rotation-y={-Math.PI / 2} position={[7, 0, 1]} scale={[18, 2.4, 1]} />
+        <Lightformer form="ring" color={LIME} intensity={2} scale={2} position={[3, -3, 3]} target={[0, 0, 0]} />
+      </Environment>
+    </>
+  );
+}
+
 /**
  * Sunny in real 3D (three.js via React Three Fiber, already used by the site's hero), reconstructed from the original
  * picture. Transparent canvas over the launcher; an orthographic camera so the front view at rest is the picture;
@@ -292,18 +326,7 @@ export default function Robot3D({ active, onReady, onFail, ...props }: Props) {
         style={{ pointerEvents: 'none' }}
       >
         <PerformanceMonitor onDecline={() => setDpr((d) => Math.min(d, 1.5))} />
-        <ambientLight intensity={0.25} />
-        <directionalLight position={[-3, 4, 5]} intensity={1} />
-        <directionalLight position={[4, 2.5, -4]} intensity={1.2} color="#e8f0ff" />
-        {/* A soft studio for the sides and the back (the front shows the picture's own light). */}
-        <Environment resolution={128} frames={1}>
-          <color attach="background" args={['#4a4c52']} />
-          <Lightformer intensity={3} rotation-x={Math.PI / 2} position={[0, 6, 0]} scale={[14, 8, 1]} />
-          <Lightformer intensity={1.8} position={[0, 0.5, 8]} scale={[14, 8, 1]} />
-          <Lightformer intensity={1.6} rotation-y={Math.PI / 2} position={[-7, 1, 0]} scale={[18, 2, 1]} />
-          <Lightformer intensity={1.4} rotation-y={-Math.PI / 2} position={[7, 0, 1]} scale={[18, 2.4, 1]} />
-          <Lightformer form="ring" color={LIME} intensity={2} scale={2} position={[3, -3, 3]} target={[0, 0, 0]} />
-        </Environment>
+        <Studio />
         <Robot {...props} image={images.body} face={images.face} parts={images.parts} shadows={!coarse} onBuilt={built} />
       </Canvas>
     </Boundary>

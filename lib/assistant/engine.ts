@@ -3,6 +3,7 @@ import 'server-only';
 import { AiFailedError, AiNotConfiguredError } from '@/lib/ai';
 import { geminiChat, geminiKey } from './gemini';
 import { agencyKnowledge, budgetHints } from './knowledge';
+import { modePrompt, type AssistantMode } from './qitmir';
 import { agencyDateKey } from '@/lib/time';
 import { textLanguage } from './speech';
 import { runTool, toolLabel, toolsFor, type AssistantAction, type AssistantContext } from './tools';
@@ -88,7 +89,7 @@ function nextDays(): string {
 
 const REPLY_IN = { 'uz-UZ': 'o‘zbek tilida', 'ru-RU': 'rus tilida', 'en-US': 'ingliz tilida' } as const;
 
-async function systemPrompt(ctx: AssistantContext, name: string | null, lastQuestion: string): Promise<string> {
+async function systemPrompt(ctx: AssistantContext, name: string | null, lastQuestion: string, mode?: AssistantMode): Promise<string> {
   const reply = textLanguage(lastQuestion);
   const now = new Date().toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent', dateStyle: 'full', timeStyle: 'short' });
   const role = ctx.audience === 'public' ? SALES : ctx.audience === 'staff' ? STAFF : CLIENT;
@@ -100,6 +101,8 @@ async function systemPrompt(ctx: AssistantContext, name: string | null, lastQues
     ctx.audience === 'staff' ? `Sanalar: ${nextDays()}.` : '',
     hints.length ? `Byudjetni bilmasa, tariflardan birini taklif qil: ${hints.join('; ')}.` : '',
     '# SUN MEDIA haqida bilimlar\n' + (await agencyKnowledge()),
+    // The manner only (Qitmir mode): tools, permissions and confirmations above stay exactly the same.
+    modePrompt(mode),
     // Last, so it is fresh when the model starts writing: the knowledge above is Uzbek, the reply follows the visitor.
     `Eslatma: bu javobni ${REPLY_IN[reply.lang]}${reply.cyrillic && reply.lang === 'uz-UZ' ? ', kirill yozuvida' : ''} yoz (boshqa tilda matn so‘ralsa, o‘sha matnning o‘zi so‘ralgan tilda).`,
   ]
@@ -115,7 +118,7 @@ export async function assistantReply(
   history: ChatTurn[],
   ctx: AssistantContext,
   name: string | null,
-  { onText, onStep, signal }: { onText?: (delta: string) => void; onStep?: (e: StepEvent) => void; signal?: AbortSignal } = {},
+  { onText, onStep, signal, mode }: { onText?: (delta: string) => void; onStep?: (e: StepEvent) => void; signal?: AbortSignal; mode?: AssistantMode } = {},
 ): Promise<{ reply: string; actions: AssistantAction[] }> {
   const step = async (tool: string, input: Record<string, unknown>) => {
     onStep?.({ phase: 'start', name: tool, label: toolLabel(tool) });
@@ -125,7 +128,7 @@ export async function assistantReply(
   };
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key && !geminiKey()) throw new AiNotConfiguredError();
-  const system = await systemPrompt(ctx, name, history[history.length - 1]?.text ?? '');
+  const system = await systemPrompt(ctx, name, history[history.length - 1]?.text ?? '', mode);
   if (key) {
     try {
       const result = await claudeReply(key, system, history, ctx, step, signal);

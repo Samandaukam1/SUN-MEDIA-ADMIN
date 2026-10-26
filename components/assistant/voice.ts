@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { firstSentence, speakable, speechChunks } from '@/lib/assistant/speech';
 
 export type VoiceLang = 'uz-UZ' | 'ru-RU' | 'en-US';
+/** Same voice, another manner: 'qitmir' is a little more playful (prosody only, see /api/assistant/tts). */
+export type VoiceStyle = 'qitmir';
 
 /** Why the voice could not do what was asked. */
 export type VoiceIssue = 'mic-denied' | 'mic-missing' | 'stt-unavailable' | 'no-speech' | 'stt-failed' | 'voice-missing' | 'tap-to-play';
@@ -184,6 +186,7 @@ function wav16k(chunks: Float32Array[], rate: number): Blob {
 type Clip = { kind: 'pcm'; reader: ReadableStreamDefaultReader<Uint8Array>; rate: number } | { kind: 'file'; data: ArrayBuffer } | { kind: 'none' } | null;
 type Session = {
   lang: VoiceLang;
+  style?: VoiceStyle;
   ctl: AbortController;
   jobs: { text: string; clip: Promise<Clip> }[];
   sentText: string;
@@ -362,9 +365,9 @@ export function useVoice() {
     end(s);
   }, [end]);
 
-  const fetchClip = useCallback(async (text: string, signal: AbortSignal): Promise<Clip> => {
+  const fetchClip = useCallback(async (text: string, signal: AbortSignal, style?: VoiceStyle): Promise<Clip> => {
     try {
-      const res = await fetch('/api/assistant/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, stream: true }), signal });
+      const res = await fetch('/api/assistant/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text, stream: true, ...(style ? { style } : {}) }), signal });
       if (res.status === 204) return { kind: 'none' };
       if (!res.ok || !res.body) return null;
       const type = res.headers.get('content-type') ?? '';
@@ -486,6 +489,11 @@ export function useVoice() {
         const u = new SpeechSynthesisUtterance(speakable(text, lang));
         u.voice = voice;
         u.lang = voice.lang;
+        // Qitmir: the same system voice, a touch brighter and quicker.
+        if (s.style === 'qitmir') {
+          u.pitch = 1.12;
+          u.rate = 1.06;
+        }
         u.onstart = () => {
           s.played = true;
           synthOn.current = true;
@@ -552,7 +560,7 @@ export function useVoice() {
 
   const enqueue = useCallback(
     (s: Session, text: string) => {
-      s.jobs.push({ text, clip: s.noServer ? Promise.resolve({ kind: 'none' }) : fetchClip(text, s.ctl.signal) });
+      s.jobs.push({ text, clip: s.noServer ? Promise.resolve({ kind: 'none' }) : fetchClip(text, s.ctl.signal, s.style) });
       if (!s.played) setPreparing(true);
       void run(s);
     },
@@ -561,11 +569,11 @@ export function useVoice() {
 
   /** A spoken reply that may still be arriving: `update` with the text so far, `finish` with the whole text. */
   const speech = useCallback(
-    (lang: VoiceLang): SpeechHandle => {
+    (lang: VoiceLang, style?: VoiceStyle): SpeechHandle => {
       stopSpeaking();
       let resolve: (spoke: boolean) => void = () => undefined;
       const done = new Promise<boolean>((r) => (resolve = r));
-      const s: Session = { lang, ctl: new AbortController(), jobs: [], sentText: '', finished: false, running: false, dead: false, played: false, sources: new Set(), nextTime: 0, resolve, done, noServer: false };
+      const s: Session = { lang, style, ctl: new AbortController(), jobs: [], sentText: '', finished: false, running: false, dead: false, played: false, sources: new Set(), nextTime: 0, resolve, done, noServer: false };
       session.current = s;
       return {
         update(text) {
@@ -590,7 +598,7 @@ export function useVoice() {
     [end, enqueue, stopSpeaking],
   );
 
-  const speak = useCallback((text: string, lang: VoiceLang) => speech(lang).finish(text), [speech]);
+  const speak = useCallback((text: string, lang: VoiceLang, style?: VoiceStyle) => speech(lang, style).finish(text), [speech]);
 
   // ---------- listening ----------
   const cancelListening = useCallback(() => {

@@ -18,6 +18,10 @@ import './sunbot.css';
 const SunBotChat = dynamic(() => import('./SunBotChat').then((m) => m.SunBotChat), { ssr: false });
 /** The 3D robot (three.js, shared with the site's hero) loads the same way; the flat robot stands in until it is ready. */
 const Robot3D = dynamic(() => import('./robot/Robot3D'), { ssr: false });
+/** Qitmir mode's stage (the robot playing across the page): loaded only once someone turns the mode on. */
+const QitmirStage = dynamic(() => import('./qitmir/QitmirStage'), { ssr: false });
+/** Chat states that own the robot: while one runs it stays home, in the launcher. */
+const BUSY = new Set(['listening', 'thinking', 'working', 'speaking']);
 
 /**
  * WebGL that a GPU draws (as for the hero): software renderers would take seconds per frame, so such devices, weak ones
@@ -51,14 +55,24 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
   const [flying, setFlying] = useState(true);
   const [lite, setLite] = useState(false);
   const [face, setFace] = useState<ChatFace>({ mood: 'idle' });
-  const [three, setThree] = useState<{ ok: boolean; ready: boolean; calm: boolean; compact: boolean; visible: boolean; landed: boolean }>({
+  const [three, setThree] = useState<{ ok: boolean; ready: boolean; calm: boolean; compact: boolean; touch: boolean; visible: boolean; landed: boolean }>({
     ok: false,
     ready: false,
     calm: false,
     compact: false,
+    touch: false,
     visible: true,
     landed: false,
   });
+  // Qitmir mode: off until the person turns it on (remembered for this visit). Paused = home with the sly face only;
+  // cursorFx off = it may tag the cursor but never holds it.
+  const [qitmir, setQitmir] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [cursorFx, setCursorFx] = useState(true);
+  const [stage, setStage] = useState(false);
+  const [stageFailed, setStageFailed] = useState(false);
+  const [out, setOut] = useState(false);
+  const hover = useRef<HTMLSpanElement>(null);
   const [cue, setCue] = useState<RobotCue | undefined>(undefined);
   // The header robot (phones): its own ready / failed state; it falls back to the flat robot on its own.
   const [head3d, setHead3d] = useState<'loading' | 'ready' | 'failed'>('loading');
@@ -85,8 +99,15 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
       ok: can3D(),
       calm: matchMedia('(prefers-reduced-motion: reduce)').matches,
       compact: matchMedia('(pointer: coarse)').matches || innerWidth < 640,
+      touch: matchMedia('(pointer: coarse)').matches,
       landed: landedBefore,
     }));
+    if (stored('sunbot:qitmir') === '1') {
+      setQitmir(true);
+      setWanted(true);
+    }
+    setPaused(stored('sunbot:qitmir-pause') === '1');
+    setCursorFx(stored('sunbot:qitmir-cursor') !== '0');
     const onVisibility = () => setThree((s) => ({ ...s, visible: document.visibilityState === 'visible' }));
     document.addEventListener('visibilitychange', onVisibility);
     const landed = setTimeout(() => setFlying(false), landedBefore ? 0 : 2600);
@@ -132,6 +153,39 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
     setOpen(true);
   };
 
+  // Qitmir mode plays (the robot leaves its launcher) only with the 3D robot and without reduced motion; otherwise the
+  // mode is the sly face and the personality alone.
+  const play = qitmir && !paused && three.ok && three.ready && !three.calm && !stageFailed;
+  useEffect(() => {
+    if (play) setStage(true);
+    else if (!out) setStage(false);
+  }, [play, out]);
+  const onOut = useCallback(() => setOut(true), []);
+  const onDocked = useCallback(() => setOut(false), []);
+  const onStageFail = useCallback(() => {
+    setStageFailed(true);
+    setOut(false);
+    setStage(false);
+  }, []);
+  const toggleQitmir = () => {
+    const next = !qitmir;
+    setQitmir(next);
+    store('sunbot:qitmir', next ? '1' : '0');
+    if (next) setWanted(true);
+  };
+  const togglePause = () => {
+    setPaused((p) => {
+      store('sunbot:qitmir-pause', p ? '0' : '1');
+      return !p;
+    });
+  };
+  const toggleCursorFx = () => {
+    setCursorFx((c) => {
+      store('sunbot:qitmir-cursor', c ? '0' : '1');
+      return !c;
+    });
+  };
+
   // Eyes follow the pointer over the launcher (desktop): two CSS variables, written at most once a frame.
   const onPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
     if (e.pointerType !== 'mouse' || look.current) return;
@@ -153,11 +207,28 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
   };
 
   return (
-    <div className={`sb-root ${lite ? 'sb-lite' : ''}`}>
+    <div className={`sb-root ${lite ? 'sb-lite' : ''} ${qitmir ? 'sb-qitmir' : ''}`}>
+      {stage ? (
+        <QitmirStage
+          box={three.compact ? 84 : 116}
+          touch={three.touch}
+          lite={lite}
+          dock={!play || open || BUSY.has(face.mood)}
+          on={qitmir}
+          chat={face.mood}
+          cursorFx={cursorFx}
+          active={three.visible}
+          home={hover}
+          onOut={onOut}
+          onDocked={onDocked}
+          onFail={onStageFail}
+        />
+      ) : null}
       {wanted ? (
         <SunBotChat
           key={audience}
           audience={audience}
+          qitmir={qitmir}
           open={open}
           closing={closing}
           onClose={close}
@@ -179,6 +250,7 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
                     calm={three.calm}
                     compact
                     roam={false}
+                    qitmir={qitmir}
                     active={open && three.visible}
                     onReady={onHeadReady}
                     onFail={onHeadFail}
@@ -212,7 +284,7 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
       <button
         ref={launcher}
         type="button"
-        className={`sb-launcher ${open ? 'is-open' : ''} ${three.ready ? 'has-3d' : ''} ${three.landed ? 'sb-landed' : ''}`}
+        className={`sb-launcher ${open ? 'is-open' : ''} ${three.ready ? 'has-3d' : ''} ${three.landed ? 'sb-landed' : ''} ${out ? 'sb-out' : ''}`}
         onClick={() => (open ? close() : show())}
         onPointerEnter={() => setWanted(true)}
         onFocus={() => setWanted(true)}
@@ -222,7 +294,7 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
         aria-expanded={open}
       >
         <span className="sb-fly">
-          <span className="sb-hover">
+          <span className="sb-hover" ref={hover}>
             <RobotFace mood={open ? face.mood : flying ? 'happy' : 'idle'} sound={open && !three.ready ? face.sound : undefined} size={150} />
             {wanted && three.ok ? (
               <span className={`sb-3d ${three.ready ? 'ready' : ''}`} aria-hidden>
@@ -235,8 +307,9 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
                   calm={three.calm}
                   compact={three.compact}
                   roam={!open}
-                  // On a phone the open chat covers the launcher: nothing to draw then.
-                  active={three.visible && !(open && three.compact)}
+                  qitmir={qitmir}
+                  // On a phone the open chat covers the launcher: nothing to draw then; nor while the robot is out playing.
+                  active={three.visible && !(open && three.compact) && !out}
                   onReady={on3dReady}
                   onFail={on3dFail}
                 />
@@ -246,6 +319,55 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
         </span>
         <span className="sb-ring" aria-hidden />
       </button>
+
+      {!flying ? (
+        <div className={`sb-qm ${qitmir ? 'on' : ''}`} role="group" aria-label="Qitmir rejim">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={qitmir}
+            className="sb-qm-switch"
+            onClick={toggleQitmir}
+            title={qitmir ? 'Qitmir rejimni o‘chirish (Esc — kursorni qo‘yib yuboradi)' : 'Qitmir rejim: robot sahifa bo‘ylab o‘ynaydi'}
+          >
+            {/* The robot's own Qitmir eyes: grey while off, glowing red while on. */}
+            <svg className="sb-qm-eyes" viewBox="0 0 20 11" width="19" height="11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+              <path d="M2 6.2C2.6 2.6 6 1.7 8.2 4.9" />
+              <path d="M18 6.2C17.4 2.6 14 1.7 11.8 4.9" />
+            </svg>
+            <span className="sb-qm-label">Qitmir rejim</span>
+          </button>
+          {qitmir && three.ok && !three.calm ? (
+            <button type="button" className="sb-qm-tool" aria-pressed={paused} onClick={togglePause} aria-label={paused ? 'O‘yinni davom ettirish' : 'O‘yinni pauza qilish'} title={paused ? 'O‘yinni davom ettirish' : 'Pauza: robot joyida qoladi'}>
+              {paused ? (
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden>
+                  <path d="M8 5.5v13l10.5-6.5z" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden>
+                  <rect x="6.5" y="5.5" width="3.8" height="13" rx="1.2" />
+                  <rect x="13.7" y="5.5" width="3.8" height="13" rx="1.2" />
+                </svg>
+              )}
+            </button>
+          ) : null}
+          {qitmir && three.ok && !three.calm && !three.touch && !paused ? (
+            <button
+              type="button"
+              className="sb-qm-tool"
+              aria-pressed={!cursorFx}
+              onClick={toggleCursorFx}
+              aria-label={cursorFx ? 'Kursor effektlarini o‘chirish' : 'Kursor effektlarini yoqish'}
+              title={cursorFx ? 'Kursor effektlari: yoqilgan' : 'Kursor effektlari: o‘chiq'}
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" strokeLinecap="round" aria-hidden>
+                <path d="M5 3.5l13 7.2-5.6 1.6-2.4 5.6z" />
+                {cursorFx ? null : <path d="M3 21 21 3" />}
+              </svg>
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

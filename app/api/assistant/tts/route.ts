@@ -3,12 +3,12 @@ import { z } from 'zod';
 
 import { geminiKey, geminiSpeech, geminiSpeechStream } from '@/lib/assistant/gemini';
 import { corsHeaders, rateLimited } from '@/lib/assistant/request';
-import { speakable, textLanguage, type SpeechLang } from '@/lib/assistant/speech';
+import { speakable, speechSsml, textLanguage, type SpeechLang } from '@/lib/assistant/speech';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const body = z.object({ text: z.string().trim().min(1).max(900), stream: z.boolean().optional() });
+const body = z.object({ text: z.string().trim().min(1).max(900), stream: z.boolean().optional(), style: z.enum(['qitmir']).optional() });
 
 /** The voice for the reply's language: Uzbek (Latin or Cyrillic) by default, Russian, or English. */
 function voiceFor(text: string): { lang: SpeechLang; voice: string } {
@@ -17,8 +17,6 @@ function voiceFor(text: string): { lang: SpeechLang; voice: string } {
   if (lang === 'en-US') return { lang, voice: process.env.ASSISTANT_VOICE_EN || 'en-US-AndrewMultilingualNeural' };
   return { lang, voice: process.env.ASSISTANT_VOICE || 'uz-UZ-SardorNeural' };
 }
-
-const escapeXml = (s: string) => s.replace(/[<>&'"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' })[c]!);
 
 export function OPTIONS(request: NextRequest) {
   return new NextResponse(null, { status: 204, headers: corsHeaders(request) });
@@ -45,22 +43,30 @@ export async function POST(request: NextRequest) {
   const spoken = speakable(parsed.data.text, lang);
   if (!spoken) return new NextResponse(null, { status: 204, headers });
   const stream = !!parsed.data.stream;
+  // Qitmir mode: the same voice, a little livelier (no other voice, no other service).
+  const playful = parsed.data.style === 'qitmir';
   const audioHeaders = (type: string) => ({ ...headers, 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
 
   // Free option: Gemini TTS (AI Studio key). Over quota or unavailable → 204, the widget falls back.
   if (!key || !region) {
     if (stream) {
-      const live = await geminiSpeechStream(spoken, lang, request.signal);
+      const live = await geminiSpeechStream(spoken, lang, request.signal, playful);
       if (live) return new Response(live.stream, { headers: audioHeaders(`audio/pcm;rate=${live.rate}`) });
       // The listener already stopped Sunny: no second attempt for nobody.
       if (request.signal.aborted) return new NextResponse(null, { status: 204, headers });
     }
-    const audio = await geminiSpeech(spoken, lang);
+    const audio = await geminiSpeech(spoken, lang, playful);
     if (!audio) return new NextResponse(null, { status: 204, headers });
     return new NextResponse(new Uint8Array(audio.body), { headers: audioHeaders(audio.type) });
   }
 
-  const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${lang}"><voice name="${voice}"><prosody rate="${process.env.ASSISTANT_RATE || '+4%'}" pitch="${process.env.ASSISTANT_PITCH || '+25%'}">${escapeXml(spoken)}</prosody></voice></speak>`;
+  const ssml = speechSsml(spoken, {
+    lang,
+    voice,
+    rate: playful ? process.env.ASSISTANT_QITMIR_RATE || '+9%' : process.env.ASSISTANT_RATE || '+4%',
+    pitch: playful ? process.env.ASSISTANT_QITMIR_PITCH || '+28%' : process.env.ASSISTANT_PITCH || '+25%',
+    playful,
+  });
   const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {
     method: 'POST',
     headers: {
@@ -77,9 +83,9 @@ export async function POST(request: NextRequest) {
     // Azure over its monthly quota or down: Gemini speaks instead (when its key is set) rather than silence.
     if (res) console.error('[assistant] Azure TTS', res.status);
     if (request.signal.aborted || !geminiKey()) return new NextResponse(null, { status: 204, headers });
-    const live = stream ? await geminiSpeechStream(spoken, lang, request.signal) : null;
+    const live = stream ? await geminiSpeechStream(spoken, lang, request.signal, playful) : null;
     if (live) return new Response(live.stream, { headers: audioHeaders(`audio/pcm;rate=${live.rate}`) });
-    const audio = await geminiSpeech(spoken, lang);
+    const audio = await geminiSpeech(spoken, lang, playful);
     if (!audio) return new NextResponse(null, { status: 204, headers });
     return new NextResponse(new Uint8Array(audio.body), { headers: audioHeaders(audio.type) });
   }

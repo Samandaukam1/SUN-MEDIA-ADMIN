@@ -127,8 +127,19 @@ export async function geminiChat(
 ): Promise<string> {
   // The configured model first, then the free models fastest first: flash-lite answers in about a second and has the
   // largest free quota; the bigger flash models (20 free requests a day, often "high demand") back it up.
-  const models = awake([process.env.ASSISTANT_GEMINI_MODEL, 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash']);
+  let models = awake([process.env.ASSISTANT_GEMINI_MODEL, 'gemini-3.8-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.6-flash']);
   let modelIndex = 0;
+  // "High demand" (503) is temporary: when every model has refused, those are asked once more after a short pause.
+  const busy: string[] = [];
+  let retried = false;
+  const onceMore = async () => {
+    if (retried || !busy.length || signal?.aborted) return false;
+    retried = true;
+    models = [...new Set(busy)];
+    modelIndex = 0;
+    await new Promise((r) => setTimeout(r, 1500));
+    return true;
+  };
   const contents: Content[] = history.map((t) => ({ role: t.role === 'user' ? 'user' : 'model', parts: [{ text: t.text }] }));
   let reply = '';
   let gap = false;
@@ -171,7 +182,7 @@ export async function geminiChat(
       console.error('[assistant] Gemini timeout', model);
       // A model that hangs is skipped for a while, so the next questions do not wait on it again.
       resting.set(model, Date.now() + 5 * 60_000);
-      if (nextModel()) continue;
+      if (nextModel() || (await onceMore())) continue;
       throw new AiFailedError('Ulanishda xato. Birozdan so‘ng qayta urinib ko‘ring. (GNET)');
     }
     if (!res.ok || !res.body) {
@@ -180,8 +191,9 @@ export async function geminiChat(
       console.error('[assistant] Gemini', model, res.status, detail.slice(0, 400));
       if (refusedThinking(model, res.status, detail)) continue;
       if (res.status === 404 || res.status === 429 || res.status >= 500) rest(model, res.status, detail);
-      // Model missing, over its own quota or overloaded: try the next free model.
-      if ((res.status === 404 || res.status === 429 || res.status >= 500) && nextModel()) continue;
+      if (res.status >= 500) busy.push(model);
+      // Model missing, over its own quota or overloaded: try the next free model (then the overloaded ones once more).
+      if ((res.status === 404 || res.status === 429 || res.status >= 500) && (nextModel() || (await onceMore()))) continue;
       if (res.status === 429) throw new AiFailedError('Bugungi bepul limit tugadi. Birozdan so‘ng yozing. (G429)');
       if (res.status === 400 && /API key/i.test(detail)) throw new AiFailedError('AI kaliti noto‘g‘ri. (G400)');
       if (res.status === 403) throw new AiFailedError('AI kaliti faol emas yoki bu hududda ruxsat yo‘q. (G403)');

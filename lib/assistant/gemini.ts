@@ -149,7 +149,8 @@ export async function geminiChat(
     if (signal?.aborted) break;
     const model = models[modelIndex];
     const thinkingConfig = thinkingFor(model);
-    const timer = deadline(signal, 12_000, 40_000);
+    // Flash-lite starts writing in about a second: no first word in 8 s means it is stuck, not slow.
+    const timer = deadline(signal, 8_000, 40_000);
     let res: Response;
     try {
       res = await fetch(`${BASE}/models/${model}:streamGenerateContent?alt=sse`, {
@@ -168,6 +169,8 @@ export async function geminiChat(
       if (signal?.aborted) break;
       // Slow or unreachable: the next (lighter) free model answers instead.
       console.error('[assistant] Gemini timeout', model);
+      // A model that hangs is skipped for a while, so the next questions do not wait on it again.
+      resting.set(model, Date.now() + 5 * 60_000);
       if (nextModel()) continue;
       throw new AiFailedError('Ulanishda xato. Birozdan so‘ng qayta urinib ko‘ring. (GNET)');
     }

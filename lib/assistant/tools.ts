@@ -10,6 +10,7 @@ import { normalizePhone } from '@/lib/site/normalize';
 import { agencyDateKey, formatTime } from '@/lib/time';
 import type { Database } from '@/types/database';
 import { ACTION_LABELS, confirmToken, isAction, isWrite, offeredActions, runAction } from './agent';
+import type { HoloDeck } from './cards';
 import { rateLimited } from './request';
 
 /** Who is talking to the assistant. Public visitors get sales tools; signed-in people get read-only work tools (RLS). */
@@ -38,7 +39,9 @@ export type AssistantAction =
   /** A change that waits for the person: the widget shows the card; the token goes to /api/assistant/confirm. */
   | { type: 'confirm'; token: string; text: string }
   /** A change was made (or refused) in the system: the widget refreshes the page and Sunny shows the result. */
-  | { type: 'did'; name: string; ok: boolean; message: string };
+  | { type: 'did'; name: string; ok: boolean; message: string; /** A genuine accomplishment, confirmed: Sunny celebrates. */ celebrate?: boolean }
+  /** Holographic cards: the facts of a list, shown by the robot in a voice conversation. */
+  | HoloDeck;
 
 type ToolDef = { name: string; description: string; input_schema: Record<string, unknown> };
 type ToolResult = { content: string; action?: AssistantAction; actions?: AssistantAction[]; ok?: boolean; write?: boolean };
@@ -476,7 +479,7 @@ async function agentAction(name: string, input: Record<string, unknown>, ctx: As
     return { content: JSON.stringify({ holat: 'TASDIQ KUTILMOQDA', xabar: out.message, amal: out.confirm }), actions, ok: true, write: false };
   }
   if (out.link) actions.push({ type: 'link', ...out.link });
-  if (write) actions.push({ type: 'did', name, ok: out.ok, message: out.message });
+  if (write) actions.push({ type: 'did', name, ok: out.ok, message: out.message, ...(out.ok && out.celebrate ? { celebrate: true } : {}) });
   if (out.ok) for (const path of out.revalidate ?? []) {
     try {
       revalidatePath(path);

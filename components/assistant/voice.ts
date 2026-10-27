@@ -6,7 +6,8 @@ import { firstSentence, speakable, speechChunks } from '@/lib/assistant/speech';
 
 export type VoiceLang = 'uz-UZ' | 'ru-RU' | 'en-US';
 /** Same voice, another manner: 'qitmir' is a little more playful (prosody only, see /api/assistant/tts). */
-export type VoiceStyle = 'qitmir';
+/** How the same voice sounds: Qitmir, or Sunny's mood (bright, soft) and professional mode (steady). */
+export type VoiceStyle = 'qitmir' | 'bright' | 'soft' | 'steady';
 
 /** Why the voice could not do what was asked. */
 export type VoiceIssue = 'mic-denied' | 'mic-missing' | 'stt-unavailable' | 'no-speech' | 'stt-failed' | 'voice-missing' | 'tap-to-play';
@@ -504,10 +505,11 @@ export function useVoice() {
         const u = new SpeechSynthesisUtterance(speakable(text, lang));
         u.voice = voice;
         u.lang = voice.lang;
-        // Qitmir: the same system voice, a touch brighter and quicker.
-        if (s.style === 'qitmir') {
-          u.pitch = 1.12;
-          u.rate = 1.06;
+        // The same system voice, its prosody following the style (Qitmir and a good mood brighter, a low mood softer).
+        const prosody = { qitmir: [1.12, 1.06], bright: [1.08, 1.04], soft: [0.94, 0.95], steady: [1, 1] }[s.style ?? 'steady'];
+        if (s.style) {
+          u.pitch = prosody[0];
+          u.rate = prosody[1];
         }
         u.onstart = () => {
           s.played = true;

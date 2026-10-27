@@ -11,7 +11,7 @@ import { RobotFace, type RobotMood } from './RobotFace';
 import { answers } from './answers';
 import { pick, quip } from './qitmir/quips';
 import { store, stored } from './session';
-import { ISSUE_TEXT, useVoice, type SoundSubscribe, type VoiceLang } from './voice';
+import { ISSUE_TEXT, useVoice, type SoundSubscribe, type VoiceLang, type VoiceStyle } from './voice';
 import { WakeListener, wakeRecognizer, type WakeState } from './wake';
 import './sunbot-chat.css';
 
@@ -22,7 +22,10 @@ type Action =
   /** A change waiting for the person: shown as a card; only their click (or "ha") sends the token back. */
   | { type: 'confirm'; token: string; text: string; state?: 'pending' | 'running' | 'done' | 'failed' | 'cancelled' }
   /** A change the system made (ok) or refused, as the server reported it after checking the database. */
-  | { type: 'did'; name: string; ok: boolean; message: string };
+  | { type: 'did'; name: string; ok: boolean; message: string; celebrate?: boolean }
+  /** Holographic cards: the facts of a list, shown by the robot in a voice conversation. */
+  | { type: 'cards'; title: string; items: HoloCard[]; more: number };
+type HoloCard = { title: string; sub?: string | null; time?: string | null; status?: string | null; warn?: boolean; href?: string | null };
 type Msg = { role: 'user' | 'assistant'; text: string; actions?: Action[]; error?: boolean; streaming?: boolean; retry?: string };
 type Done = { reply?: string; actions?: Action[] };
 type Step = { phase: 'start'; name: string; label: string } | { phase: 'end'; name: string; ok: boolean; write: boolean };
@@ -90,8 +93,47 @@ function save(audience: ChatAudience, msgs: Msg[]) {
 /** "Sunny!" answered aloud, then it listens. */
 const ACK = ['Eshitaman!', 'Ha, eshitaman.', 'Qani, ayting.', 'Shu yerdaman!', 'Eshitaman, nima gap?'];
 
-/** The voice's manner: playful in Qitmir mode, Sunny's usual one otherwise. */
-const voiceStyle = (qitmir: boolean) => (qitmir ? ('qitmir' as const) : undefined);
+/** The voice's manner: playful in Qitmir mode, even in professional mode, otherwise a little of Sunny's mood. */
+const BRIGHT = new Set<Emotion>(['happy', 'excited', 'celebrating', 'proud', 'playful']);
+const SOFT = new Set<Emotion>(['sleepy', 'sad', 'embarrassed', 'sulking', 'offended']);
+function voiceStyle(qitmir: boolean, professional: boolean, feeling?: Emotion): VoiceStyle | undefined {
+  if (qitmir) return 'qitmir';
+  if (professional) return 'steady';
+  return feeling && BRIGHT.has(feeling) ? 'bright' : feeling && SOFT.has(feeling) ? 'soft' : undefined;
+}
+
+/** Holographic cards (voice mode): a few compact facts by the robot, each with at most one link. */
+function Holo({ deck, onOpen }: { deck: Extract<Action, { type: 'cards' }>; onOpen?: () => void }) {
+  return (
+    <section className="sb-holo" aria-label={deck.title}>
+      <p className="sb-holo-title">{deck.title}</p>
+      <ul>
+        {deck.items.map((c, i) => (
+          <li key={i} className={`sb-holo-card ${c.warn ? 'warn' : ''}`} style={{ animationDelay: `${i * 55}ms` }}>
+            <span className="sb-holo-main">
+              <span className="sb-holo-name">{c.title}</span>
+              {c.sub ? <span className="sb-holo-sub">{c.sub}</span> : null}
+            </span>
+            <span className="sb-holo-meta">
+              {c.time ? <span className="sb-holo-time">{c.time}</span> : null}
+              {c.status ? <span className="sb-holo-status">{c.status}</span> : null}
+              {c.href ? (
+                <Link href={c.href} className="sb-holo-link" aria-label={`${c.title} — ochish`}>
+                  Ochish →
+                </Link>
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {deck.more ? (
+        <button type="button" className="sb-holo-more" onClick={onOpen}>
+          Yana {deck.more} ta — chatda
+        </button>
+      ) : null}
+    </section>
+  );
+}
 
 /** Light markdown: **bold** and [label](/path) links, nothing else. */
 function Rich({ text }: { text: string }) {
@@ -180,6 +222,10 @@ export type ChatFace = { mood: RobotMood; sound?: SoundSubscribe; /** A voice co
 export function SunBotChat({
   audience,
   qitmir = false,
+  professional = false,
+  onCelebrate,
+  ask,
+  announce,
   open,
   closing,
   onClose,
@@ -202,6 +248,14 @@ export function SunBotChat({
   audience: ChatAudience;
   /** Qitmir mode: the same assistant and the same rules, a playful voice and wit (never on errors). */
   qitmir?: boolean;
+  /** Professional mode: serious and concise; the same assistant, the same rules. */
+  professional?: boolean;
+  /** A genuine accomplishment the server confirmed (a task done, content approved): Sunny celebrates. */
+  onCelebrate?: () => void;
+  /** A question asked for the person (a ritual's "Ha"): answered on the voice card, the panel stays closed. */
+  ask?: { text: string; id: number };
+  /** A proactive line to say aloud (only when the person turned proactive speech on). */
+  announce?: { text: string; id: number };
   open: boolean;
   closing: boolean;
   onClose: () => void;
@@ -254,6 +308,12 @@ export function SunBotChat({
   mutedRef.current = muted;
   const qitmirRef = useRef(qitmir);
   qitmirRef.current = qitmir;
+  const proRef = useRef(professional);
+  proRef.current = professional;
+  const styleRef = useRef<VoiceStyle | undefined>(undefined);
+  styleRef.current = voiceStyle(qitmir, professional, feeling);
+  const celebrateRef = useRef(onCelebrate);
+  celebrateRef.current = onCelebrate;
   const actRef = useRef(onAct);
   actRef.current = onAct;
   const feelRef = useRef({ onFeel, feeling });
@@ -401,7 +461,7 @@ export function SunBotChat({
         actRef.current?.(local.act);
         if (local.act !== 'stop' && (via === 'voice' || !mutedRef.current) && (openRef.current || voiceOnlyRef.current)) {
           spokenText.current = reply;
-          void voice.speak(reply, lang, voiceStyle(qitmirRef.current));
+          void voice.speak(reply, lang, styleRef.current);
         }
         return;
       }
@@ -430,7 +490,7 @@ export function SunBotChat({
       }
 
       // A question asked in voice mode is always answered aloud.
-      const speech = mutedRef.current && !(via === 'voice' && voiceOnlyRef.current) ? null : voice.speech(lang, voiceStyle(qitmirRef.current));
+      const speech = mutedRef.current && !(via === 'voice' && voiceOnlyRef.current) ? null : voice.speech(lang, styleRef.current);
       const live = () => request.current.id === id;
       let streamed = '';
       let shown = false;
@@ -453,7 +513,7 @@ export function SunBotChat({
           body: JSON.stringify({
             messages: history.slice(-HISTORY).map(({ role, text }) => ({ role, text: text.slice(0, MAX_TEXT) })),
             stream: true,
-            ...(qitmirRef.current ? { mode: 'qitmir' } : {}),
+            ...(qitmirRef.current ? { mode: 'qitmir' } : proRef.current ? { mode: 'professional' } : {}),
             ...(feelRef.current.feeling && feelRef.current.feeling !== 'friendly' ? { feeling: feelRef.current.feeling } : {}),
             // Sunny Vision: which page the person is looking at ("shu vazifa" = the one on screen).
             page: { path: location.pathname.slice(0, 180), title: document.title.slice(0, 120) },
@@ -548,6 +608,8 @@ export function SunBotChat({
       if (final.actions?.some((a) => a.type === 'open_apply')) setTimeout(() => openApplication(), 600);
       // Something changed in the system: the page behind the chat shows it without a reload.
       if (final.actions?.some((a) => a.type === 'did' && a.ok)) router.refresh();
+      // A real accomplishment, confirmed by the system (never before): Sunny celebrates.
+      if (final.actions?.some((a) => a.type === 'did' && a.ok && a.celebrate)) celebrateRef.current?.();
       if (!speech) return onReplied?.();
       if (!openRef.current && !voiceOnlyRef.current) return speech.cancel();
       // The reply is the streamed bubble already on screen, or the one just added after the last rendered message.
@@ -574,7 +636,7 @@ export function SunBotChat({
       const say = (text: string) => {
         if (voiceOnlyRef.current || (!mutedRef.current && openRef.current)) {
           spokenText.current = text;
-          void voice.speak(text, lang, voiceStyle(qitmirRef.current));
+          void voice.speak(text, lang, styleRef.current);
         }
       };
       if (!yes) {
@@ -587,7 +649,7 @@ export function SunBotChat({
       }
       mark('running');
       setWorking('Bajarilmoqda');
-      let data: { ok?: boolean; name?: string; message?: string; link?: { href: string; label: string } | null };
+      let data: { ok?: boolean; name?: string; message?: string; link?: { href: string; label: string } | null; celebrate?: boolean };
       try {
         const res = await fetch('/api/assistant/confirm', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: card.token }) });
         data = await res.json().catch(() => ({ ok: false, message: 'Xatolik yuz berdi.' }));
@@ -606,6 +668,7 @@ export function SunBotChat({
       setMsgs((m) => [...m, { role: 'assistant', text, actions }]);
       say(text);
       if (ok) router.refresh();
+      if (ok && data.celebrate) celebrateRef.current?.();
     },
     [lang, report, router, voice],
   );
@@ -647,7 +710,7 @@ export function SunBotChat({
     if (rest) return void send(rest, 'voice');
     const ack = pick('wake', ACK);
     spokenText.current = ack;
-    void voice.speak(ack, lang, voiceStyle(qitmirRef.current)).then(() => hearRef.current());
+    void voice.speak(ack, lang, styleRef.current).then(() => hearRef.current());
   };
   const onBarge = useRef<(rest: string) => void>(() => undefined);
   onBarge.current = (rest) => {
@@ -704,6 +767,25 @@ export function SunBotChat({
     hearRef.current();
   }, [voiceAsk, voice]);
 
+  // A ritual's "Ha" (or any question asked for the person): answered on the voice card by the robot.
+  const lastQuestion = useRef(0);
+  useEffect(() => {
+    if (!ask || ask.id === lastQuestion.current) return;
+    lastQuestion.current = ask.id;
+    if (!openRef.current) setVoiceOnly(true);
+    voiceOnlyRef.current = !openRef.current;
+    void send(ask.text, 'text');
+  }, [ask, send]);
+  // A proactive line, aloud: only when the person asked for it, and never over Sunny's own speech or the microphone.
+  const lastAnnounce = useRef(0);
+  useEffect(() => {
+    if (!announce || announce.id === lastAnnounce.current) return;
+    lastAnnounce.current = announce.id;
+    if (busyRef.current || voice.listening || voice.speaking || voice.preparing) return;
+    spokenText.current = announce.text;
+    void voice.speak(announce.text, lang, styleRef.current);
+  }, [announce, voice, lang]);
+
   const toggleMute = () => {
     voice.unlock();
     const next = !muted;
@@ -730,7 +812,7 @@ export function SunBotChat({
     interrupt(false);
     setSpoken(i);
     spokenText.current = text;
-    void voice.speak(text, lang, voiceStyle(qitmirRef.current));
+    void voice.speak(text, lang, styleRef.current);
   };
 
   const talking = voice.speaking || voice.preparing;
@@ -804,7 +886,8 @@ export function SunBotChat({
               <Rich text={replyMsg.text} />
             </div>
           ) : null}
-          {replyMsg?.actions?.length ? (
+          {replyMsg?.actions?.map((a, j) => (a.type === 'cards' ? <Holo key={`h${j}`} deck={a} onOpen={onOpen} /> : null))}
+          {replyMsg?.actions?.some((a) => a.type !== 'cards') ? (
             <div className="sb-actions">
               {replyMsg.actions.map((a, j) =>
                 a.type === 'confirm' && (a.state ?? 'pending') === 'pending' ? (
@@ -946,7 +1029,7 @@ export function SunBotChat({
                     </button>
                   </div>
                 ) : null}
-                {m.actions?.length ? (
+                {m.actions?.some((a) => a.type !== 'cards') ? (
                   <div className="sb-actions">
                     {m.actions.map((a, j) =>
                       a.type === 'link' ? (

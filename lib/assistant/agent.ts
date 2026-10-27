@@ -10,6 +10,7 @@ import { toUserMessage } from '@/lib/errors';
 import type { Stage } from '@/lib/workflow-shared';
 import type { Database } from '@/types/database';
 import { fits, rankCandidates, TASK_WORD, type Candidate, type Skill } from './delegation';
+import { milestone } from './mission';
 import { assessRisks, type RiskContent, type RiskShooting, type RiskTask } from './predict';
 import { matches, searchTerms, snippet } from './recall';
 
@@ -49,6 +50,8 @@ export type Outcome = {
   revalidateTags?: string[];
   /** Set when the action waits for the person's confirmation: what will happen, in one sentence. */
   confirm?: string;
+  /** A real transition that is an accomplishment (a task finished, content approved): Sunny may celebrate. */
+  celebrate?: boolean;
 };
 
 type Def<I> = {
@@ -458,7 +461,7 @@ export const ACTIONS: AnyDef[] = [
       if (!after) return { ok: false, message: 'O‘zgarishni tasdiqlab bo‘lmadi.' };
       const v = taskView(after as unknown as TaskRow);
       if (i.status && v.holat !== i.status) return { ok: false, message: 'Holat saqlanmadi (ish jarayoni qoidasi rad etdi).' };
-      return { ok: true, message: `“${v.vazifa}” yangilandi — ${changes.join('; ')}.`, data: v, link: { href: taskLink(ctx, t.id), label: 'Vazifani ochish' }, revalidate: ['/work/tasks', `/work/tasks/${t.id}`, '/xodim', `/xodim/vazifa/${t.id}`, '/panel'] };
+      return { ok: true, message: `“${v.vazifa}” yangilandi — ${changes.join('; ')}.`, data: v, celebrate: !!i.status && i.status !== t.status && milestone('update_task', i), link: { href: taskLink(ctx, t.id), label: 'Vazifani ochish' }, revalidate: ['/work/tasks', `/work/tasks/${t.id}`, '/xodim', `/xodim/vazifa/${t.id}`, '/panel'] };
     },
   }),
 
@@ -549,7 +552,7 @@ export const ACTIONS: AnyDef[] = [
       }
       const { data: after } = await ctx.db.from('content_items').select('status').eq('id', item.id).maybeSingle();
       if (after?.status !== i.status) return { ok: false, message: 'Holat saqlanmadi.' };
-      return { ok: true, message: `“${item.title}” — ${STATUS_UZ[i.status]}.`, data: { id: item.id, holat: i.status }, link: { href: `/work/content/${item.id}`, label: 'Kontentni ochish' }, revalidate: [`/work/content/${item.id}`, '/work/content', '/panel'] };
+      return { ok: true, message: `“${item.title}” — ${STATUS_UZ[i.status]}.`, data: { id: item.id, holat: i.status }, celebrate: milestone('set_content_status', i), link: { href: `/work/content/${item.id}`, label: 'Kontentni ochish' }, revalidate: [`/work/content/${item.id}`, '/work/content', '/panel'] };
     },
   }),
 
@@ -1070,6 +1073,50 @@ export const ACTIONS: AnyDef[] = [
     },
   }),
 
+  define({
+    name: 'briefing',
+    description:
+      'Kunlik ish brifingi — faqat tizimdagi haqiqiy ma’lumot: bugun muddati tugaydigan va muddati o‘tgan vazifalarim, bugungi s’yomkalarim (vaqti, joyi), bugun muddati yoki posti bo‘lgan kontentim. "Bugun qanday ishlarim bor?", "kunimni aytib ber" uchun. Uchrashuv yoki jadvalni o‘ylab topma.',
+    params: { type: 'object', properties: {} },
+    input: z.object({}).passthrough(),
+    write: false,
+    run: async (_, ctx) => {
+      const start = new Date(`${today()}T00:00:00+05:00`);
+      const end = new Date(start.getTime() + 86_400_000).toISOString();
+      const [tasks, shoots, content] = await Promise.all([
+        ctx.db.from('tasks').select(`${TASK_SELECT}, mine:task_assignments!inner(user_id)`).eq('mine.user_id', ctx.userId).is('deleted_at', null).in('status', [...OPEN_TASK]).lt('due_at', end).order('due_at').limit(30),
+        ctx.db
+          .from('shooting_members')
+          .select('role, shooting:shootings!inner(id, title, starts_at, ends_at, status, location_name, deleted_at, client:clients(name))')
+          .eq('user_id', ctx.userId)
+          .gte('shooting.starts_at', start.toISOString())
+          .lt('shooting.starts_at', end)
+          .is('shooting.deleted_at', null)
+          .not('shooting.status', 'in', '(cancelled,postponed,completed)'),
+        ctx.db.from('content_assignments').select('content:content_items!content_assignments_content_id_fkey(id, title, status, due_at, post_at, deleted_at, client:clients(name))').eq('user_id', ctx.userId).limit(60),
+      ]);
+      const failed = tasks.error ?? shoots.error;
+      if (failed) return { ok: false, message: dbError(failed) };
+      const due = ((tasks.data ?? []) as unknown as TaskRow[]).map(taskView);
+      type Shoot = { id: string; title: string; starts_at: string; ends_at: string; location_name: string | null; client: { name: string } | null };
+      const syomkalar = ((shoots.data ?? []) as unknown as { role: string; shooting: Shoot }[])
+        .sort((a, b) => a.shooting.starts_at.localeCompare(b.shooting.starts_at))
+        .map(({ role, shooting: x }) => ({ syomka: x.title, mijoz: x.client?.name ?? null, vaqt: `${clock(x.starts_at)}–${clock(x.ends_at)}`, joy: x.location_name, rol: CREW_UZ[role] ?? role, havola: has(ctx, 'shootings.manage') ? `/work/shootings/${x.id}` : null }));
+      type Item = { id: string; title: string; status: string; due_at: string | null; post_at: string | null; deleted_at: string | null; client: { name: string } | null };
+      const endMs = new Date(end).getTime();
+      const kontent = ((content.data ?? []) as unknown as { content: Item | null }[])
+        .map((r) => r.content)
+        .filter((k): k is Item => !!k && !k.deleted_at && !['approved', 'scheduled', 'published', 'cancelled'].includes(k.status) && [k.due_at, k.post_at].some((d) => !!d && new Date(d).getTime() < endMs))
+        .map((k) => ({ kontent: k.title, mijoz: k.client?.name ?? null, bosqich: STATUS_UZ[k.status] ?? k.status, muddat: when(k.due_at), post: when(k.post_at), havola: has(ctx, 'content.manage') ? `/work/content/${k.id}` : null }));
+      const late = due.filter((t) => t.muddati_otgan).length;
+      return {
+        ok: true,
+        message: `Bugun: ${due.length - late} ta vazifa muddati, ${late} ta muddati o‘tgan, ${syomkalar.length} ta s’yomka, ${kontent.length} ta kontent.`,
+        data: { sana: today(), vazifalar: due, syomkalar, kontent },
+      };
+    },
+  }),
+
   // ----- partner concierge (§33): a partner's own company only (row-level security), read only -----
   define({
     name: 'partner_status',
@@ -1189,6 +1236,7 @@ export const ACTION_LABELS: Record<string, string> = {
   recall: 'Xotiradan qidirilmoqda',
   partner_status: 'Loyiha holati o‘qilmoqda',
   my_approvals: 'Tasdiq kutayotganlar o‘qilmoqda',
+  briefing: 'Bugungi kun yig‘ilmoqda',
 };
 
 /** One sentence naming exactly what a write will do: shown on the confirmation card. */

@@ -2,7 +2,14 @@
  * Qitmir mode in Sunny's words: added to the system prompt only when the person turned the mode on in the widget.
  * It changes the tone and nothing else — the same tools, the same permissions, the same confirmation rules.
  */
-export type AssistantMode = 'qitmir';
+export type AssistantMode = 'qitmir' | 'professional';
+export const MODES = ['qitmir', 'professional'] as const;
+
+/** Professional mode (§44): serious, concise, work only. The same tools, permissions and confirmations. */
+export const PROFESSIONAL_PERSONA = `PROFESSIONAL REJIM (foydalanuvchi o‘zi yoqdi): jiddiy, qisqa va faqat ish haqida gapir.
+- Hazil, qitmirlik, emoji va kayfiyat haqidagi gaplar yo‘q. Salomlashish ham qisqa.
+- Avval natija yoki raqam, keyin kerak bo‘lsa 2–5 qisqa band, oxirida bitta aniq keyingi qadam.
+- Amallar qoidalari o‘zgarmaydi: asbobsiz yoki natijasiz "bajardim" dema, tasdiq kerak bo‘lsa tasdiq so‘ra.`;
 
 export const QITMIR_PERSONA = `QITMIR REJIM (foydalanuvchi o‘zi yoqdi): bu suhbatda sen — qitmir Sunny, ko‘zlaring qizil, kayfiyating sho‘x.
 - Ohang: qitmir, hazilkash, biroz ayyor va biroz jiddiy — lekin samimiy, aqlli va xushmuomala. Qisqa va topqir gapir.
@@ -37,4 +44,4 @@ export function feelingPrompt(feeling?: Feeling | null): string {
 }
 
 /** The system prompt's mode section ('' for Sunny's usual manner). */
-export const modePrompt = (mode?: AssistantMode | null) => (mode === 'qitmir' ? QITMIR_PERSONA : '');
+export const modePrompt = (mode?: AssistantMode | null) => (mode === 'qitmir' ? QITMIR_PERSONA : mode === 'professional' ? PROFESSIONAL_PERSONA : '');

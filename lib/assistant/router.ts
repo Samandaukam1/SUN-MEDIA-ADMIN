@@ -8,7 +8,7 @@ import { normalize } from './intents';
  */
 
 export type Route =
-  | { tool: 'check_in' | 'list_tasks' | 'upcoming_shootings' | 'my_memories' | 'risks' | 'my_approvals' | 'partner_status'; input: Record<string, unknown> }
+  | { tool: 'check_in' | 'list_tasks' | 'upcoming_shootings' | 'my_memories' | 'risks' | 'my_approvals' | 'partner_status' | 'briefing'; input: Record<string, unknown> }
   | { link: { href: string; label: string } };
 
 /** Panel pages by the words people use for them (only a link: the page itself checks access). */
@@ -45,6 +45,9 @@ export function routeCommand(text: string, audience: 'public' | 'staff' | 'clien
     if (/^(xotiram|nimalarni eslab qolding|nima eslab qolding|eslab qolganlaring|men haqimda nima bilasan)$/u.test(t)) return { tool: 'my_memories', input: {} };
     if (/^(qanday )?xavflar( bor(mi)?)?$|^xavf bormi$|^nima(lar)? kechikishi mumkin$|^qaysi (ishlar|vazifalar|kontentlar) kechikishi mumkin$|^(nimaga|nimalarga) etibor ber(ay|ish kerak)$/u.test(t)) {
       return { tool: 'risks', input: {} };
+    }
+    if (/^bugun (qanday|nima|qanaqa) ish(lar)?im bor$|^bugungi ish(lar)?im( qanday)?$|^bugun nima qilishim kerak$|^kunlik (reja|brif(ing)?)$|^brif(ing)?$|^kunimni (aytib ber|ayt)$|^bugungi rejam( qanday)?$|^bugun nimalar bor$/u.test(t)) {
+      return { tool: 'briefing', input: {} };
     }
   }
   // Partners: their own approvals queue and project status.
@@ -119,6 +122,32 @@ export function risksReply(content: string): string {
   const high = rows.filter((x) => x.daraja === 'yuqori').length;
   const list = rows.slice(0, 6).map((x, i) => `${i + 1}. ${x.daraja === 'yuqori' ? '(yuqori) ' : ''}${x.nima}. ${x.tavsiya}`);
   return [`Qoidalar bo‘yicha ${rows.length} ta ehtimoliy xavf${high ? `, ${high} tasi yuqori` : ''} (bu taxmin, fakt emas):`, ...list, rows.length > 6 ? `…yana ${rows.length - 6} ta.` : ''].filter(Boolean).join('\n');
+}
+
+/** The day in two or three spoken sentences (§39): only what the system has, nothing invented. */
+export function briefingReply(content: string): string {
+  type B = {
+    vazifalar?: { muddati_otgan?: boolean; mijoz?: string | null }[];
+    syomkalar?: { syomka: string; mijoz: string | null; vaqt: string; joy: string | null }[];
+    kontent?: { kontent: string; post: string | null; muddat: string | null }[];
+  };
+  const r = outcome<B>(content);
+  if (!r) return content;
+  if (r.failed) return r.failed;
+  const b = r.rows ?? {};
+  const tasks = b.vazifalar ?? [];
+  const shoots = b.syomkalar ?? [];
+  const items = b.kontent ?? [];
+  const late = tasks.filter((t) => t.muddati_otgan).length;
+  const todays = tasks.length - late;
+  if (!tasks.length && !shoots.length && !items.length) return 'Bugun rejangizda muddati tugaydigan vazifa, s’yomka yoki kontent yo‘q. Yangi ish kelsa, aytaman.';
+  const lines = [
+    todays || shoots.length ? `Bugun ${[todays ? `${todays} ta vazifangiz muddati tugaydi` : '', shoots.length ? `${shoots.length} ta s’yomkangiz bor` : ''].filter(Boolean).join(', ')}.` : '',
+    late ? `${late} ta vazifa muddati o‘tgan — avval shularni yoping.` : '',
+    ...shoots.slice(0, 3).map((x) => `${x.mijoz ?? x.syomka} s’yomkasi soat ${x.vaqt.split('–')[0]} da${x.joy ? ` (${x.joy})` : ''}.`),
+    items.length ? `Kontent: ${items.slice(0, 3).map((k) => `“${k.kontent}”${k.post ? ` — post ${k.post}` : k.muddat ? ` — muddat ${k.muddat}` : ''}`).join('; ')}.` : '',
+  ];
+  return lines.filter(Boolean).join('\n');
 }
 
 /** A partner's approval queue. */

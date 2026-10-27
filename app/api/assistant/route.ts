@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { AiFailedError, AiNotConfiguredError } from '@/lib/ai';
 import { assistantReply } from '@/lib/assistant/engine';
 import { PAGE_PATH } from '@/lib/assistant/context';
-import { FEELINGS } from '@/lib/assistant/qitmir';
+import { FEELINGS, MODES } from '@/lib/assistant/qitmir';
 import { assistantContext, corsHeaders, rateLimited } from '@/lib/assistant/request';
 
 export const runtime = 'nodejs';
@@ -17,8 +17,8 @@ const body = z.object({
     .min(1)
     .max(400),
   stream: z.boolean().optional(),
-  /** Qitmir mode (the widget's switch): Sunny's manner only. */
-  mode: z.enum(['qitmir']).optional(),
+  /** Qitmir or professional mode (the widget's switches): Sunny's manner only, never what it may do. */
+  mode: z.enum(MODES).optional(),
   /** Sunny's simulated mood in the widget: the tone only. */
   feeling: z.enum(FEELINGS).optional(),
   /** Sunny Vision: the page the person is on (address and title only). */

@@ -578,3 +578,61 @@ test('24. partner concierge: each partner sees its own project only; staff tools
     gemini.restore();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Phase 7: daily briefing with holographic cards, celebration, professional mode
+// ---------------------------------------------------------------------------
+test('25. briefing: "Bugun qanday ishlarim bor?" — the day’s real tasks and shootings, spoken and as cards, without the AI', { skip }, async () => {
+  // Today's shooting for the operator moves to 17:00 (Tashkent); a task of theirs is due tonight.
+  const shoot = one(`select s.id || '|' || s.starts_at || '|' || s.ends_at from shootings s where s.title = 'SAFI Yunusobod syomkasi'`).split('|');
+  sql(`update shootings set starts_at = ((now() at time zone 'Asia/Tashkent')::date + time '17:00') at time zone 'Asia/Tashkent',
+        ends_at = ((now() at time zone 'Asia/Tashkent')::date + time '19:00') at time zone 'Asia/Tashkent' where id = '${shoot[0]}'`);
+  sql(`with t as (insert into tasks (title, task_type, status, due_at, client_id)
+        values ('TEST· Bugungi montaj', 'editing', 'todo', ((now() at time zone 'Asia/Tashkent')::date + time '23:30') at time zone 'Asia/Tashkent', (select id from clients where name = 'SAFI')) returning id)
+      insert into task_assignments (task_id, user_id) select t.id, u.id from t, auth.users u where u.email = 'operator@sunmedia.local'`);
+  const gemini = fakeGemini([() => [{ text: 'AI should not be asked' }]]);
+  try {
+    const { reply, actions } = await assistantReply([{ role: 'user', text: 'Sunny, bugun qanday ishlarim bor?' }], { ...asTool(operator) }, 'Anisjon');
+    assert.equal(gemini.sent.length, 0, 'no AI request');
+    assert.match(reply, /^Bugun \d+ ta vazifangiz muddati tugaydi, 1 ta s’yomkangiz bor\./, reply);
+    assert.match(reply, /SAFI s’yomkasi soat 17:00 da/);
+    const deck = actions.find((a) => a.type === 'cards');
+    assert.equal(deck?.title, 'Bugungi kun');
+    assert.equal(deck.items[0].title, 'SAFI Yunusobod syomkasi');
+    assert.equal(deck.items[0].time, '17:00–19:00');
+    const task = deck.items.find((c) => c.title === 'TEST· Bugungi montaj');
+    assert.ok(task, JSON.stringify(deck.items));
+    // The operator sees only their own task page.
+    assert.match(task.href, /^\/xodim\/vazifa\/[0-9a-f-]{36}$/);
+  } finally {
+    gemini.restore();
+    sql(`update shootings set starts_at = '${shoot[1]}', ends_at = '${shoot[2]}' where id = '${shoot[0]}'`);
+  }
+});
+
+test('26. celebration only after the system confirmed a real accomplishment; professional mode changes the tone only', { skip }, async () => {
+  const ctx = { ...asTool(admin) };
+  const done = await runTool('update_task', { task: 'TEST· Bugungi montaj', status: 'done' }, ctx);
+  const did = done.actions.find((a) => a.type === 'did');
+  assert.equal(did.ok, true, did.message);
+  assert.equal(did.celebrate, true);
+  assert.equal(one(`select status from tasks where title = 'TEST· Bugungi montaj'`), 'done', 'the database says done, not the model');
+  // Already done: nothing happened, so nothing to celebrate.
+  const again = await runTool('update_task', { task: (await runAction('list_tasks', { scope: 'all', filter: 'done' }, admin)).data.find((t) => t.vazifa === 'TEST· Bugungi montaj').id, status: 'done' }, ctx);
+  assert.match(again.actions.find((a) => a.type === 'did').message, /allaqachon/);
+  assert.ok(!again.actions.some((a) => a.celebrate));
+  const refused = await runTool('update_task', { task: 'TEST· mavjud emas', status: 'done' }, ctx);
+  assert.ok(!refused.actions.some((a) => a.celebrate), 'nothing done, nothing celebrated');
+
+  const gemini = fakeGemini([() => [{ text: 'Bugun 2 ta vazifa.' }]]);
+  try {
+    await assistantReply([{ role: 'user', text: 'Holat qanday?' }], { ...asTool(operator) }, 'Anisjon', { mode: 'professional', feeling: 'happy' });
+    const system = gemini.sent[0].systemInstruction.parts[0].text;
+    assert.match(system, /PROFESSIONAL REJIM/);
+    assert.doesNotMatch(system, /Kayfiyat \(o‘yin/, 'no mood in professional mode');
+    const offered = gemini.sent[0].tools[0].functionDeclarations.map((d) => d.name);
+    assert.deepEqual(offered, toolsFor({ audience: 'staff', ...operator }).map((t) => t.name), 'the same tools in every mode');
+  } finally {
+    gemini.restore();
+  }
+});

@@ -8,7 +8,14 @@ import { speakable, speechSsml, textLanguage, type SpeechLang } from '@/lib/assi
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const body = z.object({ text: z.string().trim().min(1).max(900), stream: z.boolean().optional(), style: z.enum(['qitmir']).optional() });
+const body = z.object({ text: z.string().trim().min(1).max(900), stream: z.boolean().optional(), style: z.enum(['qitmir', 'bright', 'soft', 'steady']).optional() });
+
+/** Prosody per style (Azure): Qitmir livelier, a good mood a little brighter, a low mood softer, professional even. */
+const PROSODY: Record<'bright' | 'soft' | 'steady', { rate: string; pitch: string }> = {
+  bright: { rate: '+7%', pitch: '+29%' },
+  soft: { rate: '-3%', pitch: '+18%' },
+  steady: { rate: '+2%', pitch: '+20%' },
+};
 
 /** The voice for the reply's language: Uzbek (Latin or Cyrillic) by default, Russian, or English. */
 function voiceFor(text: string): { lang: SpeechLang; voice: string } {
@@ -63,8 +70,8 @@ export async function POST(request: NextRequest) {
   const ssml = speechSsml(spoken, {
     lang,
     voice,
-    rate: playful ? process.env.ASSISTANT_QITMIR_RATE || '+9%' : process.env.ASSISTANT_RATE || '+4%',
-    pitch: playful ? process.env.ASSISTANT_QITMIR_PITCH || '+28%' : process.env.ASSISTANT_PITCH || '+25%',
+    rate: playful ? process.env.ASSISTANT_QITMIR_RATE || '+9%' : parsed.data.style ? PROSODY[parsed.data.style as keyof typeof PROSODY].rate : process.env.ASSISTANT_RATE || '+4%',
+    pitch: playful ? process.env.ASSISTANT_QITMIR_PITCH || '+28%' : parsed.data.style ? PROSODY[parsed.data.style as keyof typeof PROSODY].pitch : process.env.ASSISTANT_PITCH || '+25%',
     playful,
   });
   const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, {

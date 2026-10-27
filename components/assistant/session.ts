@@ -13,3 +13,19 @@ export function store(key: string, value: string) {
     // ignore
   }
 }
+
+/** localStorage, the same way: for choices that outlive a visit (Sunny's reminders, today's rituals). */
+export function kept(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+export function keep(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // ignore
+  }
+}

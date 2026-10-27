@@ -5,11 +5,12 @@ import { agencyKnowledge, budgetHints } from './knowledge';
 import { pagePrompt, type PageContext } from './context';
 import { memoryContext, styleContext } from './memory';
 import { isWrite } from './agent';
+import { cardsFor, type HoloDeck } from './cards';
 import { missionLedger, stepOf, type MissionStep } from './mission';
 import { memoriesReply, socialPrompt } from './persona';
 import { configuredProviders, type ChatTurn } from './providers';
 import { quip } from '@/components/assistant/qitmir/quips';
-import { actionReply, approvalsReply, partnerReply, risksReply, routeCommand, shootingsReply, tasksReply } from './router';
+import { actionReply, approvalsReply, briefingReply, partnerReply, risksReply, routeCommand, shootingsReply, tasksReply } from './router';
 import { feelingPrompt, modePrompt, type AssistantMode, type Feeling } from './qitmir';
 import { agencyDateKey } from '@/lib/time';
 import { textLanguage } from './speech';
@@ -117,7 +118,8 @@ async function systemPrompt(ctx: AssistantContext, name: string | null, lastQues
     memory,
     // The manner only (Qitmir mode): tools, permissions and confirmations above stay exactly the same.
     modePrompt(mode),
-    feelingPrompt(feeling),
+    // Professional mode is serious: no mood in the tone.
+    feelingPrompt(mode === 'professional' ? null : feeling),
     pagePrompt(page),
     // Last, so it is fresh when the model starts writing: the knowledge above is Uzbek, the reply follows the visitor.
     `Eslatma: bu javobni ${REPLY_IN[reply.lang]}${reply.cyrillic && reply.lang === 'uz-UZ' ? ', kirill yozuvida' : ''} yoz (boshqa tilda matn so‘ralsa, o‘sha matnning o‘zi so‘ralgan tilda).`,
@@ -146,12 +148,17 @@ export async function assistantReply(
 ): Promise<{ reply: string; actions: AssistantAction[] }> {
   // Every change attempted in this turn, as the system reported it (mission mode: the person sees each one's real state).
   const mission: MissionStep[] = [];
+  // Holographic cards (§34): the facts of the last list Sunny read, shown by the robot in a voice conversation.
+  let deck: HoloDeck | null = null;
+  const taskHref = (id: string) =>
+    ctx.audience !== 'staff' ? '' : ctx.owner || ctx.permissions.some((p) => p === 'tasks.manage' || p === 'tasks.read_all') ? `/work/tasks/${id}` : `/xodim/vazifa/${id}`;
   const step = async (tool: string, input: Record<string, unknown>) => {
     onStep?.({ phase: 'start', name: tool, label: toolLabel(tool) });
     const result = await runTool(tool, input, ctx);
     onStep?.({ phase: 'end', name: tool, ok: result.ok !== false, write: !!result.write });
     const change = isWrite(tool) ? stepOf(tool, result.content) : null;
     if (change) mission.push(change);
+    if (!isWrite(tool)) deck = cardsFor(tool, result.content, taskHref) ?? deck;
     return result;
   };
   // An exact command (attendance, my tasks, shootings, a page) is done by the system's own tool, without the AI.
@@ -163,7 +170,7 @@ export async function assistantReply(
   }
   if (route) {
     const result = await step(route.tool, route.input);
-    const actions = [...(result.action ? [result.action] : []), ...(result.actions ?? [])];
+    const actions = [...(result.action ? [result.action] : []), ...(result.actions ?? []), ...(deck ? [deck] : [])];
     let reply: string;
     if (route.tool === 'list_tasks') reply = tasksReply(result.content, route.input.filter as 'open' | 'overdue' | 'today');
     else if (route.tool === 'upcoming_shootings') reply = shootingsReply(result.content);
@@ -171,6 +178,7 @@ export async function assistantReply(
     else if (route.tool === 'risks') reply = risksReply(result.content);
     else if (route.tool === 'my_approvals') reply = approvalsReply(result.content);
     else if (route.tool === 'partner_status') reply = partnerReply(result.content);
+    else if (route.tool === 'briefing') reply = briefingReply(result.content);
     else {
       const out = actionReply(result.content);
       reply = mode === 'qitmir' && out.ok && !out.waiting ? quip(out.text, route.tool, true) : out.text;
@@ -187,7 +195,8 @@ export async function assistantReply(
     // (the visitor would see half an answer twice).
     let wrote = false;
     try {
-      const out = await provider.reply({ system, history, ctx, step, signal, onText: (d) => ((wrote = true), onText?.(d)) });
+      const answered = await provider.reply({ system, history, ctx, step, signal, onText: (d) => ((wrote = true), onText?.(d)) });
+      const out = deck ? { ...answered, actions: [...answered.actions, deck] } : answered;
       // Two or more changes: the system's own account follows the model's words, so a partial failure is never hidden.
       const ledger = missionLedger(mission);
       if (!ledger) return out;

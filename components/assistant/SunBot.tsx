@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { LocalAct } from '@/lib/assistant/intents';
@@ -9,7 +9,8 @@ import { wakeRecognizer, type WakeState } from './wake';
 import { RobotFace } from './RobotFace';
 import { EmotionEngine, expressionOf, type Feeling, type FeelEvent } from './robot/emotion';
 import type { RobotCue } from './robot/Robot3D';
-import { store, stored } from './session';
+import { DEFAULT_PREFS, PREF_LABELS, nudgeFor, readPrefs, ritualFor, type Nudge, type Prefs } from './proactive';
+import { keep, kept, store, stored } from './session';
 import type { ChatAudience, ChatFace } from './SunBotChat';
 import './sunbot.css';
 
@@ -72,6 +73,15 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
   const [qitmir, setQitmir] = useState(false);
   const [paused, setPaused] = useState(false);
   const [cursorFx, setCursorFx] = useState(true);
+  // Professional mode (§44): serious and concise, the robot stays home; never together with Qitmir.
+  const [professional, setProfessional] = useState(false);
+  // What Sunny may bring up on its own (rituals, notifications) and whether aloud: the person's choice, kept on this device.
+  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
+  const [prefsOpen, setPrefsOpen] = useState(false);
+  const [nudge, setNudge] = useState<(Nudge & { id: number }) | null>(null);
+  const [ask, setAsk] = useState<{ text: string; id: number } | undefined>(undefined);
+  const [announce, setAnnounce] = useState<{ text: string; id: number } | undefined>(undefined);
+  const router = useRouter();
   const [stage, setStage] = useState(false);
   const [stageFailed, setStageFailed] = useState(false);
   const [out, setOut] = useState(false);
@@ -167,6 +177,8 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
       setWanted(true);
     }
     setPaused(stored('sunbot:qitmir-pause') === '1');
+    if (stored('sunbot:qitmir') !== '1' && stored('sunbot:pro') === '1') setProfessional(true);
+    setPrefs(readPrefs(kept('sunbot:prefs')));
     setCanWake(!!wakeRecognizer());
     if (stored('sunbot:wake') === '1' && wakeRecognizer()) {
       setWake(true);
@@ -221,7 +233,7 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
 
   // The robot may leave its launcher (Qitmir play, or short trips round the page in normal mode) only with the 3D robot
   // and without reduced motion; the pause button keeps it home. Otherwise Qitmir is the sly face and personality alone.
-  const roam = !paused && three.ok && three.ready && !three.calm && !stageFailed;
+  const roam = !paused && !professional && three.ok && three.ready && !three.calm && !stageFailed;
   useEffect(() => {
     if (roam) setStage(true);
     else if (!out) setStage(false);
@@ -286,8 +298,127 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
     if (next) {
       setWanted(true);
       feel('qitmir');
+      setProfessional(false);
+      store('sunbot:pro', '0');
     }
   };
+  const togglePro = () => {
+    const next = !professional;
+    setProfessional(next);
+    store('sunbot:pro', next ? '1' : '0');
+    if (next && qitmir) {
+      setQitmir(false);
+      store('sunbot:qitmir', '0');
+    }
+  };
+  const setPref = (key: keyof Prefs, value: boolean) => {
+    setPrefs((p) => {
+      const next = { ...p, [key]: value };
+      keep('sunbot:prefs', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const showNudge = useCallback((n: Nudge) => setNudge((old) => ({ ...n, id: (old?.id ?? 0) + 1 })), []);
+  // A nudge fades by itself; a short cheer sooner.
+  useEffect(() => {
+    if (!nudge) return;
+    const t = setTimeout(() => setNudge((n) => (n?.id === nudge.id ? null : n)), nudge.key === 'cheer' ? 4500 : 25_000);
+    return () => clearTimeout(t);
+  }, [nudge]);
+  const takeNudge = () => {
+    if (!nudge) return;
+    setNudge(null);
+    if (nudge.ask) {
+      setWanted(true);
+      setAsk((a) => ({ text: nudge.ask!, id: (a?.id ?? 0) + 1 }));
+    } else if (nudge.href) router.push(nudge.href);
+  };
+
+  // Celebration (§35): only after the system confirmed a real accomplishment; at most once in a while.
+  const cheered = useRef(0);
+  const onCelebrate = useCallback(() => {
+    const now = Date.now();
+    if (now - cheered.current < 15_000) return;
+    cheered.current = now;
+    if (professional) {
+      sendCue('success');
+      return;
+    }
+    sendCue('dance');
+    feel('dance');
+    setCommand((c) => ({ name: 'dance', id: (c?.id ?? 0) + 1 }));
+    showNudge({ key: 'cheer', text: qitmir ? 'Mana endi odamga o‘xshab ishladik! 😏' : 'Zo‘r ish! Bajarildi 🎉', label: '' });
+  }, [professional, qitmir, sendCue, feel, showNudge]);
+
+  // Daily rituals (§36): once a day, for signed-in people, only a line until they say "ha" (no AI call at all).
+  const member = audience !== 'public';
+  const mode = qitmir ? 'qitmir' : professional ? 'professional' : 'normal';
+  useEffect(() => {
+    if (!member || flying || open || !prefs.rituals) return;
+    const t = setTimeout(() => {
+      const today = new Date().toLocaleDateString('en-CA');
+      let done: string[] = [];
+      try {
+        const r = JSON.parse(kept('sunbot:ritual') ?? '{}') as { date?: string; kinds?: string[] };
+        if (r.date === today) done = r.kinds ?? [];
+      } catch {
+        // a fresh day
+      }
+      const ritual = ritualFor(new Date().getHours(), audience === 'client' ? 'client' : 'staff', mode, done);
+      if (!ritual) return;
+      keep('sunbot:ritual', JSON.stringify({ date: today, kinds: [...done, ritual.key] }));
+      if (ritual.key === 'morning' && !professional) feel('happy');
+      showNudge(ritual);
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [member, flying, open, prefs.rituals, audience, mode, professional, feel, showNudge]);
+
+  // Proactive (§38, §43): a new notification from the person's own live feed. Visual by default, aloud only if chosen;
+  // never over typing or a conversation in progress (it waits a little, then lets it go).
+  const live = useRef({ prefs, open, mood: face.mood });
+  live.current = { prefs, open, mood: face.mood };
+  useEffect(() => {
+    if (!member) return;
+    let wait: ReturnType<typeof setInterval> | undefined;
+    const busy = () => {
+      const el = document.activeElement as HTMLElement | null;
+      return live.current.open || BUSY.has(live.current.mood) || !!el?.closest('input, textarea, select, [contenteditable="true"]');
+    };
+    const onNotify = (e: Event) => {
+      const n = nudgeFor((e as CustomEvent).detail, live.current.prefs);
+      if (!n) return;
+      clearInterval(wait);
+      const deliver = () => {
+        showNudge(n);
+        sendCue('welcome');
+        feel('tap');
+        if (live.current.prefs.speak) {
+          setWanted(true);
+          setAnnounce((a) => ({ text: n.text, id: (a?.id ?? 0) + 1 }));
+        }
+      };
+      if (!busy()) return deliver();
+      let tries = 0;
+      wait = setInterval(() => {
+        if (!busy()) {
+          clearInterval(wait);
+          deliver();
+        } else if (++tries > 20) clearInterval(wait);
+      }, 3000);
+    };
+    window.addEventListener('sm:notify', onNotify);
+    return () => {
+      window.removeEventListener('sm:notify', onNotify);
+      clearInterval(wait);
+    };
+  }, [member, showNudge, sendCue, feel]);
+  useEffect(() => {
+    if (!prefsOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setPrefsOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [prefsOpen]);
   const togglePause = () => {
     setPaused((p) => {
       store('sunbot:qitmir-pause', p ? '0' : '1');
@@ -377,6 +508,10 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
           key={audience}
           audience={audience}
           qitmir={qitmir}
+          professional={professional}
+          onCelebrate={onCelebrate}
+          ask={ask}
+          announce={announce}
           feeling={feeling.name}
           onFeel={feel}
           open={open}
@@ -422,7 +557,37 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
         />
       ) : null}
 
-      {!open && teaser ? (
+      {!open && nudge ? (
+        <div className={`sb-nudge ${nudge.key === 'cheer' ? 'cheer' : ''}`} role="status" aria-live="polite">
+          <p>{nudge.text}</p>
+          {nudge.label && (nudge.ask || nudge.href) ? (
+            <button type="button" className="sb-nudge-go" onClick={takeNudge}>
+              {nudge.label}
+            </button>
+          ) : null}
+          <button type="button" className="sb-nudge-x" aria-label="Yopish" onClick={() => setNudge(null)}>
+            ×
+          </button>
+        </div>
+      ) : null}
+
+      {prefsOpen ? (
+        <div className="sb-prefs" role="dialog" aria-label="Sunny eslatmalari">
+          <p className="sb-prefs-title">Sunny nimalarni o‘zi aytsin?</p>
+          {PREF_LABELS.filter(([k]) => audience === 'staff' || k === 'rituals').map(([k, label]) => (
+            <label key={k} className="sb-prefs-row">
+              <input type="checkbox" checked={prefs[k]} onChange={(e) => setPref(k, e.target.checked)} />
+              <span>{label}</span>
+            </label>
+          ))}
+          <button type="button" className="sb-prefs-done" onClick={() => setPrefsOpen(false)}>
+            Tayyor
+          </button>
+        </div>
+      ) : null}
+
+      {/* One bubble at a time: Sunny's own line (a ritual, a notification) takes the teaser's place. */}
+      {!open && teaser && !nudge ? (
         <button type="button" className="sb-teaser" onClick={show}>
           Salom! Savolingiz bormi? 👋
           <span
@@ -526,6 +691,35 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
             </svg>
             <span className="sb-qm-label">Qitmir rejim</span>
           </button>
+          {member ? (
+            <button
+              type="button"
+              className="sb-qm-tool sb-pro"
+              aria-pressed={professional}
+              onClick={togglePro}
+              aria-label="Professional rejim"
+              title={professional ? 'Professional rejim: yoqilgan (jiddiy va qisqa)' : 'Professional rejim: jiddiy, qisqa, faqat ish'}
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <rect x="3.5" y="7" width="17" height="12.5" rx="2.2" />
+                <path d="M9 7V5.6A1.6 1.6 0 0 1 10.6 4h2.8A1.6 1.6 0 0 1 15 5.6V7M3.5 12.5h17" />
+              </svg>
+            </button>
+          ) : null}
+          {member ? (
+            <button
+              type="button"
+              className="sb-qm-tool"
+              aria-expanded={prefsOpen}
+              onClick={() => setPrefsOpen((v) => !v)}
+              aria-label="Sunny eslatmalari sozlamasi"
+              title="Sunny nimalarni o‘zi aytsin"
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9M10 20a2.2 2.2 0 0 0 4 0" />
+              </svg>
+            </button>
+          ) : null}
           {three.ok && !three.calm ? (
             <button type="button" className="sb-qm-tool" aria-pressed={paused} onClick={togglePause} aria-label={paused ? 'Sunny harakatini davom ettirish' : 'Sunny harakatini to‘xtatish'} title={paused ? 'Davom ettirish' : 'Pauza: Sunny joyida qoladi'}>
               {paused ? (

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppBadge } from '@/components/pwa/AppBadge';
 import { getBrowserClient } from '@/lib/supabase/client';
 
-type Item = { id: string; title: string; body: string | null; created_at: string; read_at: string | null; data: Record<string, unknown> | null };
+type Item = { id: string; type: string; title: string; body: string | null; created_at: string; read_at: string | null; data: Record<string, unknown> | null };
 
 const TZ = 'Asia/Tashkent';
 const when = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: TZ });
@@ -37,16 +37,26 @@ export function NotificationBell({ userId, area, tone = 'panel' }: { userId: str
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  // The newest notification already known: anything later that is still unread is news, and Sunny may mention it.
+  const known = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     const supabase = getBrowserClient();
     const [list, count] = await Promise.all([
-      supabase.from('notifications').select('id, title, body, created_at, read_at, data').order('created_at', { ascending: false }).limit(30),
+      supabase.from('notifications').select('id, type, title, body, created_at, read_at, data').order('created_at', { ascending: false }).limit(30),
       supabase.from('notifications').select('id', { count: 'exact', head: true }).is('read_at', null),
     ]);
-    if (list.data) setItems(list.data as Item[]);
+    if (list.data) {
+      const rows = list.data as Item[];
+      const fresh = known.current === null ? undefined : rows.find((i) => !i.read_at && i.created_at > known.current!);
+      if (rows[0] && (known.current === null || rows[0].created_at > known.current)) known.current = rows[0].created_at;
+      else known.current ??= '';
+      // Sunny (when on the page) reacts to the newest one only; what it says is up to the person's choices.
+      if (fresh) window.dispatchEvent(new CustomEvent('sm:notify', { detail: { id: fresh.id, type: fresh.type, title: fresh.title, body: fresh.body, href: hrefOf(fresh, area) } }));
+      setItems(rows);
+    }
     setUnread(count.count ?? 0);
-  }, []);
+  }, [area]);
 
   useEffect(() => {
     void load();

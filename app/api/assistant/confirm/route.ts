@@ -33,5 +33,5 @@ export async function POST(request: NextRequest) {
 
   const out = await runAction(pending.name, pending.input, { db: ctx.db, userId: ctx.userId, permissions: ctx.permissions, owner: ctx.owner }, { confirmed: true });
   if (out.ok) for (const path of out.revalidate ?? []) revalidatePath(path);
-  return NextResponse.json({ ok: out.ok, name: pending.name, message: out.message, link: out.link ?? null }, { headers });
+  return NextResponse.json({ ok: out.ok, name: pending.name, message: out.message, link: out.link ?? null, celebrate: out.ok && !!out.celebrate }, { headers });
 }

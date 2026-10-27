@@ -37,6 +37,17 @@ export function stepOf(name: string, content: string): MissionStep | null {
   return { label, state: r.holat === 'BAJARILDI' ? 'done' : 'failed', text: r.xabar ?? (r.holat === 'BAJARILDI' ? 'bajarildi' : 'bajarilmadi') };
 }
 
+/**
+ * A genuine accomplishment worth a celebration (§35): a task finished, content approved or published. Routine changes
+ * (a check-in, a message, a new task) are not. Only ever asked after the system confirmed the change.
+ */
+export function milestone(name: string, input: unknown): boolean {
+  const status = (input as { status?: unknown } | null)?.status;
+  if (name === 'update_task') return status === 'done';
+  if (name === 'set_content_status') return status === 'approved' || status === 'published';
+  return false;
+}
+
 const MARK = { done: '✅', failed: '❌', waiting: '⏳' } as const;
 const clip = (s: string, n = 180) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 

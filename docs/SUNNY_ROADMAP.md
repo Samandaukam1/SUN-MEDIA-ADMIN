@@ -6,7 +6,7 @@ Bu fayl har sessiyada yangilanadi: yangi sessiya shu yerdan davom etadi. Holat f
 
 Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ tashqi to‘siq
 
-## Joriy holat (2026-10-27, 6-sessiya)
+## Joriy holat (2026-10-27, 7-sessiya)
 
 | Bosqich | Holat | Izoh |
 |---|---|---|
@@ -16,7 +16,7 @@ Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ t
 | 4. AI intelligence (Gemini) | 🟡 | provayder registri, tokensiz buyruqlar, deterministik backend buyruqlari ✅; byudjet va xulosa — DB kerak |
 | 5. Memory & personality | 🟡 | xotira, uslub, sozlamalar, rolga mos ohang ✅ — production'da (migratsiya qo‘llangan); xotira sahifasi va avtomatik takliflar yo‘q |
 | 6. Action agent | 🟡 | mission mode, smart delegation, predictive, universal search, partner concierge ✅ (lokal bazada sinalgan, deploy qilinmagan); hamkor tasdiqlashi — ilovada |
-| 7. Advanced experiences | 🟡 | easter egg'lar, ovoz kartochkasi; rituals/proactive/briefing yo‘q |
+| 7. Advanced experiences | ✅ | gologramma kartalar, bayram, rituallar, proaktiv reaksiya, brifing, 3 rejim, emotsiya→ovoz; ⛔ ovoz biometriyasi (§40, sababi pastda) |
 | 8. Cross-platform app | 🟡 | PWA + Web Push (7ed0570) production'da yoqildi: migratsiya, push-dispatch v4, VAPID (2026-10-27); to‘liq audit qilinmagan |
 | 9. Integration & release | ⬜ | |
 
@@ -193,10 +193,41 @@ Sinalmagan: haqiqiy Gemini missiyani shu tartibda rejalashtirishi (lokalda AI ka
 2. ⬜ Qidiruv uchun indeks (pg_trgm `messages.body`) — katta hajmda kerak bo‘lsa, migratsiya bilan.
 3. ⬜ Missiyada jamoaga avtomatik xabar — hozir faqat rejada tasdiqlangan `send_message`.
 
-### 7–8-bosqich
-⬜ Holographic task cards (ovoz kartochkasi asos), daily rituals, proactive reminders, daily briefing (real ma’lumot),
-⬜ ixtiyoriy ovoz biometriyasi (rozilik bilan, autentifikatsiya o‘rnini bosmaydi). PWA/Push: mavjud tizimni audit
-qilish — badge, deep link, bildirishnoma sozlamalari, quiet hours.
+## 7-bosqich — bajarildi (2026-10-27, 7-sessiya) — migratsiya kerak emas
+
+- **Gologramma kartalar (§34)** — [cards.ts](../lib/assistant/cards.ts): ovoz rejimida (panel yopiq) javob bilan birga robot
+  yonidagi kartada 6 tagacha ixcham karta — nom, mijoz, vaqt, holat, bitta havola ("Ochish →", klaviatura bilan).
+  Vazifalar, s’yomkalar, brifing, xavflar, tasdiqlar, nomzodlar, qidiruv natijalaridan; o‘sha asbob natijasidan quriladi
+  (qo‘shimcha o‘qish yo‘q). Panel o‘zi ochilmaydi.
+- **Bayram (§35)** — vazifa haqiqatan "bajarildi"ga o‘tganda yoki kontent tasdiqlanganda/joylanganda (amalning o‘zi
+  `celebrate` belgilaydi, "allaqachon shu holatda" — yo‘q), server tasdiqidan KEYIN: raqs, quvonch, qisqa ibora; 15 s
+  ichida bittadan ortiq emas; professional rejimda faqat bosh irg‘ash.
+- **Kunlik rituallar (§36)** — [proactive.ts](../components/assistant/proactive.ts): ertalab (06–11) salom + "bugungi
+  ishlaringizni aytaymi?", kechqurun (17–21, xodim) tugamagan ishlar; kuniga bir marta, "ha" deyilmaguncha hech qanday
+  so‘rov yo‘q, javobni AI emas tizim beradi. Uzoq jimlikda uxlash, "Sunny!" — avvaldan bor.
+- **Maxfiy buyruqlar (§37)** — 1–2-bosqichda bor (raqs, salto, jahl, uxla, xursand, quvla, qo‘l ber, yarashdik).
+- **Proaktiv (§38, §43)** — bildirishnoma qo‘ng‘irog‘i (foydalanuvchining shaxsiy realtime kanali) yangi o‘qilmagan
+  bildirishnomani `sm:notify` hodisasi bilan e’lon qiladi; Sunny pufakcha bilan aytadi ("Sizga yangi vazifa kelibdi:
+  “…”. Ko‘rib chiqamizmi?"), robot qaraydi. Yozayotgan yoki suhbat paytida kutadi (60 s gacha). Sozlamalar (🔔 tugma):
+  vazifalar, muddatlar, tasdiqlar, s’yomkalar, chat (standart o‘chiq), ovoz chiqarib aytish (standart o‘chiq). Bu
+  qurilmada saqlanadi. Sunny o‘zi so‘rov yubormaydi.
+- **Kunlik brifing (§39)** — `briefing` amali + router ("Bugun qanday ishlarim bor?"): bugungi va muddati o‘tgan
+  vazifalar, bugungi s’yomkalar (vaqti, joyi), bugun muddati/posti bo‘lgan kontent — AI'siz, kartalar bilan.
+- **Rejimlar (§44)** — Oddiy, Professional (💼, jiddiy-qisqa, kayfiyatsiz, robot uyda), Qitmir; bir vaqtda bittasi.
+  Hammasida bir xil asboblar, ruxsatlar va tasdiqlar (integratsiya testi #26 tekshiradi).
+- **Emotsiya → ovoz** — yaxshi kayfiyatda ovoz biroz yorqinroq, past kayfiyatda yumshoqroq, professional rejimda tekis
+  (Azure prosodiyasi va brauzer ovozi; o‘sha ovoz, boshqa servis yo‘q).
+- ⛔ **Ovoz biometriyasi (§40)** — qilinmadi: brauzerda ishonchli ovoz-izi uchun texnik asos yo‘q (Web Speech API faqat
+  matn beradi), bepul server servisi ham yo‘q; pullik biometrik API ruxsatsiz ulanmaydi. Shaxs — tizimga kirgan sessiya
+  (§40 ning o‘zi shuni afzal ko‘radi). Kerak bo‘lsa: rozilik, shablonni himoyalash va o‘chirish bilan alohida loyiha.
+
+Tekshiruv: 153 unit (yangi 7), agent integratsiya 23/23 (yangi #25 brifing + kartalar AI'siz, #26 bayram faqat haqiqiy
+o‘tishda va professional rejim faqat ohangni o‘zgartiradi), brauzer (lokal baza, Chrome) 11/11: ertalabki ritual →
+"Ha" → panel ochilmasdan kartali brifing, kuniga bir marta, sozlamalar, haqiqiy bildirishnoma qatori → jonli pufakcha,
+bir vaqtda bitta pufakcha, professional ↔ qitmir, sahifa xatolari yo‘q; Qitmir regressiya 4/4.
+Sinalmagan: haqiqiy telefon, ovoz chiqarib proaktiv aytish (avtomat brauzerda ovoz yo‘q).
+
+### 8-bosqich — PWA/Push audit (keyingi)
 
 ## Chiqarib tashlangan (egasi rad etgan, §49)
 Quality Guardian, Meeting Copilot, Time Machine, Executive Intelligence.

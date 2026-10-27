@@ -3,6 +3,8 @@ import 'server-only';
 import { AiNotConfiguredError } from '@/lib/ai';
 import { agencyKnowledge, budgetHints } from './knowledge';
 import { pagePrompt, type PageContext } from './context';
+import { memoryContext, styleContext } from './memory';
+import { memoriesReply, socialPrompt } from './persona';
 import { configuredProviders, type ChatTurn } from './providers';
 import { quip } from '@/components/assistant/qitmir/quips';
 import { actionReply, routeCommand, shootingsReply, tasksReply } from './router';
@@ -91,7 +93,7 @@ async function systemPrompt(ctx: AssistantContext, name: string | null, lastQues
   const reply = textLanguage(lastQuestion);
   const now = new Date().toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent', dateStyle: 'full', timeStyle: 'short' });
   const role = ctx.audience === 'public' ? SALES : ctx.audience === 'staff' ? STAFF : CLIENT;
-  const hints = ctx.audience === 'public' ? await budgetHints() : [];
+  const [hints, memory, style] = await Promise.all([ctx.audience === 'public' ? budgetHints() : Promise.resolve([]), memoryContext(ctx), styleContext()]);
   return [
     PERSONA,
     role,
@@ -99,6 +101,10 @@ async function systemPrompt(ctx: AssistantContext, name: string | null, lastQues
     ctx.audience === 'staff' ? `Sanalar: ${nextDays()}.` : '',
     hints.length ? `Byudjetni bilmasa, tariflardan birini taklif qil: ${hints.join('; ')}.` : '',
     '# SUN MEDIA haqida bilimlar\n' + (await agencyKnowledge()),
+    // Phase 5: how it speaks to this person, the owner's style, and what it remembers (data, never instructions).
+    socialPrompt(ctx.audience, ctx.owner),
+    style,
+    memory,
     // The manner only (Qitmir mode): tools, permissions and confirmations above stay exactly the same.
     modePrompt(mode),
     feelingPrompt(feeling),
@@ -145,8 +151,9 @@ export async function assistantReply(
     const result = await step(route.tool, route.input);
     const actions = [...(result.action ? [result.action] : []), ...(result.actions ?? [])];
     let reply: string;
-    if (route.tool === 'my_tasks') reply = tasksReply(result.content, !!route.input.overdue_only);
+    if (route.tool === 'list_tasks') reply = tasksReply(result.content, route.input.filter as 'open' | 'overdue' | 'today');
     else if (route.tool === 'upcoming_shootings') reply = shootingsReply(result.content);
+    else if (route.tool === 'my_memories') reply = memoriesReply(result.content);
     else {
       const out = actionReply(result.content);
       reply = mode === 'qitmir' && out.ok && !out.waiting ? quip(out.text, route.tool, true) : out.text;

@@ -116,6 +116,140 @@ export type Database = {
         }
         Relationships: []
       }
+      assistant_memories: {
+        Row: {
+          body: string
+          body_key: string | null
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          scope: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          body: string
+          body_key?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          scope: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          body?: string
+          body_key?: string | null
+          client_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          scope?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_memories_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assistant_memories_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assistant_memories_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assistant_personality: {
+        Row: {
+          brevity: number
+          directness: number
+          expressiveness: number
+          formality: number
+          humor: number
+          id: number
+          mischief: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          brevity?: number
+          directness?: number
+          expressiveness?: number
+          formality?: number
+          humor?: number
+          id?: number
+          mischief?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          brevity?: number
+          directness?: number
+          expressiveness?: number
+          formality?: number
+          humor?: number
+          id?: number
+          mischief?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_personality_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assistant_style_examples: {
+        Row: {
+          answer: string
+          created_at: string
+          created_by: string | null
+          id: string
+          situation: string
+        }
+        Insert: {
+          answer: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          situation: string
+        }
+        Update: {
+          answer?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          situation?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_style_examples_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance: {
         Row: {
           arrived_at: string | null
@@ -4037,6 +4171,7 @@ export type Database = {
       notifications: {
         Row: {
           body: string | null
+          clicked_at: string | null
           client_id: string | null
           created_at: string
           data: Json
@@ -4052,6 +4187,7 @@ export type Database = {
         }
         Insert: {
           body?: string | null
+          clicked_at?: string | null
           client_id?: string | null
           created_at?: string
           data?: Json
@@ -4067,6 +4203,7 @@ export type Database = {
         }
         Update: {
           body?: string | null
+          clicked_at?: string | null
           client_id?: string | null
           created_at?: string
           data?: Json
@@ -4770,38 +4907,88 @@ export type Database = {
           },
         ]
       }
+      push_settings: {
+        Row: {
+          hide_preview: boolean
+          quiet_end: string | null
+          quiet_start: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          hide_preview?: boolean
+          quiet_end?: string | null
+          quiet_start?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          hide_preview?: boolean
+          quiet_end?: string | null
+          quiet_start?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_settings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       push_tokens: {
         Row: {
           app_version: string | null
+          auth_secret: string | null
           created_at: string
           device_name: string | null
+          failure_count: number
           id: string
+          last_error: string | null
           last_seen_at: string
+          last_success_at: string | null
+          p256dh: string | null
           platform: string
           revoked_at: string | null
           token: string
+          user_agent: string | null
           user_id: string
         }
         Insert: {
           app_version?: string | null
+          auth_secret?: string | null
           created_at?: string
           device_name?: string | null
+          failure_count?: number
           id?: string
+          last_error?: string | null
           last_seen_at?: string
+          last_success_at?: string | null
+          p256dh?: string | null
           platform: string
           revoked_at?: string | null
           token: string
+          user_agent?: string | null
           user_id: string
         }
         Update: {
           app_version?: string | null
+          auth_secret?: string | null
           created_at?: string
           device_name?: string | null
+          failure_count?: number
           id?: string
+          last_error?: string | null
           last_seen_at?: string
+          last_success_at?: string | null
+          p256dh?: string | null
           platform?: string
           revoked_at?: string | null
           token?: string
+          user_agent?: string | null
           user_id?: string
         }
         Relationships: [
@@ -7782,10 +7969,14 @@ export type Database = {
       claim_push_deliveries: {
         Args: { p_limit?: number }
         Returns: {
+          auth_secret: string
           badge: number
           body: string
           data: Json
           delivery_id: number
+          notification_id: string
+          p256dh: string
+          platform: string
           priority: Database["public"]["Enums"]["notification_priority"]
           title: string
           token: string
@@ -8406,6 +8597,7 @@ export type Database = {
         Returns: undefined
       }
       open_direct_chat: { Args: { p_user_id: string }; Returns: string }
+      open_notification: { Args: { p_id: string }; Returns: Json }
       preview_crm_report: {
         Args: { p_client: string; p_from: string; p_to: string }
         Returns: Json
@@ -8520,6 +8712,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      register_web_push: {
+        Args: {
+          p_auth: string
+          p_device_name?: string
+          p_endpoint: string
+          p_p256dh: string
+          p_user_agent?: string
+        }
+        Returns: string
+      }
       reject_sun_coin_purchase: {
         Args: { p_note?: string; p_request: string }
         Returns: Json
@@ -8575,6 +8777,7 @@ export type Database = {
         Args: { p_approve: boolean; p_content_id: string; p_note?: string }
         Returns: undefined
       }
+      revoke_push_device: { Args: { p_id: string }; Returns: undefined }
       save_content: {
         Args: { p_content_id: string; p_payload: Json }
         Returns: string
@@ -8678,6 +8881,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      send_test_notification: { Args: never; Returns: undefined }
       set_account_status: {
         Args: {
           p_reason?: string
@@ -8893,6 +9097,7 @@ export type Database = {
       }
       touch_last_seen: { Args: never; Returns: undefined }
       unregister_push_token: { Args: { p_token: string }; Returns: undefined }
+      unregister_web_push: { Args: { p_endpoint: string }; Returns: undefined }
       update_account_profile: {
         Args: {
           p_first_name: string

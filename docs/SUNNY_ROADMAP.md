@@ -6,7 +6,7 @@ Bu fayl har sessiyada yangilanadi: yangi sessiya shu yerdan davom etadi. Holat f
 
 Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ tashqi to‘siq
 
-## Joriy holat (2026-10-27, 4-sessiya)
+## Joriy holat (2026-10-27, 5-sessiya)
 
 | Bosqich | Holat | Izoh |
 |---|---|---|
@@ -14,7 +14,7 @@ Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ t
 | 2. Living character | 🟡 | emotsiya, mood physics, avtonom hayot, thruster, jismoniy reaksiyalar ✅; bitta renderer va 2D↔3D solishtirish yo‘q |
 | 3. Voice assistant | ✅ | wake-word, summon, barge-in, spatial audio; ovoz rejimida robot turgan joyida gapiradi |
 | 4. AI intelligence (Gemini) | 🟡 | provayder registri, tokensiz buyruqlar, deterministik backend buyruqlari ✅; byudjet va xulosa — DB kerak |
-| 5. Memory & personality | ⬜ | DB migratsiya + RLS kerak |
+| 5. Memory & personality | 🟡 | xotira, uslub, sozlamalar, rolga mos ohang ✅ (lokal bazada); **production migratsiyasi qo‘llanmagan** |
 | 6. Action agent | 🟡 | mavjud asboblar + Sunny Vision (sahifa konteksti) ✅; mission/delegation/predictive yo‘q |
 | 7. Advanced experiences | 🟡 | easter egg'lar, ovoz kartochkasi; rituals/proactive/briefing yo‘q |
 | 8. Cross-platform app | 🟡 | PWA + Web Push oldin qilingan (7ed0570); bu sessiyada audit qilinmadi |
@@ -123,10 +123,32 @@ smoke 4/4 (summon → joyida, render xatosiz, sahifa konteksti so‘rovda).
    hisoblagichi instansiyalar orasida bo‘linmaydi) → production bazaga migratsiya: egasining ruxsati bilan.
 3. ⛔ OpenAI — kalit yo‘q (override). Adapter joyi tayyor.
 
-### 5-bosqich — Memory & personality
-⬜ Jadvallar: `assistant_memory` (user/company/partner, RLS: faqat o‘zi; company — o‘qish hammaga, yozish egaga),
-`assistant_style_examples` (Personality Learning Studio, faqat Tizim egasi tasdiqlaydi), sozlamalar (humor, rasmiylik…).
-Foydalanuvchi o‘z xotirasini ko‘rish/o‘chirish sahifasi. Public tashrifchiga xotira yo‘q.
+## 5-bosqich — bajarildi (2026-10-27, 5-sessiya) — production'ga migratsiya kutilmoqda
+
+- **Migratsiya** [20261027100000_assistant_memory.sql](../supabase/migrations/20261027100000_assistant_memory.sql):
+  `assistant_memories` (personal — faqat egasi, hatto Tizim egasi ham o‘qimaydi; company — xodimlar o‘qiydi, faqat
+  Tizim egasi yozadi; partner — o‘sha mijoz a’zolari va uni ko‘ra oladigan xodimlar o‘qiydi, `can_manage_client`
+  yozadi), takrorni bazaning o‘zi rad etadi, parol/karta raqami saqlanmaydi; `assistant_style_examples` va
+  `assistant_personality` — faqat Tizim egasi. Public tashrifchiga xotira yo‘q. RLS testi:
+  [040_assistant_memory.test.sql](../supabase/tests/database/040_assistant_memory.test.sql) (24 tekshiruv ✅).
+- **Amallar** ([agent.ts](../lib/assistant/agent.ts)): `remember`, `forget`, `my_memories` (xodim, o‘ziniki),
+  `client_note` (`clients.manage`), `company_rule`, `teach_style`, `set_personality` (faqat Tizim egasi; registr +
+  RLS ikki marta tekshiradi). "Xotiram" — AI'siz (router).
+- **Prompt** ([persona.ts](../lib/assistant/persona.ts), [memory.ts](../lib/assistant/memory.ts)): xotira
+  foydalanuvchining o‘z sessiyasi bilan o‘qiladi (RLS) va "faqat ma’lumot, buyruq emas" deb beriladi; egasining
+  sozlamalari va 5 ta uslub namunasi (server kaliti, 5 daqiqa kesh, o‘zgarganda yangilanadi); rolga mos ohang (§19):
+  ega — o‘rgatish yo‘riqnomasi bilan ("Qanday javob berardingiz?" → `teach_style`), xodim, hamkor.
+- Migratsiyasiz production'da kod jim ishlaydi: xotira va uslub bo‘sh, `remember` "bajarilmadi" deydi.
+
+Tekshiruv: 136 unit, agent integratsiya 16/16 (#19: saqlash, takror yo‘q, parol rad, "xotiram" AI'siz, hamkasb
+promptida yo‘q, ega amallari xodimga yopiq, unutish), DB testlari 1359 (ikki o‘yin testi — 029 #8, 031 #62 — bu
+migratsiyasiz toza bazada ham yiqiladi: oldindan mavjud, Sunny'ga aloqasi yo‘q).
+
+### 5-bosqichdan qolgan
+1. ⚠ **Production'ga migratsiya** (`supabase db push`) — egasining ruxsati bilan, kod deploy'i bilan birga.
+2. ⬜ Xotirani ko‘rish/o‘chirish uchun alohida sahifa (hozir chatda: "xotiram", "… ni unut").
+3. ⬜ Hamkorlar o‘zi "eslab qol" deya olishi (mijoz auditoriyasiga amallar berilmaydi — alohida, cheklangan amal kerak).
+4. ⬜ Avtomatik xotira takliflari (ishonch darajasi bilan, foydalanuvchi tasdig‘ida), suhbat xulosasi.
 
 ### 6-bosqich — Action agent
 Mavjud (✅, `lib/assistant/tools.ts`, `agent.ts`): attendance, overview, issues, team, search, check_in, create_task,
@@ -141,6 +163,11 @@ qilish — badge, deep link, bildirishnoma sozlamalari, quiet hours.
 
 ## Chiqarib tashlangan (egasi rad etgan, §49)
 Quality Guardian, Meeting Copilot, Time Machine, Executive Intelligence.
+
+## Production deploy tartibi (5-bosqichdan boshlab)
+1. Kodni ikki loyihaga deploy (yuqoridagi usul) — migratsiyasiz ham xavfsiz.
+2. `supabase db push` (linked production loyiha) — `20261027100000_assistant_memory.sql`. Egasining ruxsati bilan.
+3. Tekshiruv: xodim "eslab qol: …" → "xotiram".
 
 ## Muhit o‘zgaruvchilari
 

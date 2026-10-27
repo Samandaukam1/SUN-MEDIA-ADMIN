@@ -35,6 +35,12 @@ const DID: Record<string, [string, string]> = {
   send_message: ['Xabar yuborildi', 'Xabar yuborilmadi'],
   edit_message: ['Xabar tahrirlandi', 'Xabar tahrirlanmadi'],
   delete_message: ['Xabar o‘chirildi', 'Xabar o‘chirilmadi'],
+  remember: ['Eslab qolindi', 'Eslab qolinmadi'],
+  forget: ['Unutildi', 'Unutilmadi'],
+  client_note: ['Mijoz eslatmasi saqlandi', 'Saqlanmadi'],
+  company_rule: ['Kompaniya qoidasi saqlandi', 'Saqlanmadi'],
+  teach_style: ['Uslub o‘rganildi', 'O‘rganilmadi'],
+  set_personality: ['Sozlama yangilandi', 'Yangilanmadi'],
 };
 
 /** Who the chat is for: the public site, the team's internal system, or a client's cabinet. */

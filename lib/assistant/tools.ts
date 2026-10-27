@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 
 import { commandCenterSchema } from '@/lib/schemas/command-center';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -482,6 +482,13 @@ async function agentAction(name: string, input: Record<string, unknown>, ctx: As
       revalidatePath(path);
     } catch {
       // outside a request (tests): nothing cached to refresh
+    }
+  }
+  if (out.ok) for (const tag of out.revalidateTags ?? []) {
+    try {
+      revalidateTag(tag);
+    } catch {
+      // outside a request (tests)
     }
   }
   const content = JSON.stringify({ holat: out.ok ? (write ? 'BAJARILDI' : 'OK') : 'BAJARILMADI', xabar: out.message, ...(out.data !== undefined ? { malumot: out.data } : {}) });

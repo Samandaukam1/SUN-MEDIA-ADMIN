@@ -40,6 +40,8 @@ export type Outcome = {
   link?: { href: string; label: string };
   /** Pages whose server render is now stale. */
   revalidate?: string[];
+  /** Cached data that is now stale (e.g. Sunny's style). */
+  revalidateTags?: string[];
   /** Set when the action waits for the person's confirmation: what will happen, in one sentence. */
   confirm?: string;
 };
@@ -200,6 +202,9 @@ const STATUS_UZ: Record<string, string> = {
 };
 
 const s = (description: string) => ({ type: 'string', description });
+/** Sunny's personality dials (set_personality), each 0–1. */
+const DIALS = ['humor', 'mischief', 'formality', 'brevity', 'expressiveness', 'directness'] as const;
+const dial = z.number().min(0).max(1).optional();
 
 // ---------------------------------------------------------------------------
 // The actions
@@ -644,6 +649,125 @@ export const ACTIONS: AnyDef[] = [
       return { ok: true, message: 'Xabar o‘chirildi.', revalidate: ['/chat', '/xodim/chat'] };
     },
   }),
+
+  // ----- memory and personality (phase 5): the database decides who reads and writes which note -----
+  define({
+    name: 'remember',
+    description:
+      'Foydalanuvchi O‘ZI aniq so‘ragan narsani eslab qoladi ("eslab qol: …", "buni unutma"): ish odati, afzallik, doimiy ko‘rsatma. Faqat u so‘raganda chaqir. Parol, karta, pasport kabi maxfiy narsani saqlama.',
+    params: { type: 'object', properties: { text: s('Eslab qolinadigan qisqa gap, foydalanuvchining o‘z mazmunida') }, required: ['text'] },
+    input: z.object({ text: z.string().trim().min(2).max(400) }),
+    write: true,
+    run: async ({ text }, ctx) => {
+      const { error } = await ctx.db.from('assistant_memories').insert({ scope: 'personal', user_id: ctx.userId, body: text });
+      if (error?.code === '23505') return { ok: true, message: 'Buni allaqachon eslab qolganman.' };
+      if (error?.code === '23514') return { ok: false, message: 'Maxfiy ma’lumotni (parol, karta raqami) eslab qolmayman.' };
+      if (error) return { ok: false, message: dbError(error) };
+      return { ok: true, message: `Eslab qoldim: «${text}».` };
+    },
+  }),
+  define({
+    name: 'forget',
+    description: 'Foydalanuvchining O‘Z eslatmasini o‘chiradi ("buni unut", "… ni o‘chir"). text — eslatmadagi so‘zlar; all — hammasini.',
+    params: { type: 'object', properties: { text: s('Qaysi eslatma (undagi so‘zlar)'), all: { type: 'boolean' } } },
+    input: z.object({ text: z.string().trim().max(200).optional(), all: z.boolean().optional() }),
+    write: true,
+    run: async ({ text, all }, ctx) => {
+      if (!all && !text) return { ok: false, message: 'Qaysi eslatmani unutay?' };
+      let q = ctx.db.from('assistant_memories').delete().eq('scope', 'personal').eq('user_id', ctx.userId);
+      if (!all && text) q = q.ilike('body', `%${text.replace(/[%_\\]/g, ' ').trim()}%`);
+      const { data, error } = await q.select('body');
+      if (error) return { ok: false, message: dbError(error) };
+      if (!data?.length) return { ok: false, message: 'Bunday eslatma topilmadi.' };
+      return { ok: true, message: data.length === 1 ? `Unutdim: «${data[0].body}».` : `${data.length} ta eslatma o‘chirildi.` };
+    },
+  }),
+  define({
+    name: 'my_memories',
+    description: 'Sunny shu foydalanuvchi haqida nimalarni eslab qolganini (va kompaniya qoidalarini) ko‘rsatadi: "nimalarni eslab qolding?", "xotiram".',
+    params: { type: 'object', properties: {} },
+    input: z.object({}).passthrough(),
+    write: false,
+    run: async (_, ctx) => {
+      const { data, error } = await ctx.db.from('assistant_memories').select('scope, body, updated_at').order('updated_at', { ascending: false }).limit(40);
+      if (error) return { ok: false, message: dbError(error) };
+      const kind = { personal: 'shaxsiy', company: 'kompaniya', partner: 'hamkor' } as Record<string, string>;
+      const rows = (data ?? []).map((m) => ({ eslatma: m.body, turi: kind[m.scope] ?? m.scope }));
+      return { ok: true, message: rows.length ? `${rows.length} ta eslatma.` : 'Eslatma yo‘q.', data: rows };
+    },
+  }),
+  define({
+    name: 'client_note',
+    description: 'Mijoz (hamkor) haqida agentlik eslatmasini saqlaydi: uning afzalliklari, kelishuvlar ("SAFI postlarni kechqurun xohlaydi"). Mijozni boshqara oladigan xodim uchun.',
+    params: { type: 'object', properties: { client: s('Mijoz nomi'), text: s('Eslatma') }, required: ['client', 'text'] },
+    input: z.object({ client: z.string().trim().min(1), text: z.string().trim().min(2).max(400) }),
+    needs: ['clients.manage'],
+    write: true,
+    run: async ({ client, text }, ctx) => {
+      const c = await findClient(ctx, client);
+      if ('ask' in c) return { ok: false, message: c.ask };
+      const { error } = await ctx.db.from('assistant_memories').insert({ scope: 'partner', client_id: c.one.id, body: text });
+      if (error?.code === '23505') return { ok: true, message: `${c.one.name} haqida bu allaqachon yozilgan.` };
+      if (error?.code === '42501') return { ok: false, message: 'Bu mijoz haqida yozish rolingizga ochiq emas.' };
+      if (error) return { ok: false, message: dbError(error) };
+      return { ok: true, message: `${c.one.name} haqida eslab qoldim: «${text}».` };
+    },
+  }),
+  define({
+    name: 'company_rule',
+    description: 'Kompaniya qoidasini barcha xodimlar uchun eslab qoladi (faqat Tizim egasi): "kompaniya qoidasi sifatida eslab qol: …".',
+    params: { type: 'object', properties: { text: s('Qoida') }, required: ['text'] },
+    input: z.object({ text: z.string().trim().min(2).max(400) }),
+    needs: ['assistant.teach'],
+    write: true,
+    run: async ({ text }, ctx) => {
+      if (!ctx.owner) return { ok: false, message: 'Kompaniya qoidalarini faqat Tizim egasi kiritadi.' };
+      const { error } = await ctx.db.from('assistant_memories').insert({ scope: 'company', body: text });
+      if (error?.code === '23505') return { ok: true, message: 'Bu qoida allaqachon bor.' };
+      if (error) return { ok: false, message: dbError(error) };
+      return { ok: true, message: `Kompaniya qoidasi saqlandi: «${text}».` };
+    },
+  }),
+  define({
+    name: 'teach_style',
+    description: 'Personality Learning Studio (faqat Tizim egasi): egasi qanday javob berishini namuna sifatida saqlaydi. situation — vaziyat yoki savol, answer — egasining javobi.',
+    params: { type: 'object', properties: { situation: s('Vaziyat yoki savol'), answer: s('Egasining javobi') }, required: ['situation', 'answer'] },
+    input: z.object({ situation: z.string().trim().min(2).max(300), answer: z.string().trim().min(2).max(600) }),
+    needs: ['assistant.teach'],
+    write: true,
+    run: async ({ situation, answer }, ctx) => {
+      if (!ctx.owner) return { ok: false, message: 'Uslubni faqat Tizim egasi o‘rgatadi.' };
+      const { error } = await ctx.db.from('assistant_style_examples').insert({ situation, answer });
+      if (error) return { ok: false, message: dbError(error) };
+      return { ok: true, message: 'O‘rgandim — endi shunga yaqin javob beraman.', revalidateTags: ['assistant-style'] };
+    },
+  }),
+  define({
+    name: 'set_personality',
+    description:
+      'Sunny shaxsiyati sozlamalari (faqat Tizim egasi), har biri 0–1: humor (hazil), mischief (qitmirlik), formality (rasmiylik), brevity (qisqalik), expressiveness (ifodalilik), directness (to‘g‘ridanlik). "Hazilni kamaytir" → humor pastroq.',
+    params: { type: 'object', properties: Object.fromEntries(DIALS.map((k) => [k, { type: 'number', minimum: 0, maximum: 1 }])) },
+    input: z.object({
+      humor: dial,
+      mischief: dial,
+      formality: dial,
+      brevity: dial,
+      expressiveness: dial,
+      directness: dial,
+    }),
+    needs: ['assistant.teach'],
+    write: true,
+    run: async (dials, ctx) => {
+      if (!ctx.owner) return { ok: false, message: 'Shaxsiyat sozlamasini faqat Tizim egasi o‘zgartiradi.' };
+      const changes: Partial<Record<(typeof DIALS)[number], number>> = {};
+      for (const k of DIALS) if (typeof dials[k] === 'number') changes[k] = dials[k];
+      if (!Object.keys(changes).length) return { ok: false, message: 'Qaysi sozlamani o‘zgartiray?' };
+      const { data, error } = await ctx.db.from('assistant_personality').update(changes).eq('id', 1).select('id');
+      if (error) return { ok: false, message: dbError(error) };
+      if (!data?.length) return { ok: false, message: 'Sozlamani o‘zgartirib bo‘lmadi.' };
+      return { ok: true, message: 'Sozlama yangilandi.', revalidateTags: ['assistant-style'] };
+    },
+  }),
 ];
 
 async function lastOwnMessage(ctx: AgentContext, chat: string | undefined): Promise<string | { ask: string }> {
@@ -680,6 +804,13 @@ export const ACTION_LABELS: Record<string, string> = {
   send_message: 'Xabar yuborilmoqda',
   edit_message: 'Xabar tahrirlanmoqda',
   delete_message: 'Xabar o‘chirilmoqda',
+  remember: 'Eslab qolinmoqda',
+  forget: 'Eslatma o‘chirilmoqda',
+  my_memories: 'Xotira o‘qilmoqda',
+  client_note: 'Mijoz haqida yozilmoqda',
+  company_rule: 'Kompaniya qoidasi saqlanmoqda',
+  teach_style: 'Uslub o‘rganilmoqda',
+  set_personality: 'Sozlama o‘zgartirilmoqda',
 };
 
 /** One sentence naming exactly what a write will do: shown on the confirmation card. */

@@ -353,12 +353,46 @@ test('18. an exact command ("Keldim", "vazifalarim") is done by the system’s o
     const rows = one(`select count(*) from attendance a join profiles p on p.id = a.user_id where p.email = 'editor@sunmedia.local' and a.work_date = '${today()}'`);
     assert.equal(rows, did.ok ? '1' : '0');
 
-    // The shortcut never widens access: a tool this role may not use is refused exactly as when the AI asks for it.
+    // "Vazifalarim": the person's own open tasks, as the database has them, again without the AI.
     const tasks = await assistantReply([{ role: 'user', text: 'vazifalarim' }], ctx, 'Editor');
     assert.equal(gemini.sent.length, 0);
-    const offered = toolsFor(ctx).map((t) => t.name).includes('my_tasks');
-    assert.match(tasks.reply, offered ? /vazifa/i : /rolingizga ochiq emas/);
+    assert.match(tasks.reply, /^(Sizda \d+ ta ochiq vazifa bor|Ochiq vazifangiz yo‘q)/, tasks.reply);
+    const open = one(`select count(*) from tasks t join task_assignments a on a.task_id = t.id join profiles p on p.id = a.user_id where p.email = 'editor@sunmedia.local' and t.deleted_at is null and t.status in ('todo','in_progress','in_review','revision')`);
+    if (open !== '0') assert.match(tasks.reply, new RegExp(`^Sizda ${open} ta`));
   } finally {
     gemini.restore();
   }
+});
+
+test('19. memory: a person’s own notes only — saved, listed without the AI, kept out of colleagues’ prompts, forgotten on request', { skip }, async () => {
+  const note = `TEST· Ertalab qisqa xulosa ${Date.now()}`;
+  const ctx = { ...asTool(editor) };
+  const saved = await runTool('remember', { text: note }, ctx);
+  assert.match(saved.content, /"holat":"BAJARILDI"/);
+  assert.match((await runTool('remember', { text: note.toUpperCase() }, ctx)).content, /allaqachon/, 'the same note is not saved twice');
+  assert.match((await runTool('remember', { text: 'Instagram parol: x123' }, ctx)).content, /"holat":"BAJARILMADI".*Maxfiy/, 'no secrets');
+
+  const gemini = fakeGemini([() => [{ text: 'ok' }]]);
+  try {
+    const list = await assistantReply([{ role: 'user', text: 'xotiram' }], ctx, 'Editor');
+    assert.equal(gemini.sent.length, 0, '"xotiram" needs no AI');
+    assert.ok(list.reply.includes(note), list.reply);
+
+    // In the editor's own conversation the note is context; in a colleague's it is not there at all.
+    await assistantReply([{ role: 'user', text: 'Salom, bugun nimadan boshlay?' }], ctx, 'Editor');
+    assert.ok(gemini.sent.at(-1).systemInstruction.parts[0].text.includes(note), 'own prompt carries the note');
+    await assistantReply([{ role: 'user', text: 'Salom, bugun nimadan boshlay?' }], { ...asTool(operator) }, 'Operator');
+    assert.ok(!gemini.sent.at(-1).systemInstruction.parts[0].text.includes(note), 'a colleague never gets it');
+  } finally {
+    gemini.restore();
+  }
+
+  // Company rules and Sunny's style are the owner's: not offered to staff, and refused even if asked for.
+  assert.ok(!toolsFor(ctx).some((t) => ['company_rule', 'teach_style', 'set_personality'].includes(t.name)));
+  assert.match((await runTool('company_rule', { text: 'TEST· qoida' }, ctx)).content, /"holat":"BAJARILMADI"/);
+  assert.equal(one(`select count(*) from assistant_memories where body = 'TEST· qoida'`), '0');
+
+  const gone = await runTool('forget', { text: note.slice(6, 30) }, ctx);
+  assert.match(gone.content, /"holat":"BAJARILDI"/);
+  assert.equal(one(`select count(*) from assistant_memories where body = '${note}'`), '0');
 });

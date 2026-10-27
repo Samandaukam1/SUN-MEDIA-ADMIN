@@ -1,0 +1,41 @@
+import 'server-only';
+
+import { unstable_cache } from 'next/cache';
+
+import { createAdminClient } from '@/lib/supabase/admin';
+import type { AssistantContext } from './tools';
+import { memoryPrompt, stylePrompt, type Dials, type MemoryNote } from './persona';
+
+/**
+ * What goes into the system prompt from Sunny's memory (phase 5). A person's notes are read with their own session:
+ * row-level security returns only their personal notes, the company rules (staff) and the partner notes they may see.
+ * Public visitors have no memory.
+ */
+export async function memoryContext(ctx: AssistantContext): Promise<string> {
+  if (!ctx.db || !ctx.userId) return '';
+  const { data, error } = await ctx.db.from('assistant_memories').select('scope, body').order('updated_at', { ascending: false }).limit(40);
+  if (error || !data?.length) return '';
+  return memoryPrompt(data as MemoryNote[]);
+}
+
+/**
+ * The owner's dials and style examples, for every conversation. Read with the server key (they hold no personal data;
+ * only the system owner can write them), cached for a few minutes and refreshed as soon as the owner changes them.
+ */
+export const styleContext = unstable_cache(
+  async (): Promise<string> => {
+    try {
+      const db = createAdminClient();
+      const [dials, examples] = await Promise.all([
+        db.from('assistant_personality').select('humor, mischief, formality, brevity, expressiveness, directness').eq('id', 1).maybeSingle(),
+        db.from('assistant_style_examples').select('situation, answer').order('created_at', { ascending: false }).limit(5),
+      ]);
+      return stylePrompt((dials.data as Dials | null) ?? null, examples.data ?? []);
+    } catch {
+      // Not migrated yet, or no server key: Sunny's usual manner.
+      return '';
+    }
+  },
+  ['assistant-style-v1'],
+  { revalidate: 300, tags: ['assistant-style'] },
+);

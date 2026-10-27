@@ -9,9 +9,10 @@ test('exact commands go to the system’s own tools (no AI); everything else goe
   assert.deepEqual(routeCommand('Keldim', 'staff'), { tool: 'check_in', input: {} });
   assert.deepEqual(routeCommand('davomatimni belgilagin', 'staff'), { tool: 'check_in', input: {} });
   assert.deepEqual(routeCommand('Sunny, keldimni belgila', 'staff'), { tool: 'check_in', input: {} });
-  assert.deepEqual(routeCommand('Vazifalarim', 'staff'), { tool: 'my_tasks', input: {} });
-  assert.deepEqual(routeCommand('bugungi vazifalarim qanday?', 'client'), { tool: 'my_tasks', input: {} });
-  assert.deepEqual(routeCommand('muddati o‘tgan vazifalarim', 'staff'), { tool: 'my_tasks', input: { overdue_only: true } });
+  assert.deepEqual(routeCommand('Vazifalarim', 'staff'), { tool: 'list_tasks', input: { scope: 'mine', filter: 'open' } });
+  assert.deepEqual(routeCommand('bugungi vazifalarim qanday?', 'staff'), { tool: 'list_tasks', input: { scope: 'mine', filter: 'today' } });
+  assert.equal(routeCommand('vazifalarim', 'client'), null, 'clients have no task list of their own: the AI answers');
+  assert.deepEqual(routeCommand('muddati o‘tgan vazifalarim', 'staff'), { tool: 'list_tasks', input: { scope: 'mine', filter: 'overdue' } });
   assert.deepEqual(routeCommand('yaqin s’yomkalar', 'staff'), { tool: 'upcoming_shootings', input: {} });
   assert.deepEqual(routeCommand('vazifalar sahifasini och', 'staff'), { link: { href: '/work/tasks', label: 'Vazifalar' } });
   // Not for the public; not attendance for clients; not questions.
@@ -32,10 +33,10 @@ test('task and shooting lists read naturally', () => {
     { vazifa: 'Reels montaji', holat: 'in_progress', muddat: '27-oktabr 18:00', muddati_otgan: false, mijoz: 'SAFI' },
     { vazifa: 'Ssenariy', holat: 'todo', muddat: '25-oktabr', muddati_otgan: true, mijoz: null },
   ];
-  const t = tasksReply(JSON.stringify(rows));
+  const t = tasksReply(JSON.stringify({ holat: 'OK', xabar: '2 ta vazifa.', malumot: rows }));
   assert.match(t, /^Sizda 2 ta ochiq vazifa bor \(1 tasi muddati o‘tgan\):/);
   assert.match(t, /1\. Reels montaji — SAFI, muddat 27-oktabr 18:00 \(jarayonda\)/);
-  assert.equal(tasksReply('Ochiq vazifa yo‘q.'), 'Ochiq vazifa yo‘q.');
-  assert.equal(tasksReply('[]'), 'Ochiq vazifangiz yo‘q.');
+  assert.equal(tasksReply(JSON.stringify({ holat: 'OK', xabar: 'Bunday vazifa yo‘q.', malumot: [] }), 'overdue'), 'Muddati o‘tgan vazifangiz yo‘q.');
+  assert.equal(tasksReply(JSON.stringify({ holat: 'BAJARILMADI', xabar: 'Ruxsat yo‘q.' })), 'Ruxsat yo‘q.');
   assert.match(shootingsReply(JSON.stringify([{ syomka: 'SAFI Yunusobod', holat: 'confirmed', boshlanishi: '28-oktabr 11:00', joy: 'Yunusobod', mijoz: 'SAFI' }])), /1\. 28-oktabr 11:00 — SAFI Yunusobod \(SAFI\), Yunusobod/);
 });

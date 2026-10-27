@@ -7,7 +7,7 @@ import { normalize } from './intents';
  * exact command returns null and goes to the AI as before. Pure functions (matching and wording).
  */
 
-export type Route = { tool: 'check_in' | 'my_tasks' | 'upcoming_shootings'; input: Record<string, unknown> } | { link: { href: string; label: string } };
+export type Route = { tool: 'check_in' | 'list_tasks' | 'upcoming_shootings' | 'my_memories'; input: Record<string, unknown> } | { link: { href: string; label: string } };
 
 /** Panel pages by the words people use for them (only a link: the page itself checks access). */
 const PAGES: [RegExp, string, string][] = [
@@ -35,8 +35,13 @@ export function routeCommand(text: string, audience: 'public' | 'staff' | 'clien
   if (audience === 'staff' && /^(men )?(keldim|ishga keldim|keldimni (belgila|bos|qayd qil)|davomat(im)?(ni)? belgila|kelganimni belgila)$/u.test(t)) {
     return { tool: 'check_in', input: {} };
   }
-  if (/^(muddati otgan|kechikkan) vazifalarim$/u.test(t)) return { tool: 'my_tasks', input: { overdue_only: true } };
-  if (/^((bugungi|mening|meni) )?vazifalarim( (qanday|bor|nima|qani))?$|^vazifalarimni (korsat|ayt)$|^menda qanday vazifalar bor$/u.test(t)) return { tool: 'my_tasks', input: {} };
+  // Tasks: the staff's own list (clients have no task list of their own: their questions go to the AI).
+  if (audience === 'staff') {
+    if (/^(muddati otgan|kechikkan) vazifalarim$/u.test(t)) return { tool: 'list_tasks', input: { scope: 'mine', filter: 'overdue' } };
+    if (/^bugungi vazifalarim( (qanday|bor|nima|qani))?$/u.test(t)) return { tool: 'list_tasks', input: { scope: 'mine', filter: 'today' } };
+    if (/^((mening|meni) )?vazifalarim( (qanday|bor|nima|qani))?$|^vazifalarimni (korsat|ayt)$|^menda qanday vazifalar bor$/u.test(t)) return { tool: 'list_tasks', input: { scope: 'mine', filter: 'open' } };
+    if (/^(xotiram|nimalarni eslab qolding|nima eslab qolding|eslab qolganlaring|men haqimda nima bilasan)$/u.test(t)) return { tool: 'my_memories', input: {} };
+  }
   if (/^((yaqin|keyingi|bu haftagi|yaqindagi) )?syomkalar( (qachon|qanday|bor))?$|^qachon syomka bor$/u.test(t)) return { tool: 'upcoming_shootings', input: {} };
   if (audience === 'staff') {
     const m = /^(.+?) (sahifasini |sahifasi |boʻlimini |bolimini )?(och|ochib ber|ochgin|korsat)$/u.exec(t);
@@ -58,19 +63,24 @@ export function actionReply(content: string): { text: string; ok: boolean; waiti
   }
 }
 
-/** "Sizda 4 ta ochiq vazifa bor (1 tasi muddati o‘tgan): …" — from the my_tasks rows. */
-export function tasksReply(content: string, overdueOnly = false): string {
+/** "Sizda 4 ta ochiq vazifa bor (1 tasi muddati o‘tgan): …" — from the list_tasks result (rows in `malumot`). */
+export function tasksReply(content: string, filter: 'open' | 'overdue' | 'today' = 'open'): string {
   let rows: { vazifa: string; holat: string; muddat?: string | null; muddati_otgan?: boolean; mijoz?: string | null }[];
   try {
-    rows = JSON.parse(content);
+    const parsed = JSON.parse(content) as { holat?: string; xabar?: string; malumot?: unknown } | unknown[];
+    if (!Array.isArray(parsed) && parsed.holat === 'BAJARILMADI') return parsed.xabar ?? 'Vazifalarni o‘qib bo‘lmadi.';
+    rows = (Array.isArray(parsed) ? parsed : parsed.malumot) as typeof rows;
   } catch {
     return content;
   }
-  if (!Array.isArray(rows) || !rows.length) return overdueOnly ? 'Muddati o‘tgan vazifangiz yo‘q.' : 'Ochiq vazifangiz yo‘q.';
+  if (!Array.isArray(rows) || !rows.length) return filter === 'overdue' ? 'Muddati o‘tgan vazifangiz yo‘q.' : filter === 'today' ? 'Bugun muddati tugaydigan vazifangiz yo‘q.' : 'Ochiq vazifangiz yo‘q.';
   const late = rows.filter((r) => r.muddati_otgan).length;
-  const head = overdueOnly
-    ? `Muddati o‘tgan ${rows.length} ta vazifangiz bor:`
-    : `Sizda ${rows.length} ta ochiq vazifa bor${late ? ` (${late} tasi muddati o‘tgan)` : ''}:`;
+  const head =
+    filter === 'overdue'
+      ? `Muddati o‘tgan ${rows.length} ta vazifangiz bor:`
+      : filter === 'today'
+        ? `Bugun ${rows.length} ta vazifangizning muddati:`
+        : `Sizda ${rows.length} ta ochiq vazifa bor${late ? ` (${late} tasi muddati o‘tgan)` : ''}:`;
   const list = rows.slice(0, 8).map((r, i) => `${i + 1}. ${r.vazifa}${r.mijoz ? ` — ${r.mijoz}` : ''}${r.muddat ? `, muddat ${r.muddat}` : ''}${r.muddati_otgan ? ' ⚠️' : ''} (${STATUS[r.holat] ?? r.holat})`);
   return [head, ...list, rows.length > 8 ? `…yana ${rows.length - 8} ta — [Vazifalar](/work/tasks)` : ''].filter(Boolean).join('\n');
 }

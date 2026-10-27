@@ -293,6 +293,8 @@ export class QitmirBrain {
   private dodgeUntil = -1e9;
   /** Going home by its own choice (end of a calm trip), not because something needs the robot home. */
   private voluntary = false;
+  /** Summoned: flies home as fast as it can. */
+  private fast = false;
 
   private pos: Vec2;
   private vel: Vec2 = [0, 0];
@@ -770,8 +772,14 @@ export class QitmirBrain {
         }
         this.alpha = Math.min(1, this.alpha + dt / 0.3);
         this.sizeTo = this.home.scale;
-        this.seek(this.home.x, this.home.y, 8, 40, 1.4);
         const d = Math.hypot(this.home.x - this.pos[0], this.home.y - this.pos[1]);
+        if (d > 0.6 * B) this.seek(this.home.x, this.home.y, this.fast ? 15 : 8, this.fast ? 75 : 40, 1.4);
+        else {
+          // The last stretch onto its pad: an eased landing, no overshoot (the thruster dims as it settles).
+          const k = damp(this.fast ? 11 : 8, dt);
+          this.pos = [this.pos[0] + (this.home.x - this.pos[0]) * k, this.pos[1] + (this.home.y - this.pos[1]) * k];
+          this.vel = [0, 0];
+        }
         if (d < 1.5 && Math.hypot(...this.vel) < 30 && Math.abs(this.size - this.home.scale) < 0.01 && qAngle(this.q) < 0.02) this.docked();
         return;
       }
@@ -1185,6 +1193,7 @@ export class QitmirBrain {
 
   private docked() {
     this.mode = 'DOCKED';
+    this.fast = false;
     this.clip = this.shadow = this.tether = null;
     this.events.push({ type: 'docked' });
   }
@@ -1316,6 +1325,13 @@ export class QitmirBrain {
     if (this.mode === 'DOCKED' && !this.flags.dock && this.home && ['salto', 'dance', 'happy', 'wave'].includes(act)) this.liftOff(now);
     const busy = ['DOCKED', 'RETURNING', 'THROWN_AWAY', 'TUMBLING', 'DIZZY', 'CURSOR_GRAB'];
     if (busy.includes(this.mode)) return false;
+    // "Sunny!": back to its launcher at full speed, to listen (cinematic: thrust, trail, banking, a controlled stop).
+    if (act === 'summon') {
+      this.tether = this.clip = this.shadow = null;
+      this.fast = true;
+      this.goHome(now);
+      return true;
+    }
     this.tether = this.clip = this.shadow = null;
     this.sizeTo = 1;
     if (act === 'salto') this.salto(now);

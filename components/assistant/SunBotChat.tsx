@@ -9,9 +9,10 @@ import { localIntent, sentiment, type LocalAct } from '@/lib/assistant/intents';
 import type { Emotion, FeelEvent } from './robot/emotion';
 import { RobotFace, type RobotMood } from './RobotFace';
 import { answers } from './answers';
-import { quip } from './qitmir/quips';
+import { pick, quip } from './qitmir/quips';
 import { store, stored } from './session';
 import { ISSUE_TEXT, useVoice, type SoundSubscribe, type VoiceLang } from './voice';
+import { WakeListener, wakeRecognizer, type WakeState } from './wake';
 import './sunbot-chat.css';
 
 type Action =
@@ -78,6 +79,9 @@ function save(audience: ChatAudience, msgs: Msg[]) {
     // storage blocked: the chat simply does not survive a reload
   }
 }
+
+/** "Sunny!" answered aloud, then it listens. */
+const ACK = ['Eshitaman!', 'Ha, eshitaman.', 'Qani, ayting.', 'Shu yerdaman!', 'Eshitaman, nima gap?'];
 
 /** The voice's manner: playful in Qitmir mode, Sunny's usual one otherwise. */
 const voiceStyle = (qitmir: boolean) => (qitmir ? ('qitmir' as const) : undefined);
@@ -180,6 +184,12 @@ export function SunBotChat({
   onFeel,
   feeling,
   voiceAsk = 0,
+  wake = false,
+  onWake,
+  onWakeState,
+  pan = 0,
+  spatial = true,
+  onSpatial,
   head,
 }: {
   audience: ChatAudience;
@@ -199,6 +209,15 @@ export function SunBotChat({
   feeling?: Emotion;
   /** Voice mode: each increment is a press of the robot's mic — listen without opening the panel. */
   voiceAsk?: number;
+  /** "Sunny!" wake word (foreground, switched on by the person). */
+  wake?: boolean;
+  /** The name was heard: the robot is summoned at once. */
+  onWake?: () => void;
+  onWakeState?: (state: WakeState | 'unsupported') => void;
+  /** Spatial audio: where the robot is (−1 left … 1 right), and whether the voice follows it. */
+  pan?: number;
+  spatial?: boolean;
+  onSpatial?: () => void;
   /** A reply was given (and spoken, if the voice is on): the 3D robot nods. */
   onReplied?: () => void;
   /** The system confirmed (or refused) a change: the 3D robot celebrates or shakes its head. Never before the server says so. */
@@ -232,6 +251,10 @@ export function SunBotChat({
   actRef.current = onAct;
   const feelRef = useRef({ onFeel, feeling });
   feelRef.current = { onFeel, feeling };
+  const wakeProps = useRef({ onWake, onWakeState });
+  wakeProps.current = { onWake, onWakeState };
+  /** What Sunny is saying (or just said): heard back through the speakers it is an echo, not the person. */
+  const spokenText = useRef('');
   // Voice mode: a spoken conversation with the panel closed. Sunny listens, thinks and speaks where it is, and its words
   // show on a small card by the robot; the panel is not needed for any of it (the same conversation continues there).
   const [voiceOnly, setVoiceOnly] = useState(false);
@@ -369,7 +392,10 @@ export function SunBotChat({
         setMsgs([...list, { role: 'user', text }, { role: 'assistant', text: reply }]);
         setInput('');
         actRef.current?.(local.act);
-        if (local.act !== 'stop' && (via === 'voice' || !mutedRef.current) && (openRef.current || voiceOnlyRef.current)) void voice.speak(reply, lang, voiceStyle(qitmirRef.current));
+        if (local.act !== 'stop' && (via === 'voice' || !mutedRef.current) && (openRef.current || voiceOnlyRef.current)) {
+          spokenText.current = reply;
+          void voice.speak(reply, lang, voiceStyle(qitmirRef.current));
+        }
         return;
       }
       // Kind or rude words touch Sunny's mood (the question itself still goes to the assistant).
@@ -466,6 +492,7 @@ export function SunBotChat({
                 streamed += ev.text;
                 show(streamed);
                 speech?.update(streamed);
+                spokenText.current = streamed;
               } else if (ev.t === 'step') {
                 // A tool running in the system: Sunny works; a change it made or that was refused shows at once.
                 if (ev.phase === 'start') setWorking(ev.label ?? 'Bajarilmoqda');
@@ -516,6 +543,7 @@ export function SunBotChat({
       if (!openRef.current && !voiceOnlyRef.current) return speech.cancel();
       // The reply is the streamed bubble already on screen, or the one just added after the last rendered message.
       setSpoken(shown ? msgsRef.current.length - 1 : msgsRef.current.length);
+      spokenText.current = streamed || final.text;
       const spoke = await speech.finish(streamed || final.text);
       if (live()) onReplied?.();
       // Conversation mode: a spoken question gets a spoken answer, then Sunny listens again (not after a silent reply:
@@ -535,7 +563,10 @@ export function SunBotChat({
       voice.unlock();
       voice.stopSpeaking();
       const say = (text: string) => {
-        if (voiceOnlyRef.current || (!mutedRef.current && openRef.current)) void voice.speak(text, lang, voiceStyle(qitmirRef.current));
+        if (voiceOnlyRef.current || (!mutedRef.current && openRef.current)) {
+          spokenText.current = text;
+          void voice.speak(text, lang, voiceStyle(qitmirRef.current));
+        }
       };
       if (!yes) {
         mark('cancelled');
@@ -580,11 +611,78 @@ export function SunBotChat({
     if (mutedRef.current && !chosenMute.current) setMuted(false);
     mutedRef.current = mutedRef.current && chosenMute.current;
     const before = input;
+    // One recognizer at a time: the wake word waits while the question is heard.
+    wakeRef.current?.pause();
     const text = await voice.listen(lang, (t) => setInput(t));
     if (text) void send(text, 'voice');
     else setInput(before);
   }, [input, interrupt, lang, send, voice]);
   hearRef.current = () => void hear();
+
+  // "Sunny!" — the wake word. Called: the robot is summoned at once; a command said in the same breath is sent, otherwise
+  // Sunny answers ("Eshitaman!") and listens. While it speaks, "to‘xta…" or its name interrupts it (its own voice is not).
+  const wakeRef = useRef<WakeListener | null>(null);
+  const { unlock } = voice;
+  const toVoice = useCallback(() => {
+    if (!openRef.current) setVoiceOnly(true);
+    voiceOnlyRef.current = voiceOnlyRef.current || !openRef.current;
+  }, []);
+  const onCalled = useRef<(rest: string, final: boolean) => void>(() => undefined);
+  onCalled.current = (rest, final) => {
+    if (!final) {
+      wakeProps.current.onWake?.();
+      toVoice();
+      return;
+    }
+    toVoice();
+    if (rest) return void send(rest, 'voice');
+    const ack = pick('wake', ACK);
+    spokenText.current = ack;
+    void voice.speak(ack, lang, voiceStyle(qitmirRef.current)).then(() => hearRef.current());
+  };
+  const onBarge = useRef<(rest: string) => void>(() => undefined);
+  onBarge.current = (rest) => {
+    interrupt(false);
+    toVoice();
+    if (rest.split(' ').length >= 2) void send(rest, 'voice');
+    else hearRef.current();
+  };
+  useEffect(() => {
+    if (!wake) return;
+    const make = wakeRecognizer();
+    if (!make) return void wakeProps.current.onWakeState?.('unsupported');
+    // Switching it on was a click on the page: the voice may play from now on.
+    unlock();
+    const w = new WakeListener(make, lang, {
+      onWake: (rest, final) => onCalled.current(rest, final),
+      onBargeIn: (rest) => onBarge.current(rest),
+      onState: (st) => wakeProps.current.onWakeState?.(st),
+    });
+    wakeRef.current = w;
+    w.enable();
+    return () => {
+      w.disable();
+      wakeRef.current = null;
+    };
+  }, [wake, lang, unlock]);
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    const on = () => setVisible(document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', on);
+    return () => document.removeEventListener('visibilitychange', on);
+  }, []);
+  const wakeTalking = voice.speaking || voice.preparing;
+  useEffect(() => {
+    const w = wakeRef.current;
+    if (!w) return;
+    w.speaking(wakeTalking ? spokenText.current : '');
+    if (visible && !voice.listening && !voice.transcribing) w.resume();
+    else w.pause();
+  }, [wake, visible, voice.listening, voice.transcribing, wakeTalking]);
+
+  // Spatial audio: the voice a little from the robot's side.
+  const { setPan } = voice;
+  useEffect(() => setPan(spatial ? pan : 0), [pan, spatial, setPan]);
 
   // The robot's mic (voice mode): listen with the panel closed; a second press ends the question.
   const lastAsk = useRef(0);
@@ -622,6 +720,7 @@ export function SunBotChat({
     voice.unlock();
     interrupt(false);
     setSpoken(i);
+    spokenText.current = text;
     void voice.speak(text, lang, voiceStyle(qitmirRef.current));
   };
 
@@ -776,6 +875,22 @@ export function SunBotChat({
                   </button>
                 ))}
               </div>
+              {onSpatial ? (
+                <button
+                  type="button"
+                  className={`sb-icon ${spatial ? 'on' : ''}`}
+                  onClick={onSpatial}
+                  aria-pressed={spatial}
+                  aria-label="Ovoz yo‘nalishi (Sunny tomondan)"
+                  title={spatial ? 'Ovoz Sunny tomondan keladi: yoqilgan' : 'Ovoz yo‘nalishi: o‘chiq (markazda)'}
+                >
+                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M3 14v-2a9 9 0 0 1 18 0v2" />
+                    <rect x="3" y="14" width="4.5" height="6" rx="1.5" />
+                    <rect x="16.5" y="14" width="4.5" height="6" rx="1.5" />
+                  </svg>
+                </button>
+              ) : null}
               <button type="button" className="sb-icon" onClick={reset} aria-label="Yangi suhbat" title="Yangi suhbat">
                 <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />

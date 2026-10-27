@@ -177,3 +177,20 @@ test('mood physics: a sad robot chases slower and lower than a happy one; the th
   const rest = r.poses.filter((p) => p.state === 'LOGO_LANDING' && p.shadow?.o === 0.5);
   assert.ok(rest.length && rest.at(-1).thrust < 0.15, 'thruster almost off while it rests on the logo');
 });
+
+test('"Sunny!": a robot out on the page flies home at full speed to listen (much faster than a normal return)', () => {
+  const back = (summon) => {
+    const r = rig({ targets: { sights: [{ x: 100, y: 100, w: 300, h: 100 }] } });
+    r.b.pointer('move', 200, 200, 0);
+    r.run(4, (t) => r.b.pointer('move', 200 + 60 * Math.sin(t * 3), 200, t));
+    if (summon) assert.ok(r.b.command('summon', r.t));
+    r.b.setFlags({ dock: true });
+    const from = r.t;
+    r.until('NORMAL_IDLE', 10);
+    return { seconds: r.t - from, top: Math.max(...r.poses.filter((p) => p.state === 'RETURNING').map((p) => p.speed)) };
+  };
+  const normal = back(false);
+  const called = back(true);
+  assert.ok(called.top > normal.top * 1.4, `top speed ${called.top.toFixed(0)} vs ${normal.top.toFixed(0)} px/s`);
+  assert.ok(called.seconds < normal.seconds, `${called.seconds.toFixed(2)} s vs ${normal.seconds.toFixed(2)} s`);
+});

@@ -223,7 +223,9 @@ export function useVoice() {
   const [issue, setIssue] = useState<VoiceIssue | null>(null);
 
   const ctxRef = useRef<AudioContext | null>(null);
-  const outRef = useRef<{ gain: GainNode; analyser: AnalyserNode } | null>(null);
+  const outRef = useRef<{ gain: GainNode; analyser: AnalyserNode; panner: StereoPannerNode | null } | null>(null);
+  /** Spatial audio: where the robot is, left (−1) to right (1); kept subtle by the caller. */
+  const panRef = useRef(0);
   const unlocked = useRef(false);
   const session = useRef<Session | null>(null);
   const synthOn = useRef(false);
@@ -252,10 +254,23 @@ export function useVoice() {
     analyser.fftSize = 1024;
     analyser.smoothingTimeConstant = 0.5;
     voiceColour(ac, gain, analyser);
-    analyser.connect(ac.destination);
+    // Spatial audio: the voice comes a little from where Sunny is (no panner in the browser: centred, as before).
+    const panner = typeof ac.createStereoPanner === 'function' ? ac.createStereoPanner() : null;
+    if (panner) {
+      panner.pan.value = panRef.current;
+      analyser.connect(panner).connect(ac.destination);
+    } else analyser.connect(ac.destination);
     ctxRef.current = ac;
-    outRef.current = { gain, analyser };
+    outRef.current = { gain, analyser, panner };
     return ac;
+  }, []);
+
+  /** Moves the voice toward the robot's side of the screen, smoothly (0 = centre). */
+  const setPan = useCallback((pan: number) => {
+    panRef.current = Math.max(-1, Math.min(1, pan));
+    const ac = ctxRef.current;
+    const panner = outRef.current?.panner;
+    if (ac && panner) panner.pan.setTargetAtTime(panRef.current, ac.currentTime, 0.25);
   }, []);
 
   /** Call from a tap or key press: starts the audio output so replies that arrive later may play (iOS, Chrome). */
@@ -920,5 +935,6 @@ export function useVoice() {
     speak,
     stopSpeaking,
     subscribe,
+    setPan,
   };
 }

@@ -6,13 +6,13 @@ Bu fayl har sessiyada yangilanadi: yangi sessiya shu yerdan davom etadi. Holat f
 
 Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ tashqi to‘siq
 
-## Joriy holat (2026-10-27, 2-sessiya)
+## Joriy holat (2026-10-27, 3-sessiya)
 
 | Bosqich | Holat | Izoh |
 |---|---|---|
 | 1. Core foundation | ✅ | branch `feat/sunny-phase1`, production'ga **deploy qilinmagan** |
 | 2. Living character | 🟡 | emotsiya, mood physics, avtonom hayot, thruster, jismoniy reaksiyalar ✅; bitta renderer va 2D↔3D solishtirish yo‘q |
-| 3. Voice assistant | 🟡 | panelsiz ovoz rejimi bor; wake-word, spatial audio, summon yo‘q |
+| 3. Voice assistant | ✅ | wake-word, summon, barge-in, spatial audio; robot faqat uyda gapiradi (yagona renderer kerak) |
 | 4. AI intelligence (Gemini) | 🟡 | provayder registri, tokensiz buyruqlar bor; byudjet nazorati, deterministik backend buyruqlari yo‘q |
 | 5. Memory & personality | ⬜ | DB migratsiya + RLS kerak |
 | 6. Action agent | 🟡 | mavjud asboblar ishlaydi (davomat, vazifa, chat, kontent); mission/delegation/vision yo‘q |
@@ -74,13 +74,31 @@ Tekshiruv: 121 unit test, `tsc`, `eslint` toza; brauzer smoke 7/7 (sayohat, uyda
 2. ⬜ Asl 2D↔3D old ko‘rinishini ortografik solishtirish (avvalgi rekonstruksiya: `robot/sculpt.ts`).
 3. ⬜ Emotsiya → ovoz prosodiyasi (hozir faqat matn ohangi va harakat).
 
-### 3-bosqich — Voice
-1. ⬜ **"Sunny" wake-word (§12)**: foreground, ixtiyoriy (🎙 yonida "quloq" tugmasi), `SpeechRecognition` continuous
-   (Chrome/Edge/Android). Gemini tokeni sarflanmaydi, lekin brauzer audioni o‘z serveriga yuboradi — ⛔ to‘liq on-device
-   emas. iPhone PWA fonda tinglay olmaydi (Apple cheklovi) — 🎙 tugmasi fallback.
-2. ⬜ Summon parvozi (§12), ⬜ spatial audio (`StereoPannerNode`, o‘chirish sozlamasi bilan, §16).
-3. 🟡 Interruption (§15): 🎙/To‘xtatish va "to‘xta" ishlaydi; gapirayotganda wake-word bilan barge-in yo‘q.
-4. 🟡 Qitmir sahnasidagi robot gapirish uchun uyga uchadi — joyida gapirishi kerak (renderer birlashgach).
+## 3-bosqich — bajarildi (2026-10-27, 3-sessiya)
+
+- **"Sunny!" wake-word (§12)** — [wake.ts](../components/assistant/wake.ts) `WakeListener`: robot yonidagi 👂 tugmasi
+  bilan yoqiladi (sessiya davomida eslab qolinadi), faqat sahifa ko‘rinib turganda; brauzerning continuous
+  `SpeechRecognition` (o‘zbekcha), to‘xtasa qayta yoqiladi, xatoda kutish oshadi, mikrofon ruxsati yo‘q bo‘lsa o‘chadi.
+  Ism eshitilishi bilan robot chaqiriladi; bir nafasda aytilgan buyruq ("Sunny, bugungi vazifalarim…") darrov
+  yuboriladi, aks holda "Eshitaman!" (5 xil) deb tinglaydi. Chat tinglayotganda wake to‘xtab turadi (bitta recognizer).
+  Gemini tokeni sarflanmaydi. Test: `tests/assistant-wake.test.mjs`.
+- **Summon (§12)** — `brain.command('summon')`: sayohatdagi robot launcher'ga to‘liq tezlikda (thruster, trail,
+  banking) qaytadi, oxirida silliq qo‘nadi; uydagi robot tashrifchiga buriladi. Qaytish endi tebranishsiz (1.18 → 0.87 s).
+- **Ovoz bilan to‘xtatish (§15)** — Sunny gapirayotganda "to‘xta…", "bas", "Sunny…" ovozni to‘xtatadi; qolgan gap
+  yangi savol bo‘ladi ("To‘xta, avval SAFI'ni ayt" → "SAFI'ni ayt"). Sunny o‘z ovozini dinamikdan eshitsa — echo
+  filtri (so‘zlarning ≥60 % i aytilayotgan matnda) e’tiborsiz qoldiradi.
+- **Spatial audio (§16)** — [voice.ts](../components/assistant/voice.ts) `StereoPannerNode` + `setPan`: ovoz robot
+  tomondan, yumshoq (±0.35); chat sarlavhasida 🎧 tugmasi bilan o‘chadi; telefonda markazda; panner yo‘q brauzerda markazda.
+
+Tekshiruv: 127 unit test, `tsc`, `eslint`; brauzer smoke 7/7 (👂 Chrome'da, tinglash holati, 🎙 vaqtida pauza va
+qayta tinglash, 🎧 almashtirish). **Real ovoz bilan "Sunny!" va barge-in sinalmagan** (headless brauzerda gapirib bo‘lmaydi).
+
+### 3-bosqichdan qolgan
+1. 🟡 Robot gapirish uchun uyga uchadi (tinglash/gapirish holatlari launcher robotida). Joyida gapirishi va spatial
+   audio uchayotgan robot bilan siljishi — yagona renderer'dan keyin.
+2. ⛔ Safari / iPhone: wake-word yo‘q (Siri diktovkasida o‘zbek tili yo‘q, fonda tinglamaydi) — 🎙 tugmasi bor.
+3. Maxfiylik: wake-word yoqilganda brauzer mikrofon ovozini o‘z nutq xizmatiga (Chrome — Google) yuboradi; bu Gemini
+   emas va token sarflamaydi, lekin to‘liq on-device emas.
 
 ### 4-bosqich — Intelligence (Gemini)
 1. ⬜ Deterministik backend buyruqlari (§23 Layer 2): "keldimni belgila", "bugungi vazifalarim" kabi aniq so‘rovlarni

@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { LocalAct } from '@/lib/assistant/intents';
+import { wakeRecognizer, type WakeState } from './wake';
 import { RobotFace } from './RobotFace';
 import { EmotionEngine, expressionOf, type Feeling, type FeelEvent } from './robot/emotion';
 import type { RobotCue } from './robot/Robot3D';
@@ -77,7 +78,13 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
   const hover = useRef<HTMLSpanElement>(null);
   // Voice mode: each press of the mic asks the chat (loaded on demand) to listen without opening its panel.
   const [voiceAsk, setVoiceAsk] = useState(0);
-  const [command, setCommand] = useState<{ name: LocalAct; id: number } | undefined>(undefined);
+  const [command, setCommand] = useState<{ name: LocalAct | 'summon'; id: number } | undefined>(undefined);
+  // "Sunny!" wake word (switched on by the person, remembered for the visit) and spatial audio (on by default).
+  const [wake, setWake] = useState(false);
+  const [wakeState, setWakeState] = useState<WakeState | 'unsupported'>('off');
+  const [canWake, setCanWake] = useState(false);
+  const [spatial, setSpatial] = useState(true);
+  const [pan, setPanState] = useState(0);
   // Sunny's feelings (emotion.ts): every event that touches it goes through one engine; the robots show the result.
   const emo = useRef<EmotionEngine | null>(null);
   const [feeling, setFeeling] = useState<Feeling>({ name: 'friendly', k: 0 });
@@ -158,6 +165,12 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
       setWanted(true);
     }
     setPaused(stored('sunbot:qitmir-pause') === '1');
+    setCanWake(!!wakeRecognizer());
+    if (stored('sunbot:wake') === '1' && wakeRecognizer()) {
+      setWake(true);
+      setWanted(true);
+    }
+    setSpatial(stored('sunbot:spatial') !== '0');
     setCursorFx(stored('sunbot:qitmir-cursor') !== '0');
     const onVisibility = () => setThree((s) => ({ ...s, visible: document.visibilityState === 'visible' }));
     document.addEventListener('visibilitychange', onVisibility);
@@ -234,6 +247,36 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
     },
     [sendCue, feel],
   );
+  // Spatial audio: the voice comes a little from the launcher's side of the screen (centred on phones).
+  useEffect(() => {
+    const place = () => {
+      const r = hover.current?.getBoundingClientRect();
+      setPanState(!r || three.touch ? 0 : Math.max(-0.35, Math.min(0.35, ((r.left + r.width / 2) / innerWidth) * 0.7 - 0.35)));
+    };
+    place();
+    window.addEventListener('resize', place, { passive: true });
+    return () => window.removeEventListener('resize', place);
+  }, [three.touch]);
+  const toggleSpatial = useCallback(() => {
+    setSpatial((v) => {
+      store('sunbot:spatial', v ? '0' : '1');
+      return !v;
+    });
+  }, []);
+  const toggleWake = () => {
+    const next = !wake || wakeState === 'denied';
+    setWake(false);
+    if (next) setTimeout(() => setWake(true), 0);
+    store('sunbot:wake', next ? '1' : '0');
+    if (next) setWanted(true);
+  };
+  // "Sunny!" heard: the robot comes back at full speed (when it is out) and turns to the person.
+  const onWake = useCallback(() => {
+    setTeaser(false);
+    setCommand((c) => ({ name: 'summon', id: (c?.id ?? 0) + 1 }));
+    sendCue('welcome');
+    feel('tap');
+  }, [sendCue, feel]);
   const toggleQitmir = () => {
     const next = !qitmir;
     setQitmir(next);
@@ -336,6 +379,12 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
           onOpen={show}
           onAct={onAct}
           voiceAsk={voiceAsk}
+          wake={wake}
+          onWake={onWake}
+          onWakeState={setWakeState}
+          pan={pan}
+          spatial={spatial}
+          onSpatial={three.touch ? undefined : toggleSpatial}
           onFace={setFace}
           onReplied={onReplied}
           onOutcome={onOutcome}
@@ -435,6 +484,27 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
               <path d="M5 10.5a7 7 0 0 0 14 0M12 17.5v4" />
             </svg>
           </button>
+          {canWake ? (
+            <button
+              type="button"
+              className={`sb-qm-tool sb-wake ${wake && wakeState === 'waiting' ? 'live' : ''}`}
+              aria-pressed={wake && wakeState !== 'denied'}
+              onClick={toggleWake}
+              aria-label="“Sunny!” deb chaqirish"
+              title={
+                wakeState === 'denied'
+                  ? 'Mikrofonga ruxsat berilmagan — qayta urinish uchun bosing'
+                  : wake
+                    ? '“Sunny!” deb chaqirish yoqilgan (sahifa ochiq turganda mikrofon tinglaydi)'
+                    : '“Sunny!” deb chaqirish: sahifa ochiq turganda mikrofon tinglaydi'
+              }
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M7 9a5 5 0 0 1 10 0c0 3-3 4-3 7a3 3 0 0 1-5.5 1.6" />
+                <path d="M10 9.5a2 2 0 0 1 4 0" />
+              </svg>
+            </button>
+          ) : null}
           <button
             type="button"
             role="switch"

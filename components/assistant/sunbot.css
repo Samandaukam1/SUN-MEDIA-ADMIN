@@ -427,6 +427,9 @@
 .sb-voice-tools button:last-child { margin-left: auto; width: 30px; padding: 0; }
 .sb-voice-tools button:focus-visible { outline: 2px solid var(--sb-lime); outline-offset: 2px; }
 .sb-qm-mic:hover { color: var(--sb-lime) !important; }
+/* The wake word is listening: a quiet lime pulse on the ear. */
+.sb-wake.live { color: var(--sb-lime) !important; animation: sb-pulse 2.4s ease-in-out infinite; }
+.sb-icon.on { color: var(--sb-lime); }
 
 /* The robot is out playing: its pad (the ring) stays, the launcher robot steps aside. */
 .sb-launcher.sb-out .sb-3d { opacity: 0; transition: opacity 0.18s ease; }
@@ -453,7 +456,7 @@
 .sb-lite .sb-robot-img { filter: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .sb-fly, .sb-fly::after, .sb-hover, .sb-ring, .sb-ring::before, .sb-ring::after, .sb-eye, .sb-eyes, .sb-face, .sb-panel, .sb-teaser, .sb-eq i, .sb-stop, .sb-issue, .sb-qm, .sb-qm-tool,
+  .sb-fly, .sb-fly::after, .sb-hover, .sb-ring, .sb-ring::before, .sb-ring::after, .sb-eye, .sb-eyes, .sb-face, .sb-panel, .sb-teaser, .sb-eq i, .sb-stop, .sb-issue, .sb-qm, .sb-qm-tool, .sb-wake.live,
   .sb-msg.streaming .sb-bubble::after { animation: none !important; }
   .sb-mood-thinking .sb-orbit, .sb-mood-working .sb-orbit { animation: none; opacity: 0.6; }
   .sb-halo, .sb-eyes, .sb-launcher .sb-robot { transition: none !important; }

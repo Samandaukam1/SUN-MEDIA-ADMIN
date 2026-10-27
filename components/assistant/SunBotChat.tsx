@@ -162,7 +162,7 @@ const Icon = {
 };
 
 /** What the launcher robot shows while the chat is open: the chat's state and its live sound. */
-export type ChatFace = { mood: RobotMood; sound?: SoundSubscribe };
+export type ChatFace = { mood: RobotMood; sound?: SoundSubscribe; /** A voice conversation with the panel closed. */ voice?: boolean };
 
 /**
  * Sunny's chat (loaded on demand by SunBot). Type, or press the mic and talk. Replies are written as they arrive and,
@@ -448,6 +448,8 @@ export function SunBotChat({
             stream: true,
             ...(qitmirRef.current ? { mode: 'qitmir' } : {}),
             ...(feelRef.current.feeling && feelRef.current.feeling !== 'friendly' ? { feeling: feelRef.current.feeling } : {}),
+            // Sunny Vision: which page the person is looking at ("shu vazifa" = the one on screen).
+            page: { path: location.pathname.slice(0, 180), title: document.title.slice(0, 120) },
           }),
           signal: ctl.signal,
         });
@@ -778,7 +780,8 @@ export function SunBotChat({
     return () => clearTimeout(t);
   }, [voiceOnly, voiceBusy, pendingCard]);
 
-  useEffect(() => onFace({ mood, sound: voice.subscribe }), [mood, onFace, voice.subscribe]);
+  const voiceHere = voiceOnly && !open;
+  useEffect(() => onFace({ mood, sound: voice.subscribe, voice: voiceHere }), [mood, onFace, voice.subscribe, voiceHere]);
 
   return (
     <>

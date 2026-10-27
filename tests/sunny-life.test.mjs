@@ -178,19 +178,42 @@ test('mood physics: a sad robot chases slower and lower than a happy one; the th
   assert.ok(rest.length && rest.at(-1).thrust < 0.15, 'thruster almost off while it rests on the logo');
 });
 
-test('"Sunny!": a robot out on the page flies home at full speed to listen (much faster than a normal return)', () => {
-  const back = (summon) => {
-    const r = rig({ targets: { sights: [{ x: 100, y: 100, w: 300, h: 100 }] } });
-    r.b.pointer('move', 200, 200, 0);
-    r.run(4, (t) => r.b.pointer('move', 200 + 60 * Math.sin(t * 3), 200, t));
-    if (summon) assert.ok(r.b.command('summon', r.t));
-    r.b.setFlags({ dock: true });
-    const from = r.t;
-    r.until('NORMAL_IDLE', 10);
-    return { seconds: r.t - from, top: Math.max(...r.poses.filter((p) => p.state === 'RETURNING').map((p) => p.speed)) };
-  };
-  const normal = back(false);
-  const called = back(true);
-  assert.ok(called.top > normal.top * 1.4, `top speed ${called.top.toFixed(0)} vs ${normal.top.toFixed(0)} px/s`);
-  assert.ok(called.seconds < normal.seconds, `${called.seconds.toFixed(2)} s vs ${normal.seconds.toFixed(2)} s`);
+test('"Sunny!": a robot out on the page comes to attention where it is (quickly, inside the screen) and talks there', () => {
+  const r = rig({ targets: { sights: [{ x: 100, y: 100, w: 300, h: 100 }] } });
+  r.b.pointer('move', 200, 200, 0);
+  r.run(4, (t) => r.b.pointer('move', 200 + 60 * Math.sin(t * 3), 200, t));
+  assert.ok(r.b.command('summon', r.t));
+  r.run(1 / 60);
+  assert.equal(r.b.state, 'TALKING');
+  // The conversation: it stays out, steady, well inside the screen — it does not fly home to answer.
+  r.b.setFlags({ talk: true });
+  const from = r.poses.length;
+  r.run(6);
+  const talking = r.poses.slice(from);
+  assert.ok(talking.every((p) => p.state === 'TALKING' && p.visible), 'answers where it is');
+  const last = talking.at(-1);
+  assert.ok(last.x > B && last.x < W - B && last.y > B && last.y < H - B, 'inside the screen');
+  assert.ok(last.speed < 30, 'steady while it talks');
+  // Conversation over: back to its own business (Qitmir) a moment later.
+  r.b.setFlags({ talk: false });
+  r.run(2);
+  assert.notEqual(r.b.state, 'TALKING');
+});
+
+test('calm robot: after talking out on the page it goes home; the text panel (dock) brings it home at once', () => {
+  const r = rig({ persona: 'calm', targets: { logo: LOGO } });
+  r.until('LOGO_LANDING', 30);
+  r.b.setFlags({ talk: true });
+  r.run(0.5);
+  assert.equal(r.b.state, 'TALKING');
+  r.b.setFlags({ talk: false });
+  r.run(1.6);
+  assert.equal(r.b.state, 'RETURNING');
+  const q = rig({ persona: 'calm', targets: { logo: LOGO } });
+  q.until('LOGO_LANDING', 30);
+  q.b.setFlags({ talk: true });
+  q.run(0.5);
+  q.b.setFlags({ dock: true, talk: false });
+  q.run(1 / 60);
+  assert.equal(q.b.state, 'RETURNING');
 });

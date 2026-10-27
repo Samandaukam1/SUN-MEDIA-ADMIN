@@ -337,3 +337,28 @@ test('17. one message, several commands: each runs in the system in turn, with l
     gemini.restore();
   }
 });
+
+test('18. an exact command ("Keldim", "vazifalarim") is done by the system’s own tool without any AI call, with the same rules', { skip }, async () => {
+  const gemini = fakeGemini([() => [{ text: 'AI should not be asked' }]]);
+  const steps = [];
+  try {
+    const ctx = { ...asTool(editor) };
+    const { reply, actions } = await assistantReply([{ role: 'user', text: 'Keldim' }], ctx, 'Editor', { onStep: (e) => steps.push(e) });
+    assert.equal(gemini.sent.length, 0, 'no AI request');
+    assert.deepEqual(steps.map((e) => `${e.phase}:${e.name}`), ['start:check_in', 'end:check_in']);
+    assert.match(reply, /belgilan|mumkin/, reply);
+    const did = actions.find((a) => a.type === 'did');
+    assert.equal(did?.name, 'check_in');
+    // The result is what the database says: a row today exactly when the tool reported success.
+    const rows = one(`select count(*) from attendance a join profiles p on p.id = a.user_id where p.email = 'editor@sunmedia.local' and a.work_date = '${today()}'`);
+    assert.equal(rows, did.ok ? '1' : '0');
+
+    // The shortcut never widens access: a tool this role may not use is refused exactly as when the AI asks for it.
+    const tasks = await assistantReply([{ role: 'user', text: 'vazifalarim' }], ctx, 'Editor');
+    assert.equal(gemini.sent.length, 0);
+    const offered = toolsFor(ctx).map((t) => t.name).includes('my_tasks');
+    assert.match(tasks.reply, offered ? /vazifa/i : /rolingizga ochiq emas/);
+  } finally {
+    gemini.restore();
+  }
+});

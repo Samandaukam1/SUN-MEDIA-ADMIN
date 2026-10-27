@@ -48,6 +48,7 @@ export type QState =
   | 'BUMPED'
   | 'ANNOYED'
   | 'HIGH_FIVE'
+  | 'TALKING'
   | 'RETURNING'
   | 'LISTENING'
   | 'THINKING'
@@ -271,7 +272,7 @@ export class QitmirBrain {
   /** Origin → the gripping hand, px at scale 1 (y down). Measured from the model by the renderer. */
   private grip: Vec2;
   private targets: QTargets = { logo: null, texts: [], hides: [], sights: [], colliders: [] };
-  private flags = { dock: true, chat: 'idle' as MotionMood, interactive: false, selecting: false, cursorFx: true };
+  private flags = { dock: true, chat: 'idle' as MotionMood, interactive: false, selecting: false, cursorFx: true, talk: false };
 
   private mode: Mode = 'DOCKED';
   private since: number;
@@ -549,6 +550,12 @@ export class QitmirBrain {
       }
     }
 
+    // A voice conversation with the robot out on the page: it answers where it is (not from its launcher).
+    if (this.flags.talk && this.mode !== 'TALKING' && this.mode !== 'DOCKED' && this.mode !== 'RETURNING' && !PHYSICAL.has(this.mode)) {
+      this.tether = this.clip = this.shadow = null;
+      this.sizeTo = 1;
+      this.enter('TALKING', now, { until: now });
+    }
     this.react(now);
     this.think(now, dt);
     this.express(dt);
@@ -1180,6 +1187,27 @@ export class QitmirBrain {
         return;
       }
 
+      case 'TALKING': {
+        // Listening, thinking and speaking in place (the renderer shows those poses): steady, facing the person, kept
+        // well inside the screen. Done a moment after the conversation ends.
+        const m = this.box * 1.0;
+        const tx = clamp(this.pos[0], m, this.W - m);
+        const ty = clamp(this.pos[1], m, this.H - 1.2 * m);
+        this.seek(tx, ty, this.fast ? 12 : 3, this.fast ? 60 : 20, 0.8);
+        if (this.fast && Math.hypot(tx - this.pos[0], ty - this.pos[1]) < 4) this.fast = false;
+        this.vel[0] *= 1 - damp(this.fast ? 0 : 3, dt);
+        this.vel[1] *= 1 - damp(this.fast ? 0 : 3, dt);
+        g.float = 0.5;
+        g.lookAt = null;
+        if (this.flags.talk) s.until = now + 1.2;
+        else if (now > (s.until ?? 0)) {
+          this.fast = false;
+          if (this.persona === 'calm') this.homeFromTrip(now);
+          else this.enter('QITMIR_IDLE', now, { until: now + 2 });
+        }
+        return;
+      }
+
       case 'LOGO_LANDING':
         return this.logo(now, dt);
       case 'TEXT_INTERACTION':
@@ -1325,11 +1353,13 @@ export class QitmirBrain {
     if (this.mode === 'DOCKED' && !this.flags.dock && this.home && ['salto', 'dance', 'happy', 'wave'].includes(act)) this.liftOff(now);
     const busy = ['DOCKED', 'RETURNING', 'THROWN_AWAY', 'TUMBLING', 'DIZZY', 'CURSOR_GRAB'];
     if (busy.includes(this.mode)) return false;
-    // "Sunny!": back to its launcher at full speed, to listen (cinematic: thrust, trail, banking, a controlled stop).
+    // "Sunny!": it stops what it is doing and comes to attention where the person can see it — quickly, with its
+    // thruster (cinematic: acceleration, trail, banking, a controlled stop) — to listen and answer right there.
     if (act === 'summon') {
       this.tether = this.clip = this.shadow = null;
+      this.sizeTo = 1;
       this.fast = true;
-      this.goHome(now);
+      this.enter('TALKING', now, { until: now + 4 });
       return true;
     }
     this.tether = this.clip = this.shadow = null;

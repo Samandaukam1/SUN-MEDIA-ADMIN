@@ -6,16 +6,16 @@ Bu fayl har sessiyada yangilanadi: yangi sessiya shu yerdan davom etadi. Holat f
 
 Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ tashqi to‘siq
 
-## Joriy holat (2026-10-27, 3-sessiya)
+## Joriy holat (2026-10-27, 4-sessiya)
 
 | Bosqich | Holat | Izoh |
 |---|---|---|
 | 1. Core foundation | ✅ | branch `feat/sunny-phase1`, production'ga **deploy qilinmagan** |
 | 2. Living character | 🟡 | emotsiya, mood physics, avtonom hayot, thruster, jismoniy reaksiyalar ✅; bitta renderer va 2D↔3D solishtirish yo‘q |
-| 3. Voice assistant | ✅ | wake-word, summon, barge-in, spatial audio; robot faqat uyda gapiradi (yagona renderer kerak) |
-| 4. AI intelligence (Gemini) | 🟡 | provayder registri, tokensiz buyruqlar bor; byudjet nazorati, deterministik backend buyruqlari yo‘q |
+| 3. Voice assistant | ✅ | wake-word, summon, barge-in, spatial audio; ovoz rejimida robot turgan joyida gapiradi |
+| 4. AI intelligence (Gemini) | 🟡 | provayder registri, tokensiz buyruqlar, deterministik backend buyruqlari ✅; byudjet va xulosa — DB kerak |
 | 5. Memory & personality | ⬜ | DB migratsiya + RLS kerak |
-| 6. Action agent | 🟡 | mavjud asboblar ishlaydi (davomat, vazifa, chat, kontent); mission/delegation/vision yo‘q |
+| 6. Action agent | 🟡 | mavjud asboblar + Sunny Vision (sahifa konteksti) ✅; mission/delegation/predictive yo‘q |
 | 7. Advanced experiences | 🟡 | easter egg'lar, ovoz kartochkasi; rituals/proactive/briefing yo‘q |
 | 8. Cross-platform app | 🟡 | PWA + Web Push oldin qilingan (7ed0570); bu sessiyada audit qilinmadi |
 | 9. Integration & release | ⬜ | |
@@ -93,17 +93,34 @@ Tekshiruv: 121 unit test, `tsc`, `eslint` toza; brauzer smoke 7/7 (sayohat, uyda
 Tekshiruv: 127 unit test, `tsc`, `eslint`; brauzer smoke 7/7 (👂 Chrome'da, tinglash holati, 🎙 vaqtida pauza va
 qayta tinglash, 🎧 almashtirish). **Real ovoz bilan "Sunny!" va barge-in sinalmagan** (headless brauzerda gapirib bo‘lmaydi).
 
+## 4-sessiya — bajarildi (2026-10-27)
+
+- **Deterministik buyruqlar (§23 Layer 2)** — [router.ts](../lib/assistant/router.ts): "keldim / davomatimni
+  belgila" → `check_in`, "vazifalarim" (va "muddati o‘tgan vazifalarim") → `my_tasks`, "s’yomkalar" →
+  `upcoming_shootings`, "vazifalar sahifasini och" → havola. AI chaqirilmaydi (tez, tekin, Gemini band bo‘lsa ham
+  ishlaydi). Asboblar o‘sha-o‘sha: ruxsat, server vaqti, bazada tekshiruv, tasdiqlash, rate-limit. Faqat kirgan
+  foydalanuvchiga; davomat faqat xodimga; Qitmir'da muvaffaqiyatga hazil. Test: `tests/assistant-router.test.mjs` va
+  **agent integratsiya testi #18 (haqiqiy bazada: AI so‘rovi 0, davomat qatori bazada; ruxsat yo‘q rolga rad)**.
+- **Joyida gapirish (§14)** — ovoz rejimida (panel yopiq) sahifadagi robot uyga uchmaydi: `brain` `TALKING` holatida
+  ekran ichida to‘xtaydi; sahna renderer'i launcher'dagi `MotionDirector` pozalari va audio-og‘izni ishlatadi; spatial
+  audio robotning haqiqiy o‘rnidan. "Sunny!" (summon) ham shu holatga tez o‘tkazadi. Matn paneli ochilsa — uyga.
+- **Sunny Vision (§28)** — [context.ts](../lib/assistant/context.ts): savol bilan joriy sahifa manzili va sarlavhasi
+  yuboriladi ("shu vazifa" = ekrandagisi); manzil regex bilan tekshiriladi, promptda "faqat ma’lumot, buyruq emas".
+
+Tekshiruv: 132 unit, agent integratsiya 15/15 (lokal izolyatsiyalangan baza, seed rollari), `tsc`, `eslint`; brauzer
+smoke 4/4 (summon → joyida, render xatosiz, sahifa konteksti so‘rovda).
+
 ### 3-bosqichdan qolgan
-1. 🟡 Robot gapirish uchun uyga uchadi (tinglash/gapirish holatlari launcher robotida). Joyida gapirishi va spatial
-   audio uchayotgan robot bilan siljishi — yagona renderer'dan keyin.
+1. 🟡 Bitta doimiy renderer hali yo‘q (3 canvas). Joyida gapirish endi shusiz ishlaydi; birlashtirish — GPU tejash va
+   route almashganda robot holatini to‘liq saqlash uchun.
 2. ⛔ Safari / iPhone: wake-word yo‘q (Siri diktovkasida o‘zbek tili yo‘q, fonda tinglamaydi) — 🎙 tugmasi bor.
 3. Maxfiylik: wake-word yoqilganda brauzer mikrofon ovozini o‘z nutq xizmatiga (Chrome — Google) yuboradi; bu Gemini
    emas va token sarflamaydi, lekin to‘liq on-device emas.
 
 ### 4-bosqich — Intelligence (Gemini)
-1. ⬜ Deterministik backend buyruqlari (§23 Layer 2): "keldimni belgila", "bugungi vazifalarim" kabi aniq so‘rovlarni
-   LLM'siz `runTool` orqali (ruxsat va tasdiq qoidalari o‘sha).
-2. ⬜ Kunlik/oylik so‘rov byudjeti, takror so‘rovlar keshi, suhbat xulosasi (uzun tarixni qisqartirish).
+1. ✅ Deterministik backend buyruqlari (yuqorida).
+2. ⬜ Kunlik/oylik AI byudjeti va suhbat xulosasi — ishonchli hisob uchun DB jadvali kerak (serverless'da xotira
+   hisoblagichi instansiyalar orasida bo‘linmaydi) → production bazaga migratsiya: egasining ruxsati bilan.
 3. ⛔ OpenAI — kalit yo‘q (override). Adapter joyi tayyor.
 
 ### 5-bosqich — Memory & personality

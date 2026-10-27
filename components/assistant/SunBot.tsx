@@ -85,6 +85,8 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
   const [canWake, setCanWake] = useState(false);
   const [spatial, setSpatial] = useState(true);
   const [pan, setPanState] = useState(0);
+  // Where the robot talks from when it answers out on the page (screen x), for the voice's direction.
+  const [spotX, setSpotX] = useState<number | null>(null);
   // Sunny's feelings (emotion.ts): every event that touches it goes through one engine; the robots show the result.
   const emo = useRef<EmotionEngine | null>(null);
   const [feeling, setFeeling] = useState<Feeling>({ name: 'friendly', k: 0 });
@@ -351,7 +353,11 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
           box={three.compact ? 84 : 116}
           touch={three.touch}
           lite={lite}
-          dock={!roam || open || BUSY.has(face.mood)}
+          // In a voice conversation (panel closed) a robot out on the page answers where it is; the text panel brings it home.
+          dock={!roam || open || (BUSY.has(face.mood) && !(out && face.voice))}
+          talk={out && !!face.voice && BUSY.has(face.mood)}
+          sound={face.sound}
+          onSpot={setSpotX}
           persona={qitmir ? 'qitmir' : 'calm'}
           emotion={expression}
           onFeel={feel}
@@ -382,7 +388,7 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
           wake={wake}
           onWake={onWake}
           onWakeState={setWakeState}
-          pan={pan}
+          pan={out && face.voice && spotX !== null && !three.touch ? Math.max(-0.35, Math.min(0.35, (spotX / innerWidth) * 0.7 - 0.35)) : pan}
           spatial={spatial}
           onSpatial={three.touch ? undefined : toggleSpatial}
           onFace={setFace}

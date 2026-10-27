@@ -7,12 +7,13 @@ import * as THREE from 'three';
 
 import type { Expression, FeelEvent } from '../robot/emotion';
 import { buildRobot, FRAME_OFFSET_Y, FRAME_WORLD, HEIGHT } from '../robot/model';
-import type { MotionMood } from '../robot/motion';
+import { MotionDirector, type MotionMood, type Pose } from '../robot/motion';
+import type { SoundSubscribe } from '../voice';
 import { Boundary, loadPicture, Studio } from '../robot/Robot3D';
 import type { Sculpted } from '../robot/sculpt';
 import { GRIP_ARM, QitmirBrain, type Game, type Persona, type QPose, type Vec2, type Vec3 } from './brain';
 import { interactive, QitmirDom } from './dom';
-import { QITMIR_LIGHT, QITMIR_RED, qitmirTurns, smirked, squinted } from './face';
+import { QITMIR_LIGHT, QITMIR_REST, QITMIR_RED, qitmirTurns, smirked, squinted } from './face';
 import { say } from './quips';
 import './qitmir.css';
 
@@ -36,6 +37,12 @@ type Props = {
   emotion?: Expression;
   /** Something happened to the robot (a pat, a push, a high five…) for the emotion engine. */
   onFeel?: (kind: FeelEvent) => void;
+  /** A voice conversation while it is out: it listens, thinks and speaks where it is. */
+  talk?: boolean;
+  /** The live voice / microphone (loudness and mouth shape) while it talks. */
+  sound?: SoundSubscribe;
+  /** Where it is while it talks (screen x), for the voice's direction. */
+  onSpot?: (x: number) => void;
   /** The tab is visible. */
   active: boolean;
   /** The launcher's robot square: where the robot takes off and lands. */
@@ -94,12 +101,14 @@ function Player({
   dom,
   fx,
   props,
+  audio,
 }: {
   images: { body: HTMLImageElement; face: HTMLImageElement; parts: Sculpted[] };
   brain: QitmirBrain;
   dom: QitmirDom;
   fx: RefObject<Fx>;
   props: RefObject<Props & { onHidden: () => void }>;
+  audio: RefObject<{ level: number; shape: number }>;
 }) {
   const { gl, scene, camera } = useThree();
   const rig = useMemo(() => buildRobot(images.body, images.face, images.parts), [images]);
@@ -107,7 +116,9 @@ function Player({
   const envSet = useRef(false);
   const red = useRef(props.current.on ? 1 : 0);
   const glow = useRef(0.5);
-  const run = useRef({ state: '', fadeFrom: 1, homeAt: -1e9, home: null as ReturnType<typeof homeOf>, shown: false, fading: -1, clip: '', sayAt: -1e9, bubbleUntil: 0, trail: [] as Vec2[], last: null as QPose | null });
+  // Talking in place: the launcher robot's own director gives the listening / thinking / speaking poses and the mouth.
+  const director = useMemo(() => new MotionDirector({ float: 0 }), []);
+  const run = useRef({ spotAt: -1e9, state: '', fadeFrom: 1, homeAt: -1e9, home: null as ReturnType<typeof homeOf>, shown: false, fading: -1, clip: '', sayAt: -1e9, bubbleUntil: 0, trail: [] as Vec2[], last: null as QPose | null });
 
   // Extras owned by the stage (removed with it): a soft red light behind the eyes.
   const halo = useMemo(() => {
@@ -207,7 +218,7 @@ function Player({
     }
     const targets = dom.refresh(t);
     if (targets) brain.setTargets(targets);
-    brain.setFlags({ dock: P.dock || dom.busy(t), chat: P.chat, cursorFx: P.cursorFx });
+    brain.setFlags({ dock: P.dock || dom.busy(t), chat: P.chat, cursorFx: P.cursorFx, talk: !!P.talk });
     const pose = brain.update(t);
     // The state, for QA and the browser tests (written only when it changes).
     if (brain.state !== R.state && F.stage) F.stage.dataset.state = R.state = brain.state;
@@ -270,26 +281,46 @@ function Player({
     rig.root.position.set(left - il, -(top - it), 0);
     rig.root.scale.setScalar((P.box / FRAME_WORLD) * shown.scale);
     rig.root.quaternion.set(shown.orient[0], shown.orient[1], shown.orient[2], shown.orient[3]);
-    slerpTo(rig.body, shown.body, damp(8, dt));
-    slerpTo(rig.head, shown.head, damp(9, dt));
-    slerpTo(rig.armL, shown.armL, damp(12, dt));
-    slerpTo(rig.armR, shown.armR, damp(9, dt));
+    let talk: Pose | null = null;
+    if (brain.state === 'TALKING') {
+      director.setMood(P.chat, t);
+      talk = director.update(t, audio.current.level, audio.current.shape);
+      if (t - R.spotAt > 0.25) {
+        R.spotAt = t;
+        P.onSpot?.(shown.x);
+      }
+    }
+    slerpTo(rig.body, talk ? talk.body : shown.body, damp(8, dt));
+    slerpTo(rig.head, talk ? talk.head : shown.head, damp(9, dt));
+    slerpTo(rig.armL, talk ? talk.armL : shown.armL, damp(12, dt));
+    slerpTo(rig.armR, talk ? talk.armR : shown.armR, damp(9, dt));
 
     // Face: the original eyes and smile, red and sly; easing back to lime when the mode is turned off.
     red.current = THREE.MathUtils.lerp(red.current, P.on ? 1 : 0, damp(3, dt));
     const q = red.current;
-    const squint = shown.squint * q;
-    const smirk = shown.smirk * q;
+    const squint = (talk ? QITMIR_REST.squint : shown.squint) * q;
+    const smirk = (talk ? QITMIR_REST.smirk : shown.smirk) * q;
+    const eyeOpen = talk ? talk.eyeOpen : shown.eyeOpen;
+    const look = talk ? talk.look : shown.look;
     qitmirTurns(rig, squint, smirk);
-    rig.lids.forEach((lid, i) => (lid.scale.y = THREE.MathUtils.lerp(lid.scale.y, squinted(shown.eyeOpen, squint, smirk, i), damp(shown.eyeOpen < 0.5 ? 40 : 14, dt))));
-    rig.eyes.position.x = THREE.MathUtils.lerp(rig.eyes.position.x, rig.eyeRest.x + shown.look[0] * 0.035, damp(12, dt));
-    rig.eyes.position.y = THREE.MathUtils.lerp(rig.eyes.position.y, rig.eyeRest.y + shown.look[1] * 0.025, damp(12, dt));
-    const { smile, flat, talk } = rig.mats;
-    smile.opacity = THREE.MathUtils.lerp(smile.opacity, 1, damp(14, dt));
-    flat.opacity = THREE.MathUtils.lerp(flat.opacity, 0, damp(14, dt));
-    talk.opacity = THREE.MathUtils.lerp(talk.opacity, 0, damp(14, dt));
-    rig.mouth.smile.scale.y = THREE.MathUtils.lerp(rig.mouth.smile.scale.y, smirked(shown.smile, smirk), damp(10, dt));
-    glow.current = THREE.MathUtils.lerp(glow.current, shown.glow + shown.anger * 0.6, damp(8, dt));
+    rig.lids.forEach((lid, i) => (lid.scale.y = THREE.MathUtils.lerp(lid.scale.y, squinted(eyeOpen, squint, smirk, i), damp(eyeOpen < 0.5 ? 40 : 14, dt))));
+    rig.eyes.position.x = THREE.MathUtils.lerp(rig.eyes.position.x, rig.eyeRest.x + look[0] * 0.035, damp(12, dt));
+    rig.eyes.position.y = THREE.MathUtils.lerp(rig.eyes.position.y, rig.eyeRest.y + look[1] * 0.025, damp(12, dt));
+    const mouth = rig.mats;
+    mouth.smile.opacity = THREE.MathUtils.lerp(mouth.smile.opacity, talk && (talk.talk || talk.flat) ? 0 : 1, damp(14, dt));
+    mouth.flat.opacity = THREE.MathUtils.lerp(mouth.flat.opacity, talk && talk.flat && !talk.talk ? 1 : 0, damp(14, dt));
+    mouth.talk.opacity = THREE.MathUtils.lerp(mouth.talk.opacity, talk ? talk.talk : 0, damp(14, dt));
+    rig.mouth.smile.scale.y = THREE.MathUtils.lerp(rig.mouth.smile.scale.y, smirked(talk ? talk.smile : shown.smile, smirk), damp(10, dt));
+    if (talk) {
+      // The talking mouth follows the real audio, as on the launcher robot.
+      const loud = Math.sqrt(Math.min(1, talk.mouthOpen));
+      rig.mouth.talk.scale.set(
+        THREE.MathUtils.lerp(rig.mouth.talk.scale.x, 0.8 + talk.mouthWide * 0.3 - loud * 0.2, damp(25, dt)),
+        THREE.MathUtils.lerp(rig.mouth.talk.scale.y, 0.17 + loud * 0.75, damp(25, dt)),
+        1,
+      );
+    }
+    glow.current = THREE.MathUtils.lerp(glow.current, (talk ? talk.glow : shown.glow) + shown.anger * 0.6, damp(8, dt));
     tint.setScalar(1).lerp(QITMIR_RED, q).multiplyScalar(0.875 + glow.current * 0.5);
     rig.mats.face.color.copy(tint);
     rig.mats.smile.color.copy(tint);
@@ -304,7 +335,7 @@ function Player({
     halo.visible = hm.opacity > 0.005;
     const pm = rig.particles.material as THREE.PointsMaterial;
     pm.color.copy(LIME).lerp(QITMIR_LIGHT, q);
-    pm.opacity = THREE.MathUtils.lerp(pm.opacity, shown.energy * 0.9, damp(6, dt));
+    pm.opacity = THREE.MathUtils.lerp(pm.opacity, (talk ? talk.energy : shown.energy) * 0.9, damp(6, dt));
     rig.particles.visible = pm.opacity > 0.01;
     if (rig.particles.visible) rig.particles.rotation.y += dt * (1.2 + shown.energy * 3);
     rig.ring.visible = false;
@@ -411,6 +442,17 @@ export default function QitmirStage(props: Props) {
     propsRef.current.onOut();
   }, []);
   const onHidden = useCallback(() => setDocked(true), []);
+  // The live sound while it talks in place (written by the voice, read every frame).
+  const audio = useRef({ level: 0, shape: 0.5 });
+  const { talk, sound, chat } = props;
+  useEffect(() => {
+    audio.current = { level: 0, shape: 0.5 };
+    if (!talk || !sound || (chat !== 'speaking' && chat !== 'listening')) return;
+    return sound((f) => {
+      audio.current.level = f.level;
+      audio.current.shape = f.shape;
+    });
+  }, [talk, sound, chat]);
   const relay = useRef({ ...props, onOut, onHidden });
   relay.current = { ...props, onOut, onHidden };
 
@@ -456,6 +498,7 @@ export default function QitmirStage(props: Props) {
     w.__qitmir = {
       state: () => brain.state,
       play: (game: Game) => brain.play(game, now()),
+      command: (name: string) => brain.command(name, now()),
       debug: () => ({ ...brain.debug, dockProp: propsRef.current.dock, pageBusy: dom.busy(now()) }),
     };
     return () => void delete w.__qitmir;
@@ -552,7 +595,7 @@ export default function QitmirStage(props: Props) {
             >
               <PerformanceMonitor onDecline={() => setDpr((d) => Math.max(1, Math.min(d, 1.5) - 0.25))} />
               <Studio />
-              <Player images={images} brain={brain} dom={dom} fx={fx} props={relay} />
+              <Player images={images} brain={brain} dom={dom} fx={fx} props={relay} audio={audio} />
             </Canvas>
           </Boundary>
         ) : null}

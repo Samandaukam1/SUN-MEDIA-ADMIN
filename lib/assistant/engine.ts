@@ -2,7 +2,10 @@ import 'server-only';
 
 import { AiNotConfiguredError } from '@/lib/ai';
 import { agencyKnowledge, budgetHints } from './knowledge';
+import { pagePrompt, type PageContext } from './context';
 import { configuredProviders, type ChatTurn } from './providers';
+import { quip } from '@/components/assistant/qitmir/quips';
+import { actionReply, routeCommand, shootingsReply, tasksReply } from './router';
 import { feelingPrompt, modePrompt, type AssistantMode, type Feeling } from './qitmir';
 import { agencyDateKey } from '@/lib/time';
 import { textLanguage } from './speech';
@@ -84,7 +87,7 @@ function nextDays(): string {
 
 const REPLY_IN = { 'uz-UZ': 'o‘zbek tilida', 'ru-RU': 'rus tilida', 'en-US': 'ingliz tilida' } as const;
 
-async function systemPrompt(ctx: AssistantContext, name: string | null, lastQuestion: string, mode?: AssistantMode, feeling?: Feeling): Promise<string> {
+async function systemPrompt(ctx: AssistantContext, name: string | null, lastQuestion: string, mode?: AssistantMode, feeling?: Feeling, page?: PageContext): Promise<string> {
   const reply = textLanguage(lastQuestion);
   const now = new Date().toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent', dateStyle: 'full', timeStyle: 'short' });
   const role = ctx.audience === 'public' ? SALES : ctx.audience === 'staff' ? STAFF : CLIENT;
@@ -99,6 +102,7 @@ async function systemPrompt(ctx: AssistantContext, name: string | null, lastQues
     // The manner only (Qitmir mode): tools, permissions and confirmations above stay exactly the same.
     modePrompt(mode),
     feelingPrompt(feeling),
+    pagePrompt(page),
     // Last, so it is fresh when the model starts writing: the knowledge above is Uzbek, the reply follows the visitor.
     `Eslatma: bu javobni ${REPLY_IN[reply.lang]}${reply.cyrillic && reply.lang === 'uz-UZ' ? ', kirill yozuvida' : ''} yoz (boshqa tilda matn so‘ralsa, o‘sha matnning o‘zi so‘ralgan tilda).`,
   ]
@@ -121,7 +125,8 @@ export async function assistantReply(
     signal,
     mode,
     feeling,
-  }: { onText?: (delta: string) => void; onStep?: (e: StepEvent) => void; signal?: AbortSignal; mode?: AssistantMode; feeling?: Feeling } = {},
+    page,
+  }: { onText?: (delta: string) => void; onStep?: (e: StepEvent) => void; signal?: AbortSignal; mode?: AssistantMode; feeling?: Feeling; page?: PageContext } = {},
 ): Promise<{ reply: string; actions: AssistantAction[] }> {
   const step = async (tool: string, input: Record<string, unknown>) => {
     onStep?.({ phase: 'start', name: tool, label: toolLabel(tool) });
@@ -129,9 +134,29 @@ export async function assistantReply(
     onStep?.({ phase: 'end', name: tool, ok: result.ok !== false, write: !!result.write });
     return result;
   };
+  // An exact command (attendance, my tasks, shootings, a page) is done by the system's own tool, without the AI.
+  const route = routeCommand(history[history.length - 1]?.text ?? '', ctx.audience);
+  if (route && 'link' in route) {
+    const reply = `Mana, ${route.link.label} sahifasi.`;
+    onText?.(reply);
+    return { reply, actions: [{ type: 'link', ...route.link }] };
+  }
+  if (route) {
+    const result = await step(route.tool, route.input);
+    const actions = [...(result.action ? [result.action] : []), ...(result.actions ?? [])];
+    let reply: string;
+    if (route.tool === 'my_tasks') reply = tasksReply(result.content, !!route.input.overdue_only);
+    else if (route.tool === 'upcoming_shootings') reply = shootingsReply(result.content);
+    else {
+      const out = actionReply(result.content);
+      reply = mode === 'qitmir' && out.ok && !out.waiting ? quip(out.text, route.tool, true) : out.text;
+    }
+    onText?.(reply);
+    return { reply, actions };
+  }
   const providers = configuredProviders();
   if (!providers.length) throw new AiNotConfiguredError();
-  const system = await systemPrompt(ctx, name, history[history.length - 1]?.text ?? '', mode, feeling);
+  const system = await systemPrompt(ctx, name, history[history.length - 1]?.text ?? '', mode, feeling, page);
   let failure: unknown;
   for (const provider of providers) {
     // One that fails before writing anything hands over to the next; one that already wrote part of a reply does not

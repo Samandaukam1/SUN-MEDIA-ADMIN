@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { AiFailedError, AiNotConfiguredError } from '@/lib/ai';
 import { assistantReply } from '@/lib/assistant/engine';
+import { PAGE_PATH } from '@/lib/assistant/context';
 import { FEELINGS } from '@/lib/assistant/qitmir';
 import { assistantContext, corsHeaders, rateLimited } from '@/lib/assistant/request';
 
@@ -20,6 +21,8 @@ const body = z.object({
   mode: z.enum(['qitmir']).optional(),
   /** Sunny's simulated mood in the widget: the tone only. */
   feeling: z.enum(FEELINGS).optional(),
+  /** Sunny Vision: the page the person is on (address and title only). */
+  page: z.object({ path: z.string().max(200).regex(PAGE_PATH), title: z.string().max(200).optional() }).optional(),
 });
 const MAX_TEXT = 2000;
 
@@ -59,7 +62,7 @@ export async function POST(request: NextRequest) {
 
   if (!parsed.data.stream) {
     try {
-      const result = await assistantReply(history, ctx, name, { signal: request.signal, mode: parsed.data.mode, feeling: parsed.data.feeling });
+      const result = await assistantReply(history, ctx, name, { signal: request.signal, mode: parsed.data.mode, feeling: parsed.data.feeling, page: parsed.data.page });
       return NextResponse.json({ ...result, audience: ctx.audience }, { headers });
     } catch (error) {
       const { status, error: message } = failure(error);
@@ -85,6 +88,7 @@ export async function POST(request: NextRequest) {
           signal: request.signal,
           mode: parsed.data.mode,
           feeling: parsed.data.feeling,
+          page: parsed.data.page,
         });
         send({ t: 'done', ...result, audience: ctx.audience });
       } catch (error) {

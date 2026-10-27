@@ -145,8 +145,11 @@ promptida yo‘q, ega amallari xodimga yopiq, unutish), DB testlari 1359 (ikki o
 migratsiyasiz toza bazada ham yiqiladi: oldindan mavjud, Sunny'ga aloqasi yo‘q).
 
 ### 5-bosqichdan qolgan
-1. ⚠ **Production'ga migratsiya** (`supabase db push`) — egasi ruxsat bergan (2026-10-27), lekin bu kompyuterdagi Supabase
-   CLI boshqa hisobda (Sun Media loyihasiga 403). Kod deploy qilingan, xotira migratsiyagacha jim o‘chiq.
+1. ✅ **Production'ga migratsiya** (2026-10-27, egasining ruxsati bilan): hujjatdagi tartibda avval `push-dispatch` (v4),
+   so‘ng `db push` — `20261025100000_perf_helper_calls`, `20261026100000_web_push`, `20261027100000_assistant_memory`.
+   Tekshiruv: migratsiya tarixi mos, yangi jadvallarda RLS + policy'lar, push sweep muvaffaqiyatli, public chat javob
+   beradi. Xodim hisobida "eslab qol" → "xotiram" hali production'da sinalmagan (xodim sessiyasi yo‘q).
+   Web Push'ni yoqish uchun VAPID kalitlari qoldi (docs/PRODUCTION_SETUP.md, 7-bo‘lim, 3-qadam).
 2. ⬜ Xotirani ko‘rish/o‘chirish uchun alohida sahifa (hozir chatda: "xotiram", "… ni unut").
 3. ⬜ Hamkorlar o‘zi "eslab qol" deya olishi (mijoz auditoriyasiga amallar berilmaydi — alohida, cheklangan amal kerak).
 4. ⬜ Avtomatik xotira takliflari (ishonch darajasi bilan, foydalanuvchi tasdig‘ida), suhbat xulosasi.

@@ -17,7 +17,7 @@ Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ t
 | 5. Memory & personality | 🟡 | xotira, uslub, sozlamalar, rolga mos ohang ✅ — production'da (migratsiya qo‘llangan); xotira sahifasi va avtomatik takliflar yo‘q |
 | 6. Action agent | 🟡 | mission mode, smart delegation, predictive, universal search, partner concierge ✅ (lokal bazada sinalgan, deploy qilinmagan); hamkor tasdiqlashi — ilovada |
 | 7. Advanced experiences | ✅ | gologramma kartalar, bayram, rituallar, proaktiv reaksiya, brifing, 3 rejim, emotsiya→ovoz; ⛔ ovoz biometriyasi (§40, sababi pastda) |
-| 8. Cross-platform app | 🟡 | PWA + Web Push (7ed0570) production'da yoqildi: migratsiya, push-dispatch v4, VAPID (2026-10-27); to‘liq audit qilinmagan |
+| 8. Cross-platform app | ✅ | PWA + Web Push production'da (migratsiya, push-dispatch v4, VAPID); audit + §42 DB testi 35/35; haqiqiy qurilmada sinalmagan |
 | 9. Integration & release | ⬜ | |
 
 ## 1-bosqich — bajarildi (2026-10-27)
@@ -227,7 +227,30 @@ o‘tishda va professional rejim faqat ohangni o‘zgartiradi), brauzer (lokal b
 bir vaqtda bitta pufakcha, professional ↔ qitmir, sahifa xatolari yo‘q; Qitmir regressiya 4/4.
 Sinalmagan: haqiqiy telefon, ovoz chiqarib proaktiv aytish (avtomat brauzerda ovoz yo‘q).
 
-### 8-bosqich — PWA/Push audit (keyingi)
+## 8-bosqich — PWA va Push auditi (2026-10-27, 7-sessiya)
+
+Mavjud tizim (7ed0570) §41–§42 bo‘yicha ko‘rib chiqildi — qayta yozilmadi, dizayn o‘zgarmadi:
+- **Manifest** ([app/manifest.ts](../app/manifest.ts)): asl Sun Media ikonkalari (any + maskable), `standalone`,
+  `/app` dan start (har kim o‘z bo‘limiga), yorliqlar (Chat, Vazifalar), `launch_handler` — ochiq oyna qayta ishlatiladi.
+- **Service worker** ([lib/pwa/sw-template.js](../lib/pwa/sw-template.js)): har deploy'da yangi versiya, yangilanish
+  "Yangilash" tugmasi bilan (ish o‘rtasida emas); offline sahifa; maxfiy sahifa/API/chat keshlanmaydi; push → tizim
+  bildirishnomasi + app badge; bosilganda kerakli sahifa (ochiq oyna navigatsiya qilinadi); Safari qoidasi (har pushni
+  ko‘rsatish); obuna yangilansa o‘zi qayta ro‘yxatdan o‘tadi.
+- **Deep link** ([lib/pwa/routes.ts](../lib/pwa/routes.ts), testi bor): bitta bildirishnoma panel/xodim/hamkor uchun o‘z sahifasini ochadi.
+- **Sozlamalar** ([NotificationSettings](../components/pwa/NotificationSettings.tsx)): push bu qurilmada, tur bo‘yicha
+  (umumiy chat, shaxsiy, rahbar topshirig‘i, vazifalar…), matnni yashirish, sokin soatlar, chat ovozini o‘chirish,
+  qurilmalar ro‘yxati.
+- **Safe area**: Sunny `env(safe-area-inset-*)` bilan; iOS status bar `black` (shaffof emas) — kontent xavfsiz zonada.
+- **Bo‘shliq topildi va yopildi**: web push migratsiyasining (446 qator, production'da) DB testi yo‘q edi →
+  [042_web_push.test.sql](../supabase/tests/database/042_web_push.test.sql), 35 tekshiruv ✅: umumiy chat — yuboruvchidan
+  boshqa hamma a’zoga, xonadan tashqaridagiga hech narsa; shaxsiy chat — faqat ikkinchi odamga; ovozi o‘chirilgan
+  xona; tur bo‘yicha push o‘chirgichi (ilovada qoladi); sokin soatlar (ilovada bor, push yo‘q); maxfiy preview (qulf
+  ekranida jo‘natuvchi ham, matn ham yo‘q); deep link; vazifa vaqti o‘zgarishi va bekor qilinishi — faqat vazifadagilarga;
+  brauzer boshqa akkauntga o‘tsa, oldingisiga mo‘ljallangan xabar u yerga ketmaydi; bildirishnomani faqat egasi ochadi.
+
+To‘liq DB to‘plami: 1394 test, faqat oldindan mavjud ikki o‘yin testi yiqiladi (029 #8 — penalti seed'i, 031 #62 —
+o‘yin analitikasi; Sunny'ga aloqasi yo‘q, o‘yin mantig‘iga tegilmadi).
+⛔ Sinalmagan: haqiqiy iPhone/Android/Windows/macOS'da push yetib kelishi (qurilma yo‘q; production'da so‘nggi 3 kunda push trafik bo‘lmagan).
 
 ## Chiqarib tashlangan (egasi rad etgan, §49)
 Quality Guardian, Meeting Copilot, Time Machine, Executive Intelligence.

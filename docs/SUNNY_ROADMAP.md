@@ -10,12 +10,12 @@ Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ t
 
 | Bosqich | Holat | Izoh |
 |---|---|---|
-| 1. Core foundation | ✅ | branch `feat/sunny-phase1`; 1–5-bosqich kodi production'da (`59c1fcb`, 2026-10-27, ikkala Vercel loyihasi) |
+| 1. Core foundation | ✅ | branch `feat/sunny-phase1`; 1–9-bosqich production'da (`950b845` + migratsiya `20261028100000`, 2026-10-27, ikkala Vercel loyihasi) |
 | 2. Living character | 🟡 | emotsiya, mood physics, avtonom hayot, thruster, jismoniy reaksiyalar ✅; bitta renderer va 2D↔3D solishtirish yo‘q |
 | 3. Voice assistant | ✅ | wake-word, summon, barge-in, spatial audio; ovoz rejimida robot turgan joyida gapiradi |
 | 4. AI intelligence (Gemini) | ✅ | provayder registri, tokensiz buyruqlar, deterministik backend buyruqlari, kunlik AI byudjeti; suhbat xulosasi ataylab yo‘q (pastda) |
 | 5. Memory & personality | 🟡 | xotira, uslub, sozlamalar, rolga mos ohang ✅ — production'da (migratsiya qo‘llangan); xotira sahifasi va avtomatik takliflar yo‘q |
-| 6. Action agent | 🟡 | mission mode, smart delegation, predictive, universal search, partner concierge ✅ (lokal bazada sinalgan, deploy qilinmagan); hamkor tasdiqlashi — ilovada |
+| 6. Action agent | ✅ | mission mode, smart delegation, predictive, universal search, partner concierge — production'da; hamkor tasdiqlashi — ilovada |
 | 7. Advanced experiences | ✅ | gologramma kartalar, bayram, rituallar, proaktiv reaksiya, brifing, 3 rejim, emotsiya→ovoz; ⛔ ovoz biometriyasi (§40, sababi pastda) |
 | 8. Cross-platform app | ✅ | PWA + Web Push production'da (migratsiya, push-dispatch v4, VAPID); audit + §42 DB testi 35/35; haqiqiy qurilmada sinalmagan |
 | 9. Integration & release | ✅ | to‘liq test to‘plami, unumdorlik o‘lchovi, production build, deploy (pastda) |
@@ -268,6 +268,10 @@ o‘yin analitikasi; Sunny'ga aloqasi yo‘q, o‘yin mantig‘iga tegilmadi).
   🟡 Bitta doimiy renderer — qilinmadi: 3 canvas (launcher, sahna, telefonda sarlavha), bir vaqtda bittasi chizadi;
   birlashtirish ishlab turgan robotni qayta yozishni talab qiladi — foydasi (GPU kontekst soni) xavfdan kichik.
 - **Production build** — `next build` ✅ (89/89 sahifa, umumiy JS 103 kB).
+- **Deploy (2026-10-27, egasining ruxsati bilan)** — migratsiya `20261028100000_assistant_budget` (sinov rejimi alohida
+  ko‘rildi, so‘ng qo‘llandi): limitlar 300/40, funksiya faqat server kalitiga; kod `950b845` ikkala Vercel loyihasida
+  (production, Ready). Tekshiruv: ikkala sayt 200, `/api/push/config` enabled, public chat Gemini orqali javob berdi,
+  byudjet hisoblagichi o‘sha so‘rovni sanadi (1 mehmon, 1 so‘rov).
 
 ## Yakuniy holat — master prompt bo‘yicha (2026-10-27)
 

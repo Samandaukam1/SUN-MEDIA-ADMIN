@@ -10,7 +10,7 @@ Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ t
 
 | Bosqich | Holat | Izoh |
 |---|---|---|
-| 1. Core foundation | ✅ | branch `feat/sunny-phase1`, production'ga **deploy qilinmagan** |
+| 1. Core foundation | ✅ | branch `feat/sunny-phase1`; 1–5-bosqich kodi production'da (`59c1fcb`, 2026-10-27, ikkala Vercel loyihasi) |
 | 2. Living character | 🟡 | emotsiya, mood physics, avtonom hayot, thruster, jismoniy reaksiyalar ✅; bitta renderer va 2D↔3D solishtirish yo‘q |
 | 3. Voice assistant | ✅ | wake-word, summon, barge-in, spatial audio; ovoz rejimida robot turgan joyida gapiradi |
 | 4. AI intelligence (Gemini) | 🟡 | provayder registri, tokensiz buyruqlar, deterministik backend buyruqlari ✅; byudjet va xulosa — DB kerak |
@@ -145,7 +145,8 @@ promptida yo‘q, ega amallari xodimga yopiq, unutish), DB testlari 1359 (ikki o
 migratsiyasiz toza bazada ham yiqiladi: oldindan mavjud, Sunny'ga aloqasi yo‘q).
 
 ### 5-bosqichdan qolgan
-1. ⚠ **Production'ga migratsiya** (`supabase db push`) — egasining ruxsati bilan, kod deploy'i bilan birga.
+1. ⚠ **Production'ga migratsiya** (`supabase db push`) — egasi ruxsat bergan (2026-10-27), lekin bu kompyuterdagi Supabase
+   CLI boshqa hisobda (Sun Media loyihasiga 403). Kod deploy qilingan, xotira migratsiyagacha jim o‘chiq.
 2. ⬜ Xotirani ko‘rish/o‘chirish uchun alohida sahifa (hozir chatda: "xotiram", "… ni unut").
 3. ⬜ Hamkorlar o‘zi "eslab qol" deya olishi (mijoz auditoriyasiga amallar berilmaydi — alohida, cheklangan amal kerak).
 4. ⬜ Avtomatik xotira takliflari (ishonch darajasi bilan, foydalanuvchi tasdig‘ida), suhbat xulosasi.

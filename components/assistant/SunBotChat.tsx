@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { openApplication } from '@/components/site/ApplyButton';
+import { localIntent, type LocalAct } from '@/lib/assistant/intents';
 import { RobotFace, type RobotMood } from './RobotFace';
 import { answers } from './answers';
 import { quip } from './qitmir/quips';
@@ -170,9 +171,12 @@ export function SunBotChat({
   open,
   closing,
   onClose,
+  onOpen,
   onFace,
   onReplied,
   onOutcome,
+  onAct,
+  voiceAsk = 0,
   head,
 }: {
   audience: ChatAudience;
@@ -181,7 +185,13 @@ export function SunBotChat({
   open: boolean;
   closing: boolean;
   onClose: () => void;
+  /** Opens the text panel (from the voice card). */
+  onOpen?: () => void;
   onFace: (face: ChatFace) => void;
+  /** A short playful command answered locally (no AI): the robot plays it. */
+  onAct?: (act: LocalAct) => void;
+  /** Voice mode: each increment is a press of the robot's mic — listen without opening the panel. */
+  voiceAsk?: number;
   /** A reply was given (and spoken, if the voice is on): the 3D robot nods. */
   onReplied?: () => void;
   /** The system confirmed (or refused) a change: the 3D robot celebrates or shakes its head. Never before the server says so. */
@@ -211,6 +221,13 @@ export function SunBotChat({
   mutedRef.current = muted;
   const qitmirRef = useRef(qitmir);
   qitmirRef.current = qitmir;
+  const actRef = useRef(onAct);
+  actRef.current = onAct;
+  // Voice mode: a spoken conversation with the panel closed. Sunny listens, thinks and speaks where it is, and its words
+  // show on a small card by the robot; the panel is not needed for any of it (the same conversation continues there).
+  const [voiceOnly, setVoiceOnly] = useState(false);
+  const voiceOnlyRef = useRef(false);
+  voiceOnlyRef.current = voiceOnly;
   const openRef = useRef(open);
   openRef.current = open;
   const busyRef = useRef(false);
@@ -282,6 +299,8 @@ export function SunBotChat({
 
   const { stopSpeaking, cancelListening } = voice;
   useEffect(() => {
+    // The panel takes over a voice conversation (the same messages are in it).
+    if (open) setVoiceOnly(false);
     if (!open) {
       // Closing the chat releases the microphone and ends the voice.
       stopSpeaking();
@@ -332,6 +351,18 @@ export function SunBotChat({
         void decideRef.current(last, card, answer === 'yes', via);
         return;
       }
+      // Short playful commands ("raqsga tush", "salto qil", "to‘xta"…) are the robot's own business: no AI call.
+      const local = localIntent(text);
+      if (local) {
+        if (busyRef.current || local.act === 'stop') interrupt(false);
+        voice.cancelListening();
+        const reply = local.act === 'chase' && !qitmirRef.current ? 'Avval Qitmir rejimni yoqing — keyin ushlab olaman! 😏' : local.reply;
+        setMsgs([...list, { role: 'user', text }, { role: 'assistant', text: reply }]);
+        setInput('');
+        actRef.current?.(local.act);
+        if (local.act !== 'stop' && (via === 'voice' || !mutedRef.current) && (openRef.current || voiceOnlyRef.current)) void voice.speak(reply, lang, voiceStyle(qitmirRef.current));
+        return;
+      }
       // A new question while the last one is still being answered replaces it.
       if (busyRef.current) interrupt(false);
       voice.stopSpeaking();
@@ -353,7 +384,8 @@ export function SunBotChat({
         // user timing unavailable
       }
 
-      const speech = mutedRef.current ? null : voice.speech(lang, voiceStyle(qitmirRef.current));
+      // A question asked in voice mode is always answered aloud.
+      const speech = mutedRef.current && !(via === 'voice' && voiceOnlyRef.current) ? null : voice.speech(lang, voiceStyle(qitmirRef.current));
       const live = () => request.current.id === id;
       let streamed = '';
       let shown = false;
@@ -468,7 +500,7 @@ export function SunBotChat({
       // Something changed in the system: the page behind the chat shows it without a reload.
       if (final.actions?.some((a) => a.type === 'did' && a.ok)) router.refresh();
       if (!speech) return onReplied?.();
-      if (!openRef.current) return speech.cancel();
+      if (!openRef.current && !voiceOnlyRef.current) return speech.cancel();
       // The reply is the streamed bubble already on screen, or the one just added after the last rendered message.
       setSpoken(shown ? msgsRef.current.length - 1 : msgsRef.current.length);
       const spoke = await speech.finish(streamed || final.text);
@@ -490,7 +522,7 @@ export function SunBotChat({
       voice.unlock();
       voice.stopSpeaking();
       const say = (text: string) => {
-        if (!mutedRef.current && openRef.current) void voice.speak(text, lang, voiceStyle(qitmirRef.current));
+        if (voiceOnlyRef.current || (!mutedRef.current && openRef.current)) void voice.speak(text, lang, voiceStyle(qitmirRef.current));
       };
       if (!yes) {
         mark('cancelled');
@@ -540,6 +572,17 @@ export function SunBotChat({
     else setInput(before);
   }, [input, interrupt, lang, send, voice]);
   hearRef.current = () => void hear();
+
+  // The robot's mic (voice mode): listen with the panel closed; a second press ends the question.
+  const lastAsk = useRef(0);
+  useEffect(() => {
+    if (!voiceAsk || voiceAsk === lastAsk.current) return;
+    lastAsk.current = voiceAsk;
+    if (voice.listening) return voice.stopListening();
+    if (!openRef.current) setVoiceOnly(true);
+    voiceOnlyRef.current = !openRef.current;
+    hearRef.current();
+  }, [voiceAsk, voice]);
 
   const toggleMute = () => {
     voice.unlock();
@@ -610,10 +653,87 @@ export function SunBotChat({
                       : (note ?? (failed ? 'Xatolik — qayta urinib ko‘ring' : qitmir ? 'Qitmir rejim 😏' : 'SUN MEDIA AI yordamchisi'));
   const showSuggestions = msgs.filter((m) => m.role === 'user').length === 0 && !busy;
 
+  // The voice card: the last question and Sunny's reply to it, a pending confirmation, the result.
+  const lastUser = msgs.map((m) => m.role).lastIndexOf('user');
+  const replyMsg = lastUser >= 0 ? msgs.slice(lastUser + 1).reverse().find((m) => m.role === 'assistant') : undefined;
+  const replyIndex = replyMsg ? msgs.lastIndexOf(replyMsg) : -1;
+  const pendingCard = replyMsg?.actions?.findIndex((a) => a.type === 'confirm' && (a.state ?? 'pending') === 'pending') ?? -1;
+  const voiceBusy = busy || talking || voice.listening || voice.transcribing || !!working;
+  // A finished voice exchange fades after a while (not while a confirmation waits for an answer).
+  useEffect(() => {
+    if (!voiceOnly || voiceBusy || pendingCard >= 0) return;
+    const t = setTimeout(() => setVoiceOnly(false), 9000);
+    return () => clearTimeout(t);
+  }, [voiceOnly, voiceBusy, pendingCard]);
+
   useEffect(() => onFace({ mood, sound: voice.subscribe }), [mood, onFace, voice.subscribe]);
 
   return (
     <>
+      {voiceOnly && !open ? (
+        <div className={`sb-voice ${mood}`} role="status" aria-live="polite">
+          <p className="sb-voice-status">
+            {voice.listening || voice.speaking ? <Wave sound={voice.subscribe} /> : <span className={`sb-dot ${mood}`} />}
+            <span>{status}</span>
+          </p>
+          {lastUser >= 0 ? <p className="sb-voice-q">{msgs[lastUser].text}</p> : voice.listening && input ? <p className="sb-voice-q">{input}</p> : null}
+          {replyMsg ? (
+            <div className="sb-voice-a">
+              <Rich text={replyMsg.text} />
+            </div>
+          ) : null}
+          {replyMsg?.actions?.length ? (
+            <div className="sb-actions">
+              {replyMsg.actions.map((a, j) =>
+                a.type === 'confirm' && (a.state ?? 'pending') === 'pending' ? (
+                  <span key={j} className="sb-confirm-buttons">
+                    <button type="button" className="sb-confirm-yes" onClick={() => void decide(replyIndex, j, true, 'voice')}>
+                      Tasdiqlash
+                    </button>
+                    <button type="button" className="sb-confirm-no" onClick={() => void decide(replyIndex, j, false, 'voice')}>
+                      Bekor qilish
+                    </button>
+                  </span>
+                ) : a.type === 'did' ? (
+                  <span key={j} className={`sb-chip ${a.ok ? 'done' : 'fail'}`} title={a.message}>
+                    {a.ok ? '✓' : '✕'} {DID[a.name]?.[a.ok ? 0 : 1] ?? (a.ok ? 'Bajarildi' : 'Bajarilmadi')}
+                  </span>
+                ) : a.type === 'link' ? (
+                  <Link key={j} href={a.href} className="sb-chip">
+                    {a.label} →
+                  </Link>
+                ) : null,
+              )}
+            </div>
+          ) : null}
+          {voice.issue ? <p className="sb-voice-issue">{ISSUE_TEXT[voice.issue]}</p> : null}
+          <div className="sb-voice-tools">
+            {voiceBusy ? (
+              <button type="button" onClick={() => (voice.listening ? voice.stopListening() : interrupt())}>
+                {voice.listening ? 'Gapirib bo‘ldim' : 'To‘xtatish'}
+              </button>
+            ) : (
+              <button type="button" onClick={() => hearRef.current()}>
+                Yana so‘rash
+              </button>
+            )}
+            <button type="button" onClick={onOpen}>
+              Chatda ochish
+            </button>
+            <button
+              type="button"
+              aria-label="Yopish"
+              onClick={() => {
+                interrupt(false);
+                voice.cancelListening();
+                setVoiceOnly(false);
+              }}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      ) : null}
       {open ? (
         <section className={`sb-panel ${closing ? 'closing' : ''}`} role="dialog" aria-label="SUN MEDIA yordamchisi" data-lenis-prevent>
           <header className="sb-head">

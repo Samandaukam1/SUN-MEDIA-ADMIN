@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import type { LocalAct } from '@/lib/assistant/intents';
 import { RobotFace } from './RobotFace';
 import type { RobotCue } from './robot/Robot3D';
 import { store, stored } from './session';
@@ -73,6 +74,9 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
   const [stageFailed, setStageFailed] = useState(false);
   const [out, setOut] = useState(false);
   const hover = useRef<HTMLSpanElement>(null);
+  // Voice mode: each press of the mic asks the chat (loaded on demand) to listen without opening its panel.
+  const [voiceAsk, setVoiceAsk] = useState(0);
+  const [command, setCommand] = useState<{ name: LocalAct; id: number } | undefined>(undefined);
   const [cue, setCue] = useState<RobotCue | undefined>(undefined);
   // The header robot (phones): its own ready / failed state; it falls back to the flat robot on its own.
   const [head3d, setHead3d] = useState<'loading' | 'ready' | 'failed'>('loading');
@@ -167,6 +171,20 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
     setOut(false);
     setStage(false);
   }, []);
+  const askByVoice = () => {
+    setWanted(true);
+    setTeaser(false);
+    setVoiceAsk((n) => n + 1);
+  };
+  // A local command ("raqsga tush", "salto qil"…): the launcher robot plays it; the playing robot too, when it is out.
+  const onAct = useCallback(
+    (act: LocalAct) => {
+      const cue = ({ dance: 'dance', salto: 'spin', angry: 'fail', sleep: 'doze', happy: 'success', wave: 'welcome', peace: 'replied', chase: 'tap', stop: null } as const)[act];
+      if (cue) sendCue(cue);
+      setCommand((c) => ({ name: act, id: (c?.id ?? 0) + 1 }));
+    },
+    [sendCue],
+  );
   const toggleQitmir = () => {
     const next = !qitmir;
     setQitmir(next);
@@ -217,6 +235,7 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
           on={qitmir}
           chat={face.mood}
           cursorFx={cursorFx}
+          command={command}
           active={three.visible}
           home={hover}
           onOut={onOut}
@@ -232,6 +251,9 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
           open={open}
           closing={closing}
           onClose={close}
+          onOpen={show}
+          onAct={onAct}
+          voiceAsk={voiceAsk}
           onFace={setFace}
           onReplied={onReplied}
           onOutcome={onOutcome}
@@ -295,12 +317,13 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
       >
         <span className="sb-fly">
           <span className="sb-hover" ref={hover}>
-            <RobotFace mood={open ? face.mood : flying ? 'happy' : 'idle'} sound={open && !three.ready ? face.sound : undefined} size={150} />
+            <RobotFace mood={open || face.mood !== 'idle' ? face.mood : flying ? 'happy' : 'idle'} sound={!three.ready ? face.sound : undefined} size={150} />
             {wanted && three.ok ? (
               <span className={`sb-3d ${three.ready ? 'ready' : ''}`} aria-hidden>
                 <Robot3D
-                  mood={open ? face.mood : 'idle'}
-                  sound={open ? face.sound : undefined}
+                  // The chat's state shows on the robot whether or not the panel is open (voice mode has no panel).
+                  mood={face.mood}
+                  sound={face.sound}
                   cue={cue}
                   box={three.compact ? 112 : 150}
                   room={three.compact ? 70 : 150}
@@ -321,7 +344,13 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
       </button>
 
       {!flying ? (
-        <div className={`sb-qm ${qitmir ? 'on' : ''}`} role="group" aria-label="Qitmir rejim">
+        <div className={`sb-qm ${qitmir ? 'on' : ''}`} role="group" aria-label="Sunny boshqaruvi">
+          <button type="button" className="sb-qm-tool sb-qm-mic" onClick={askByVoice} aria-label="Ovoz bilan so‘rash" title="Ovoz bilan so‘rash (chat ochilmaydi)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <rect x="9" y="2.5" width="6" height="11.5" rx="3" />
+              <path d="M5 10.5a7 7 0 0 0 14 0M12 17.5v4" />
+            </svg>
+          </button>
           <button
             type="button"
             role="switch"

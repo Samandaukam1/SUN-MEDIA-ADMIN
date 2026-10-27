@@ -16,7 +16,7 @@
  */
 
 export type MotionMood = 'idle' | 'listening' | 'thinking' | 'working' | 'speaking' | 'happy' | 'error' | 'offline';
-export type MotionCue = 'welcome' | 'farewell' | 'replied' | 'tap' | 'success' | 'fail';
+export type MotionCue = 'welcome' | 'farewell' | 'replied' | 'tap' | 'success' | 'fail' | 'dance' | 'spin' | 'doze';
 /** Cues that report something to the person: they play in every state (the others wait for a free robot). */
 const NEWS: MotionCue[] = ['replied', 'success', 'fail'];
 export type IdleAct = 'spin' | 'orbit' | 'glance';
@@ -49,7 +49,7 @@ export type Pose = {
   alarm: number;
 };
 
-const CUE_SECONDS: Record<MotionCue, number> = { welcome: 1.9, farewell: 1.1, replied: 0.9, tap: 0.6, success: 2.2, fail: 1.7 };
+const CUE_SECONDS: Record<MotionCue, number> = { welcome: 1.9, farewell: 1.1, replied: 0.9, tap: 0.6, success: 2.2, fail: 1.7, dance: 2.4, spin: 1.3, doze: 4 };
 const IDLE_SECONDS: Record<IdleAct, number> = { spin: 2.8, orbit: 4.6, glance: 2.4 };
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
@@ -368,6 +368,32 @@ export class MotionDirector {
         p.eyeOpen = Math.min(p.eyeOpen, 1 - 0.15 * w);
         p.glow = Math.max(p.glow, 0.95 * w);
         p.energy = Math.max(p.energy, (1 - q) * w);
+      } else if (c.name === 'dance') {
+        // Asked to dance (a local command): sways side to side, arms up in turn, little hops, smiling.
+        const beat = Math.sin(q * Math.PI * 8);
+        p.body[1] += 0.32 * beat * w;
+        p.body[2] += 0.08 * beat * w;
+        p.head[2] -= 0.1 * beat * w;
+        p.armL[2] += (-0.55 + 0.35 * beat) * w;
+        p.armR[2] += (0.55 + 0.35 * beat) * w;
+        p.pos[1] += 0.06 * Math.abs(beat) * w;
+        p.smile = Math.max(p.smile, 1 + 0.35 * w);
+        p.glow = Math.max(p.glow, 0.7 * w);
+        p.energy = Math.max(p.energy, 0.5 * w);
+      } else if (c.name === 'spin') {
+        // A salto on request: a full turn in the air with a hop (ends where it began, so the turn never jumps).
+        p.spin = 2 * Math.PI * ease(q);
+        p.pos[1] += 0.14 * Math.sin(Math.PI * q);
+        p.armL[2] += -0.35 * Math.sin(Math.PI * q);
+        p.armR[2] += 0.35 * Math.sin(Math.PI * q);
+      } else if (c.name === 'doze') {
+        // "Uxlab qol": eyes shut, head down, a slow sink; wakes by itself after a few seconds.
+        p.eyeOpen = Math.min(p.eyeOpen, 1 - 0.92 * w);
+        p.head[0] += 0.24 * w;
+        p.head[2] += 0.1 * w;
+        p.pos[1] -= 0.04 * w;
+        p.smile = Math.max(p.smile * (1 - w), 0.9 * w);
+        p.glow = Math.min(p.glow, 0.25 - 0.15 * w);
       } else if (c.name === 'fail') {
         // The system refused or failed: a slow head shake, eyes down and warning-coloured, the light dims.
         p.head[1] += 0.3 * Math.sin(q * Math.PI * 6) * (1 - q) * w;

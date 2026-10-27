@@ -291,7 +291,18 @@ export default function Robot3D({ active, onReady, onFail, ...props }: Props) {
   // The parent's callbacks may change on every render: the picture is loaded once and the robot built once regardless.
   const handlers = useRef({ onReady, onFail });
   handlers.current = { onReady, onFail };
-  const fail = useCallback(() => handlers.current.onFail(), []);
+  // R3F drops the WebGL context a moment after the canvas unmounts (the chat header robot, on every close): only a loss
+  // while this robot is on screen is a failure — otherwise the header robot would fall back to the flat one for good.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const fail = useCallback(() => {
+    if (alive.current) handlers.current.onFail();
+  }, []);
   useEffect(() => {
     let live = true;
     loadPicture()

@@ -27,6 +27,8 @@ type Props = {
   on: boolean;
   chat: MotionMood;
   cursorFx: boolean;
+  /** A local command for one of its tricks ("salto qil"…), new on each id. */
+  command?: { name: string; id: number };
   /** The tab is visible. */
   active: boolean;
   /** The launcher's robot square: where the robot takes off and lands. */
@@ -366,6 +368,10 @@ export default function QitmirStage(props: Props) {
       live = false;
     };
   }, [fail]);
+
+  useEffect(() => {
+    if (props.command) brain.command(props.command.name, now());
+  }, [brain, props.command]);
 
   // Development only: a handle for QA and the browser tests (state, and a game on demand). Not in production builds.
   useEffect(() => {

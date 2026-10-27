@@ -1014,6 +1014,31 @@ export class QitmirBrain {
 
   // ---------- games ----------
 
+  /**
+   * One of its tricks on request (a local command such as "salto qil": no AI involved). Only when it is out and free to
+   * move — not on the way home, not while thrown or dizzy. Returns whether it obeyed.
+   */
+  command(act: string, now: number): boolean {
+    const busy = ['DOCKED', 'RETURNING', 'THROWN_AWAY', 'TUMBLING', 'DIZZY', 'CURSOR_GRAB'];
+    if (busy.includes(this.mode)) return false;
+    this.tether = this.clip = this.shadow = null;
+    this.sizeTo = 1;
+    if (act === 'salto') this.salto(now);
+    else if (act === 'angry') this.enter('ANGRY', now, { dur: 1.3, next: 'CHASING_CURSOR', lead: 1.3 });
+    else if (act === 'sleep') {
+      // Asleep from now: the next sign of the person (not the key press that asked) wakes it.
+      this.userAt = now - 0.5;
+      this.enter('SLEEPING', now, { x: this.pos[0] });
+    } else if (act === 'chase') {
+      this.armed = true;
+      this.chase(now);
+    } else if (act === 'dance' || act === 'happy' || act === 'wave' || act === 'peace') {
+      this.vel = [this.vel[0] * 0.3, -1.5 * this.box];
+      this.enter('VICTORY', now);
+    } else return false;
+    return true;
+  }
+
   /** Starts one game now if the page allows it (QA and tests; the robot normally picks its own). */
   play(game: Game, now: number): boolean {
     if (this.mode === 'DOCKED' || this.mode === 'RETURNING') return false;

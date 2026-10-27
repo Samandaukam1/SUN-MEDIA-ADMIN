@@ -1,23 +1,18 @@
 import 'server-only';
 
-import { AiFailedError, AiNotConfiguredError } from '@/lib/ai';
-import { geminiChat, geminiKey } from './gemini';
+import { AiNotConfiguredError } from '@/lib/ai';
 import { agencyKnowledge, budgetHints } from './knowledge';
+import { configuredProviders, type ChatTurn } from './providers';
 import { modePrompt, type AssistantMode } from './qitmir';
 import { agencyDateKey } from '@/lib/time';
 import { textLanguage } from './speech';
-import { runTool, toolLabel, toolsFor, type AssistantAction, type AssistantContext } from './tools';
+import { runTool, toolLabel, type AssistantAction, type AssistantContext } from './tools';
 
 /** A tool starting or finishing, for the widget ("Vazifa yaratilmoqda…", then ✓ or ✕ once the system answered). */
 export type StepEvent = { phase: 'start'; name: string; label: string } | { phase: 'end'; name: string; ok: boolean; write: boolean };
 
-export type ChatTurn = { role: 'user' | 'assistant'; text: string };
+export type { ChatTurn };
 
-type Block =
-  | { type: 'text'; text: string }
-  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-  | { type: 'tool_result'; tool_use_id: string; content: string };
-type Message = { role: 'user' | 'assistant'; content: string | Block[] };
 
 const PERSONA = `Sen — "Sunny", SUN MEDIA marketing agentligining AI yordamchisi (kumushrang robot, yashil ko‘zli). Saytda va ilovada odamlar bilan gaplashasan. Sen agentlikning eng yaxshi, eng xushmuomala menejeri kabi gapirasan: bilimdon, samimiy, aniq.
 
@@ -111,8 +106,9 @@ async function systemPrompt(ctx: AssistantContext, name: string | null, lastQues
 }
 
 /**
- * One assistant reply: Claude with tools, looping until it answers in text (at most a few tool rounds). `onText` receives
- * the reply as it is written (Gemini streams it; Claude delivers it in one piece); `signal` stops it when the visitor does.
+ * One assistant reply from the configured AI providers (see providers.ts: Gemini first; Claude when its key is set;
+ * OpenAI can be added there later). Tools loop until the model answers in text. `onText` receives the reply as it is
+ * written; `signal` stops it when the visitor does.
  */
 export async function assistantReply(
   history: ChatTurn[],
@@ -126,91 +122,21 @@ export async function assistantReply(
     onStep?.({ phase: 'end', name: tool, ok: result.ok !== false, write: !!result.write });
     return result;
   };
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key && !geminiKey()) throw new AiNotConfiguredError();
+  const providers = configuredProviders();
+  if (!providers.length) throw new AiNotConfiguredError();
   const system = await systemPrompt(ctx, name, history[history.length - 1]?.text ?? '', mode);
-  if (key) {
+  let failure: unknown;
+  for (const provider of providers) {
+    // One that fails before writing anything hands over to the next; one that already wrote part of a reply does not
+    // (the visitor would see half an answer twice).
+    let wrote = false;
     try {
-      const result = await claudeReply(key, system, history, ctx, step, signal);
-      onText?.(result.reply);
-      return result;
+      return await provider.reply({ system, history, ctx, step, signal, onText: (d) => ((wrote = true), onText?.(d)) });
     } catch (error) {
-      // Claude unavailable (no credit, limit, outage): the free Gemini key answers instead when it is set.
-      if (!geminiKey()) throw error;
-      console.error('[assistant] Claude failed, falling back to Gemini:', error instanceof Error ? error.message : error);
+      failure = error;
+      if (wrote || signal?.aborted) throw error;
+      console.error(`[assistant] ${provider.id} failed, trying the next provider:`, error instanceof Error ? error.message : error);
     }
   }
-  const actions: AssistantAction[] = [];
-  const reply = await geminiChat(
-    system,
-    history,
-    toolsFor(ctx),
-    async (tool, input) => {
-      const result = await step(tool, input);
-      if (result.action) actions.push(result.action);
-      if (result.actions) actions.push(...result.actions);
-      return result.content;
-    },
-    // Internal answers list people and numbers: they get more room than a sales reply.
-    { onText, signal, maxTokens: ctx.audience === 'staff' ? 1600 : 900 },
-  );
-  return { reply, actions };
-}
-
-async function claudeReply(
-  key: string,
-  system: string,
-  history: ChatTurn[],
-  ctx: AssistantContext,
-  step: (tool: string, input: Record<string, unknown>) => ReturnType<typeof runTool>,
-  signal?: AbortSignal,
-): Promise<{ reply: string; actions: AssistantAction[] }> {
-  const actions: AssistantAction[] = [];
-  const model = process.env.ASSISTANT_MODEL || process.env.AI_MODEL || 'claude-sonnet-5-5';
-  const tools = toolsFor(ctx);
-  const messages: Message[] = history.map((t) => ({ role: t.role, content: t.text }));
-
-  for (let round = 0; round < 8; round++) {
-    let response: Response;
-    try {
-      response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-        body: JSON.stringify({
-          model,
-          max_tokens: ctx.audience === 'staff' ? 1400 : 700,
-          system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-          tools,
-          messages,
-        }),
-        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(45_000)]) : AbortSignal.timeout(45_000),
-      });
-    } catch {
-      throw new AiFailedError('Ulanishda xato. Birozdan so‘ng qayta urinib ko‘ring.');
-    }
-    if (!response.ok) {
-      console.error('[assistant] Claude', response.status, (await response.text().catch(() => '')).slice(0, 400));
-      if (response.status === 429 || response.status >= 500) throw new AiFailedError(`Hozir band ekanman, bir daqiqadan so‘ng yozing. (C${response.status})`);
-      throw new AiFailedError(`So‘rovni bajarib bo‘lmadi. (C${response.status})`);
-    }
-    const data = (await response.json()) as { content: Block[]; stop_reason: string };
-    const uses = data.content.filter((b): b is Extract<Block, { type: 'tool_use' }> => b.type === 'tool_use');
-    const text = data.content
-      .filter((b): b is Extract<Block, { type: 'text' }> => b.type === 'text')
-      .map((b) => b.text)
-      .join('\n')
-      .trim();
-    if (data.stop_reason !== 'tool_use' || uses.length === 0) return { reply: text, actions };
-
-    messages.push({ role: 'assistant', content: data.content });
-    const results: Block[] = [];
-    for (const use of uses) {
-      const result = await step(use.name, use.input ?? {});
-      if (result.action) actions.push(result.action);
-      if (result.actions) actions.push(...result.actions);
-      results.push({ type: 'tool_result', tool_use_id: use.id, content: result.content });
-    }
-    messages.push({ role: 'user', content: results });
-  }
-  return { reply: 'Kechirasiz, javobni tayyorlay olmadim. Savolni boshqacha yozib ko‘ring.', actions };
+  throw failure;
 }

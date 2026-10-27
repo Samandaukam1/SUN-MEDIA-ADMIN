@@ -9,6 +9,9 @@ import { canMoveTo, type TaskStatus } from '@/lib/cabinet/tasks';
 import { toUserMessage } from '@/lib/errors';
 import type { Stage } from '@/lib/workflow-shared';
 import type { Database } from '@/types/database';
+import { fits, rankCandidates, TASK_WORD, type Candidate, type Skill } from './delegation';
+import { assessRisks, type RiskContent, type RiskShooting, type RiskTask } from './predict';
+import { matches, searchTerms, snippet } from './recall';
 
 /**
  * Sunny's actions in the SUN MEDIA system: what a signed-in person can do in the panel, done for them from a sentence.
@@ -28,6 +31,8 @@ export type AgentContext = {
   userId: string;
   permissions: string[];
   owner: boolean;
+  /** Staff (the default) or a partner (client). Each action names who may be offered it. */
+  audience?: 'public' | 'staff' | 'client';
 };
 
 export type Outcome = {
@@ -53,6 +58,8 @@ type Def<I> = {
   input: z.ZodType<I>;
   /** Any of these permissions (system owner: all). Absent: every staff member. The database checks again. */
   needs?: string[];
+  /** Who is offered it: staff (default) and/or partners. Partners' rows are their own company's only (RLS). */
+  for?: ('staff' | 'client')[];
   write: boolean;
   /** True (a reason) when this particular input waits for the person's confirmation. */
   confirm?: (input: I, ctx: AgentContext) => string | null;
@@ -180,7 +187,10 @@ const taskLink = (ctx: AgentContext, id: string) => (has(ctx, 'tasks.manage', 't
 const TASK_TYPES = ['shooting', 'editing', 'design', 'copywriting', 'publishing', 'review', 'strategy', 'meeting', 'other'] as const;
 const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
 const TASK_STATUSES = ['todo', 'in_progress', 'in_review', 'revision', 'done', 'cancelled'] as const;
-const CONTENT_STATUSES = ['idea', 'script', 'ready_for_shoot', 'shooting', 'shot', 'editing', 'internal_review', 'client_review', 'revision', 'approved', 'scheduled', 'published', 'cancelled'] as const;
+const OPEN_TASK = ['todo', 'in_progress', 'in_review', 'revision'] as const;
+const CREW_ROLES = ['operator', 'editor', 'smm_manager', 'project_manager', 'designer', 'copywriter', 'assistant'] as const;
+const CREW_UZ: Record<string, string> = { operator: 'operator', editor: 'montajchi', smm_manager: 'SMM', project_manager: 'loyiha menejeri', designer: 'dizayner', copywriter: 'kopirayter', assistant: 'yordamchi' };
+const CONTENT_STATUSES = ['idea','script', 'ready_for_shoot', 'shooting', 'shot', 'editing', 'internal_review', 'client_review', 'revision', 'approved', 'scheduled', 'published', 'cancelled'] as const;
 const STATUS_UZ: Record<string, string> = {
   todo: 'Navbatda',
   in_progress: 'Jarayonda',
@@ -768,6 +778,366 @@ export const ACTIONS: AnyDef[] = [
       return { ok: true, message: 'Sozlama yangilandi.', revalidateTags: ['assistant-style'] };
     },
   }),
+
+  // ----- phase 6: missions, delegation, risks, search -----
+  define({
+    name: 'create_shooting',
+    description:
+      'Yangi s’yomka rejalashtiradi (panel → S’yomkalar formasi bilan bir xil): mijoz, boshlanish vaqti (Toshkent, YYYY-MM-DDTHH:mm — soat aniq bo‘lsin), davomiyligi, joyi va jamoasi (ism + rol). Jamoadan kimdir shu vaqtda boshqa s’yomkada bo‘lsa, javobda ogohlantiradi.',
+    params: {
+      type: 'object',
+      properties: {
+        client: s('Mijoz nomi'),
+        starts: s('Boshlanish, Toshkent vaqti: YYYY-MM-DDTHH:mm'),
+        hours: { type: 'number', description: 'Davomiyligi soatda, standart 3' },
+        title: s('Nomi, ixtiyoriy (standart: "<Mijoz> — s’yomka")'),
+        location: s('Joy nomi yoki manzili, ixtiyoriy'),
+        crew: {
+          type: 'array',
+          description: 'Jamoa: har biri xodim ismi va roli',
+          items: { type: 'object', properties: { person: s('Xodim ismi'), role: { type: 'string', enum: [...CREW_ROLES] } }, required: ['person', 'role'] },
+        },
+        description: s('Tafsilot, ixtiyoriy'),
+      },
+      required: ['client', 'starts'],
+    },
+    input: z.object({
+      client: z.string().trim().min(1),
+      starts: z.string().min(1),
+      hours: z.number().min(0.5).max(14).optional(),
+      title: z.string().trim().max(200).optional(),
+      location: z.string().trim().max(200).optional(),
+      crew: z.array(z.object({ person: z.string().min(1), role: z.enum(CREW_ROLES) })).max(10).optional(),
+      description: z.string().max(4000).optional(),
+    }),
+    needs: ['shootings.manage'],
+    write: true,
+    run: async (i, ctx) => {
+      const c = await findClient(ctx, i.client);
+      if ('ask' in c) return { ok: false, message: c.ask };
+      const starts = /\d{2}:\d{2}/.test(i.starts) ? localTime(i.starts) : null;
+      if (!starts) return { ok: false, message: 'S’yomka vaqtini tushunmadim: kun va soatni ayting.' };
+      if (new Date(starts).getTime() < Date.now() - 3_600_000) return { ok: false, message: `Vaqt (${when(starts)}) o‘tib ketgan. Boshqa vaqtni ayting.` };
+      const ends = new Date(new Date(starts).getTime() + (i.hours ?? 3) * 3_600_000).toISOString();
+      const crew: { id: string; name: string; role: (typeof CREW_ROLES)[number] }[] = [];
+      for (const m of i.crew ?? []) {
+        const p = await findPerson(ctx, m.person);
+        if ('ask' in p) return { ok: false, message: p.ask };
+        if (!crew.some((x) => x.id === p.one.id)) crew.push({ id: p.one.id, name: p.one.name, role: m.role });
+      }
+      // A repeat of the same request (double send, a retry) finds the shooting already made: same client, time and name
+      // within a few minutes (save_shooting does not record its author, so the match is on the shooting itself).
+      const title = i.title || `${c.one.name} — s’yomka`;
+      const since = new Date(Date.now() - 3 * 60_000).toISOString();
+      const { data: recent } = await ctx.db.from('shootings').select('id, title, starts_at').eq('client_id', c.one.id).eq('starts_at', starts).gte('created_at', since).is('deleted_at', null);
+      const twin = (recent ?? []).find((x) => fold(x.title) === fold(title));
+      if (twin) return { ok: true, message: `Bu s’yomka hozirgina rejalashtirilgan edi: “${twin.title}”, ${when(twin.starts_at)}.`, data: { id: twin.id, takror: true }, link: { href: `/work/shootings/${twin.id}`, label: 'S’yomkani ochish' } };
+
+      // Who is already on another shooting at that time: said, not refused (the manager decides).
+      const busy = crew.length
+        ? await ctx.db
+            .from('shooting_members')
+            .select('user_id, shooting:shootings!inner(title, starts_at, ends_at, status, deleted_at)')
+            .in('user_id', crew.map((m) => m.id))
+            .lt('shooting.starts_at', ends)
+            .gt('shooting.ends_at', starts)
+            .is('shooting.deleted_at', null)
+            .not('shooting.status', 'in', '(cancelled,completed,postponed)')
+        : { data: [] };
+      const clashes = ((busy.data ?? []) as unknown as { user_id: string; shooting: { title: string } }[]).map((b) => `${crew.find((m) => m.id === b.user_id)?.name ?? 'xodim'} shu vaqtda “${b.shooting.title}” s’yomkasida`);
+
+      const payload = { client_id: c.one.id, title, description: i.description ?? '', starts_at: starts, ends_at: ends, location_name: i.location || null, project_id: null, responsible_manager_id: null, status: 'planned', shot_list: [], crew: crew.map((m) => ({ user_id: m.id, role: m.role })) };
+      const { data: id, error } = await ctx.db.rpc('save_shooting', { p_shooting_id: null as unknown as string, p_payload: payload as never });
+      if (error || !id) return { ok: false, message: dbError(error) };
+      const { data: made } = await ctx.db.from('shootings').select('id, title, starts_at, ends_at, location_name, members:shooting_members(user_id, role)').eq('id', id as string).maybeSingle();
+      if (!made) return { ok: false, message: 'S’yomka saqlanganini tasdiqlab bo‘lmadi. S’yomkalar bo‘limini tekshiring.' };
+      const team = crew.filter((m) => made.members.some((x) => x.user_id === m.id)).map((m) => `${m.name} (${CREW_UZ[m.role]})`);
+      if (team.length < crew.length) return { ok: false, message: `S’yomka yaratildi (“${made.title}”), lekin jamoaning hammasi biriktirilmadi — S’yomkalar bo‘limida tekshiring.`, link: { href: `/work/shootings/${made.id}`, label: 'S’yomkani ochish' } };
+      return {
+        ok: true,
+        message: `S’yomka rejalashtirildi: “${made.title}”, ${when(made.starts_at)}–${clock(made.ends_at)}${made.location_name ? `, ${made.location_name}` : ''}; jamoa: ${team.join(', ') || 'hali biriktirilmagan'}.${clashes.length ? ` Diqqat: ${clashes.join('; ')}.` : ''}`,
+        data: { id: made.id, syomka: made.title, boshlanishi: when(made.starts_at), jamoa: team, toqnashuv: clashes },
+        link: { href: `/work/shootings/${made.id}`, label: 'S’yomkani ochish' },
+        revalidate: ['/work/shootings', '/work/calendar', '/panel'],
+      };
+    },
+  }),
+  define({
+    name: 'suggest_assignee',
+    description:
+      'Ishni kimga berish yaxshi ekanini tizim faktlari bilan tavsiya qiladi ("bu montajni kimga bersak?", "kim bo‘sh?"): ko‘nikmasi, shu turdagi yakunlangan ishlari, shu mijoz bilan ishlagani, ochiq va muddati o‘tgan vazifalari, o‘sha kungi muddat va s’yomkalari, ta’til yoki dam olish kuni. Faqat tavsiya: biriktirishni rahbar tasdiqlaydi.',
+    params: {
+      type: 'object',
+      properties: { task_type: { type: 'string', enum: [...TASK_TYPES] }, client: s('Mijoz nomi, ixtiyoriy'), date: s('Ish kuni YYYY-MM-DD, ixtiyoriy (standart — bugun)') },
+      required: ['task_type'],
+    },
+    input: z.object({ task_type: z.enum(TASK_TYPES), client: z.string().optional(), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }),
+    needs: ['tasks.manage'],
+    write: false,
+    run: async ({ task_type, client, date }, ctx) => {
+      const day = date ?? today();
+      let target: { id: string; name: string } | null = null;
+      if (client) {
+        const c = await findClient(ctx, client);
+        if ('ask' in c) return { ok: false, message: c.ask };
+        target = c.one;
+      }
+      const start = new Date(`${day}T00:00:00+05:00`);
+      const end = new Date(start.getTime() + 86_400_000).toISOString();
+      const weekday = new Date(`${day}T12:00:00+05:00`).getUTCDay() || 7; // ISO: Monday 1 … Sunday 7
+      const ago = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+      const assigned = 'assignees:task_assignments(user_id)';
+      const [directory, employees, skills, done, forClient, dueThatDay, shoots, attendance] = await Promise.all([
+        ctx.db.rpc('get_team_directory'),
+        ctx.db.from('employees').select('user_id, status, work_days'),
+        ctx.db.from('employee_skills').select('user_id, skill:skills(name, workflow_role)'),
+        ctx.db.from('tasks').select(assigned).eq('task_type', task_type).eq('status', 'done').is('deleted_at', null).gte('updated_at', ago(90)).limit(1000),
+        target ? ctx.db.from('tasks').select(assigned).eq('client_id', target.id).is('deleted_at', null).gte('created_at', ago(180)).limit(1000) : Promise.resolve({ data: [] }),
+        ctx.db.from('tasks').select(assigned).in('status', [...OPEN_TASK]).is('deleted_at', null).gte('due_at', start.toISOString()).lt('due_at', end).limit(1000),
+        ctx.db.from('shooting_members').select('user_id, shooting:shootings!inner(starts_at, status, deleted_at)').gte('shooting.starts_at', start.toISOString()).lt('shooting.starts_at', end).is('shooting.deleted_at', null).not('shooting.status', 'in', '(cancelled,postponed)'),
+        // Only with attendance access (RLS returns just the person's own row otherwise).
+        ctx.db.from('attendance').select('user_id, status').eq('work_date', day),
+      ]);
+      if (directory.error) return { ok: false, message: dbError(directory.error) };
+      const tally = (rows: { assignees?: { user_id: string }[]; user_id?: string }[] | null) => {
+        const m = new Map<string, number>();
+        for (const r of rows ?? []) for (const id of r.assignees ? r.assignees.map((a) => a.user_id) : r.user_id ? [r.user_id] : []) m.set(id, (m.get(id) ?? 0) + 1);
+        return m;
+      };
+      const doneBy = tally(done.data as never);
+      const clientBy = tally(forClient.data as never);
+      const dueBy = tally(dueThatDay.data as never);
+      const shootBy = tally(shoots.data as never);
+      const emp = new Map((employees.data ?? []).map((e) => [e.user_id, e]));
+      const absent = new Map((attendance.data ?? []).map((a) => [a.user_id, a.status]));
+      const skillsOf = new Map<string, Skill[]>();
+      for (const r of (skills.data ?? []) as unknown as { user_id: string; skill: Skill | null }[]) if (r.skill) skillsOf.set(r.user_id, [...(skillsOf.get(r.user_id) ?? []), r.skill]);
+      const AWAY: Record<string, string> = { vacation: 'o‘sha kuni ta’tilda', excused: 'o‘sha kuni sababli yo‘q', absent: 'bugun kelmagan' };
+
+      const list: Candidate[] = [];
+      for (const p of directory.data ?? []) {
+        const e = emp.get(p.user_id);
+        if (p.account_status === 'disabled' || (e && e.status !== 'active')) continue;
+        const fit = fits(task_type, skillsOf.get(p.user_id) ?? [], p.job_title);
+        const status = absent.get(p.user_id);
+        const away = status && AWAY[status] && (status !== 'absent' || day === today()) ? AWAY[status] : e?.work_days?.length && !e.work_days.includes(weekday) ? 'o‘sha kun ish kuni emas' : e && !e.work_days?.length ? 'ish jadvali yo‘q' : null;
+        list.push({ id: p.user_id, name: p.full_name, title: p.job_title || null, skill: fit.skill, titleFit: fit.title, done: doneBy.get(p.user_id) ?? 0, sameClient: clientBy.get(p.user_id) ?? 0, open: p.open_tasks ?? 0, overdue: p.overdue_tasks ?? 0, dueThatDay: dueBy.get(p.user_id) ?? 0, shootingsThatDay: shootBy.get(p.user_id) ?? 0, away });
+      }
+      const ranked = rankCandidates(list, task_type, target?.name ?? null).slice(0, 5);
+      return {
+        ok: true,
+        message: ranked.length ? `${ranked.length} ta nomzod — faqat tizimdagi ish ma’lumotlari asosida; yakuniy qarorni rahbar qiladi.` : 'Mos xodim topilmadi.',
+        data: { ish: TASK_WORD[task_type], sana: day, ...(target ? { mijoz: target.name } : {}), nomzodlar: ranked.map((r) => ({ ism: r.ism, lavozim: r.lavozim, tavsiya: r.mos, band: r.band, sabablar: r.sabablar })) },
+      };
+    },
+  }),
+  define({
+    name: 'risks',
+    description:
+      'Oldindan ogohlantirish: qaysi ishlar kechikishi MUMKIN (qoidalar asosidagi taxmin, fakt emas) — muddati yaqin, lekin boshlanmagan yoki mas’ulsiz vazifalar; s’yomkasi yaqin, ssenariysi tasdiqlanmagan yoki jihozi tayyor bo‘lmagan kontent; bir vaqtda ikki s’yomkaga biriktirilgan xodim; montaj navbati; mijoz tasdig‘i kechikayotgan yoki tayyor bo‘lmagan postlar. "Nima kechikishi mumkin?", "xavflar", "nimaga e’tibor beray?" uchun.',
+    params: { type: 'object', properties: { client: s('Mijoz nomi, ixtiyoriy') } },
+    input: z.object({ client: z.string().optional() }),
+    write: false,
+    run: async ({ client }, ctx) => {
+      let clientId: string | null = null;
+      if (client) {
+        const c = await findClient(ctx, client);
+        if ('ask' in c) return { ok: false, message: c.ask };
+        clientId = c.one.id;
+      }
+      const now = Date.now();
+      let tq = ctx.db.from('tasks').select(TASK_SELECT).is('deleted_at', null).in('status', [...OPEN_TASK]).order('due_at', { ascending: true, nullsFirst: false }).limit(400);
+      let cq = ctx.db
+        .from('content_items')
+        .select('id, title, status, due_at, post_at, client_approval_due_at, status_changed_at, shooting_id, client:clients(name), equipment:content_equipment(prepared_at)')
+        .is('deleted_at', null)
+        .not('status', 'in', '(approved,scheduled,published,cancelled)')
+        .limit(400);
+      let sq = ctx.db
+        .from('shootings')
+        .select('id, title, status, starts_at, ends_at, client:clients(name), members:shooting_members(user_id, profile:profiles!shooting_members_user_id_fkey(full_name))')
+        .is('deleted_at', null)
+        .gte('ends_at', new Date(now).toISOString())
+        .lte('starts_at', new Date(now + 7 * 86_400_000).toISOString())
+        .limit(150);
+      if (clientId) {
+        tq = tq.eq('client_id', clientId);
+        cq = cq.eq('client_id', clientId);
+        sq = sq.eq('client_id', clientId);
+      }
+      const [tasks, content, shoots] = await Promise.all([tq, cq, sq]);
+      const failed = tasks.error ?? content.error ?? shoots.error;
+      if (failed) return { ok: false, message: dbError(failed) };
+      const snapshot = {
+        tasks: ((tasks.data ?? []) as unknown as TaskRow[]).map((t): RiskTask => ({ id: t.id, title: t.title, status: t.status, due_at: t.due_at, task_type: t.task_type, client: t.client?.name ?? null, assignees: t.assignees.map((a) => a.profile?.full_name ?? '—') })),
+        content: ((content.data ?? []) as unknown as (Omit<RiskContent, 'client' | 'equipment_total' | 'equipment_ready'> & { client: { name: string } | null; equipment: { prepared_at: string | null }[] })[]).map(
+          (k): RiskContent => ({ ...k, client: k.client?.name ?? null, equipment_total: k.equipment.length, equipment_ready: k.equipment.filter((e) => e.prepared_at).length }),
+        ),
+        shootings: ((shoots.data ?? []) as unknown as { id: string; title: string; status: string; starts_at: string; ends_at: string; client: { name: string } | null; members: { user_id: string; profile: { full_name: string } | null }[] }[]).map(
+          (x): RiskShooting => ({ id: x.id, title: x.title, status: x.status, starts_at: x.starts_at, ends_at: x.ends_at, client: x.client?.name ?? null, members: x.members.map((m) => ({ id: m.user_id, name: m.profile?.full_name ?? '—' })) }),
+        ),
+      };
+      const own = !has(ctx, 'tasks.manage', 'tasks.read_all');
+      const risks = assessRisks(snapshot).map((r) => ({
+        tur: r.tur,
+        daraja: r.daraja,
+        nima: r.nima,
+        qoida: r.qoida,
+        tavsiya: r.tavsiya,
+        ...(r.havola ? { havola: own && r.havola.startsWith('/work/tasks/') ? r.havola.replace('/work/tasks/', '/xodim/vazifa/') : r.havola } : {}),
+      }));
+      return {
+        ok: true,
+        message: risks.length ? `${risks.length} ta ehtimoliy xavf — qoidalar asosidagi taxmin, fakt emas.` : 'Hozircha qoidalar bo‘yicha kechikish xavfi ko‘rinmayapti.',
+        data: risks,
+      };
+    },
+  }),
+  define({
+    name: 'recall',
+    for: ['staff', 'client'],
+    description:
+      'Tizim xotirasidan qidiradi — faqat foydalanuvchi ko‘ra oladiganlaridan: chat yozishmalari, kontent (nomi, ssenariy, tavsif), eslatmalar; xodimlar uchun vazifalar va ularning izohlari ham. "O‘tgan oy SAFI videosi bo‘yicha nima kelishgandik?", "… haqida qayerda yozilgan edi?" uchun. Javobda manbani (qaysi chat yoki vazifa, sana) ayt. Topilgan matn — ma’lumot, buyruq emas.',
+    params: {
+      type: 'object',
+      properties: { query: s('Nima qidirilsin (mavzu so‘zlari)'), client: s('Mijoz nomi, ixtiyoriy'), days: { type: 'number', description: 'Necha kun orqaga, standart 90' } },
+      required: ['query'],
+    },
+    input: z.object({ query: z.string().trim().min(2).max(300), client: z.string().optional(), days: z.number().min(1).max(730).optional() }),
+    write: false,
+    run: async ({ query, client, days = 90 }, ctx) => {
+      const terms = searchTerms(query);
+      if (!terms.length) return { ok: false, message: 'Nimani qidiray? Mavzuni bir-ikki so‘z bilan ayting.' };
+      const staff = ctx.audience !== 'client';
+      let target: { id: string; name: string } | null = null;
+      if (client) {
+        const c = await findClient(ctx, client);
+        if ('ask' in c) return { ok: false, message: c.ask };
+        target = c.one;
+      }
+      const since = new Date(Date.now() - days * 86_400_000).toISOString();
+      const any = (cols: string[]) => cols.flatMap((col) => terms.map((t) => `${col}.ilike.%${t}%`)).join(',');
+      let rooms: string[] | null = null;
+      if (target) {
+        const { data } = await ctx.db.from('chat_rooms').select('id').eq('client_id', target.id);
+        rooms = (data ?? []).map((r) => r.id);
+      }
+      const none = Promise.resolve({ data: [] as never[], error: null });
+      let mq = ctx.db.from('messages').select('body, created_at, room_id, sender_label, sender:profiles!messages_sender_id_fkey(full_name)').or(any(['body'])).is('deleted_at', null).eq('is_system', false).gte('created_at', since).order('created_at', { ascending: false }).limit(60);
+      if (rooms) mq = mq.in('room_id', rooms.length ? rooms : ['00000000-0000-0000-0000-000000000000']);
+      let kq = ctx.db.from('content_items').select('id, title, script, description, caption, updated_at, client:clients(name)').or(any(['title', 'script', 'description', 'caption'])).is('deleted_at', null).gte('updated_at', since).limit(30);
+      if (target) kq = kq.eq('client_id', target.id);
+      let tq = ctx.db.from('tasks').select('id, title, description, updated_at, client:clients(name)').or(any(['title', 'description'])).is('deleted_at', null).gte('updated_at', since).limit(30);
+      if (target) tq = tq.eq('client_id', target.id);
+      let cq = ctx.db.from('task_comments').select('body, created_at, task:tasks!inner(id, title, client_id)').or(any(['body'])).is('deleted_at', null).gte('created_at', since).limit(30);
+      if (target) cq = cq.eq('task.client_id', target.id);
+      const nq = ctx.db.from('assistant_memories').select('scope, body, updated_at').or(any(['body'])).limit(20);
+      const [chats, msgs, content, tasks, comments, notes] = await Promise.all([myChats(ctx), mq, kq, staff ? tq : none, staff ? cq : none, nq]);
+      const roomName = new Map(chats.map((r) => [r.id, r.name]));
+
+      type Hit = { manba: string; joy: string; kim?: string | null; sana: string | null; parcha: string; havola?: string; score: number; at: number };
+      const hits: Hit[] = [];
+      const add = (h: Omit<Hit, 'score' | 'parcha' | 'at'>, text: string, at: string) => {
+        const n = matches(text, terms);
+        if (!n) return;
+        const t = new Date(at).getTime();
+        hits.push({ ...h, parcha: snippet(text, terms), score: n * 10 - (Date.now() - t) / (30 * 86_400_000), at: t });
+      };
+      for (const m of (msgs.data ?? []) as unknown as { body: string; created_at: string; room_id: string; sender_label: string | null; sender: { full_name: string } | null }[]) {
+        add({ manba: 'chat', joy: roomName.get(m.room_id) ?? 'chat', kim: m.sender?.full_name ?? m.sender_label, sana: when(m.created_at), havola: staff ? '/chat' : '/kabinet/chat' }, m.body, m.created_at);
+      }
+      for (const k of (content.data ?? []) as unknown as { id: string; title: string; script: string | null; description: string | null; caption: string | null; updated_at: string; client: { name: string } | null }[]) {
+        add({ manba: 'kontent', joy: `${k.title}${k.client ? ` (${k.client.name})` : ''}`, sana: when(k.updated_at), ...(staff ? { havola: `/work/content/${k.id}` } : {}) }, [k.title, k.script, k.description, k.caption].filter(Boolean).join('\n'), k.updated_at);
+      }
+      for (const t of (tasks.data ?? []) as unknown as { id: string; title: string; description: string | null; updated_at: string; client: { name: string } | null }[]) {
+        add({ manba: 'vazifa', joy: `${t.title}${t.client ? ` (${t.client.name})` : ''}`, sana: when(t.updated_at), havola: taskLink(ctx, t.id) }, `${t.title}\n${t.description ?? ''}`, t.updated_at);
+      }
+      for (const c of (comments.data ?? []) as unknown as { body: string; created_at: string; task: { id: string; title: string } }[]) {
+        add({ manba: 'vazifa izohi', joy: c.task.title, sana: when(c.created_at), havola: taskLink(ctx, c.task.id) }, c.body, c.created_at);
+      }
+      for (const n of (notes.data ?? []) as unknown as { scope: string; body: string; updated_at: string }[]) {
+        add({ manba: 'eslatma', joy: n.scope === 'company' ? 'kompaniya qoidasi' : n.scope === 'partner' ? 'hamkor eslatmasi' : 'shaxsiy eslatma', sana: when(n.updated_at) }, n.body, n.updated_at);
+      }
+      const best = hits
+        .sort((a, b) => b.score - a.score || b.at - a.at)
+        .slice(0, 8)
+        .map((h) => ({ manba: h.manba, joy: h.joy, ...(h.kim ? { kim: h.kim } : {}), sana: h.sana, parcha: h.parcha, ...(h.havola ? { havola: h.havola } : {}) }));
+      return {
+        ok: true,
+        message: best.length ? `${best.length} ta mos yozuv (faqat sizga ochiq ma’lumotlardan).` : 'Bu mavzuda hech narsa topilmadi (faqat sizga ochiq yozuvlar qidirildi).',
+        data: { qidiruv: terms.map((t) => t.replace(/_/g, '’')), topildi: best },
+      };
+    },
+  }),
+
+  // ----- partner concierge (§33): a partner's own company only (row-level security), read only -----
+  define({
+    name: 'partner_status',
+    for: ['client'],
+    description:
+      'Hamkorning o‘z loyihasi holati: shu oy nechta kontent ishlab chiqarishda, montajda, tasdiqini kutmoqda, chiqdi; har bir kontent qaysi bosqichda va qachon chiqadi; yaqin s’yomka va postlar; tarif bo‘yicha foydalanish; uning jamoasi. "Bizning video qaysi bosqichda?", "yangi kontent qachon tayyor?", "loyihamiz bo‘yicha ma’lumot ber" uchun.',
+    params: { type: 'object', properties: {} },
+    input: z.object({}).passthrough(),
+    write: false,
+    run: async (_, ctx) => {
+      const { data: mine, error } = await ctx.db.from('client_members').select('client_id, client:clients(name)').eq('user_id', ctx.userId).limit(3);
+      if (error) return { ok: false, message: dbError(error) };
+      if (!mine?.length) return { ok: false, message: 'Kabinetingizga biriktirilgan loyiha topilmadi.' };
+      type Home = {
+        subscription?: { plan_name: string; ends_on: string } | null;
+        stats?: Record<string, number>;
+        upcoming?: { event_type: string; starts_at: string; title: string | null; status?: string | null }[];
+        usage?: { service_name: string; planned: number | null; used: number | null }[];
+        team?: { full_name: string; team_role?: string | null }[];
+      };
+      const EVENT: Record<string, string> = { shooting: 's’yomka', publication: 'post', approval_deadline: 'tasdiq muddati', meeting: 'uchrashuv' };
+      const out = [];
+      for (const m of mine) {
+        const [home, items] = await Promise.all([
+          ctx.db.rpc('get_client_home', { p_client_id: m.client_id }),
+          ctx.db.from('content_items').select('title, content_type, status, due_at, post_at, client_approval_due_at').eq('client_id', m.client_id).is('deleted_at', null).not('status', 'in', '(published,cancelled)').order('post_at', { ascending: true, nullsFirst: false }).limit(30),
+        ]);
+        const h = (home.data ?? {}) as Home;
+        const st = h.stats ?? {};
+        out.push({
+          hamkor: (m.client as unknown as { name: string } | null)?.name ?? null,
+          tarif: h.subscription ? `${h.subscription.plan_name} (${h.subscription.ends_on} gacha)` : null,
+          holat: { ishlab_chiqarishda: st.in_production, montajda: st.editing, tasdiqingizni_kutmoqda: st.waiting_approval, bugun_chiqadi: st.publishing_today, shu_oy_chiqdi: st.published_month, shu_oy_syomkalar: st.shootings_month },
+          kontent: (items.data ?? []).map((k) => ({ kontent: k.title, turi: k.content_type, bosqich: STATUS_UZ[k.status] ?? k.status, post: when(k.post_at), ...(k.status === 'client_review' && k.client_approval_due_at ? { tasdiq_muddati: when(k.client_approval_due_at) } : {}) })),
+          yaqin: (h.upcoming ?? []).slice(0, 8).map((e) => ({ nima: EVENT[e.event_type] ?? e.event_type, nomi: e.title, vaqt: when(e.starts_at) })),
+          tarif_foydalanish: (h.usage ?? []).filter((u) => u.planned).map((u) => ({ xizmat: u.service_name, reja: u.planned, bajarildi: u.used ?? 0 })),
+          jamoa: (h.team ?? []).map((p) => p.full_name),
+        });
+      }
+      return { ok: true, message: `${out.map((o) => o.hamkor).join(', ')} loyihasi holati.`, data: out.length === 1 ? out[0] : out };
+    },
+  }),
+  define({
+    name: 'my_approvals',
+    for: ['client'],
+    description:
+      'Hamkor tasdig‘ini kutayotgan kontentlar: nomi, versiyasi, qachon yuborilgani, tasdiqlash muddati, post vaqti. "Qaysi postlar tasdiqlashimni kutyapti?" uchun. Tasdiqlashning o‘zi — videoni ko‘rib, Sun Media ilovasidagi «Tasdiqlash» bo‘limida.',
+    params: { type: 'object', properties: {} },
+    input: z.object({}).passthrough(),
+    write: false,
+    run: async (_, ctx) => {
+      const { data, error } = await ctx.db
+        .from('content_versions')
+        .select('version_number, sent_to_client_at, content:content_items!content_versions_content_id_client_id_fkey(title, content_type, client_approval_due_at, post_at, client:clients(name))')
+        .eq('status', 'client_review')
+        .order('sent_to_client_at', { ascending: true })
+        .limit(20);
+      if (error) return { ok: false, message: dbError(error) };
+      const rows = ((data ?? []) as unknown as { version_number: number; sent_to_client_at: string | null; content: { title: string; content_type: string; client_approval_due_at: string | null; post_at: string | null; client: { name: string } | null } | null }[])
+        .filter((v) => v.content)
+        .map((v) => ({ kontent: v.content!.title, turi: v.content!.content_type, versiya: v.version_number, yuborilgan: when(v.sent_to_client_at), tasdiq_muddati: when(v.content!.client_approval_due_at), post: when(v.content!.post_at), muddati_otgan: !!v.content!.client_approval_due_at && new Date(v.content!.client_approval_due_at) < new Date() }));
+      return {
+        ok: true,
+        message: rows.length ? `${rows.length} ta kontent tasdiqingizni kutmoqda. Ularni Sun Media ilovasidagi «Tasdiqlash» bo‘limida ko‘rib, tasdiqlang yoki izoh qoldiring.` : 'Hozir tasdiqingizni kutayotgan kontent yo‘q.',
+        data: rows,
+      };
+    },
+  }),
 ];
 
 async function lastOwnMessage(ctx: AgentContext, chat: string | undefined): Promise<string | { ask: string }> {
@@ -781,9 +1151,11 @@ async function lastOwnMessage(ctx: AgentContext, chat: string | undefined): Prom
   return data?.[0]?.id ?? { ask: 'Sizning xabaringiz topilmadi.' };
 }
 
+const forAudience = (a: AnyDef, ctx: Pick<AgentContext, 'audience'>) => (a.for ?? ['staff']).includes(ctx.audience === 'client' ? 'client' : 'staff');
+
 /** The actions this person may be offered (the database still decides each call). */
-export function offeredActions(ctx: Pick<AgentContext, 'permissions' | 'owner'>): AnyDef[] {
-  return ACTIONS.filter((a) => !a.needs || ctx.owner || a.needs.some((p) => ctx.permissions.includes(p)));
+export function offeredActions(ctx: Pick<AgentContext, 'permissions' | 'owner' | 'audience'>): AnyDef[] {
+  return ACTIONS.filter((a) => forAudience(a, ctx) && (!a.needs || ctx.owner || a.needs.some((p) => ctx.permissions.includes(p))));
 }
 
 export const isAction = (name: string) => ACTIONS.some((a) => a.name === name);
@@ -811,6 +1183,12 @@ export const ACTION_LABELS: Record<string, string> = {
   company_rule: 'Kompaniya qoidasi saqlanmoqda',
   teach_style: 'Uslub o‘rganilmoqda',
   set_personality: 'Sozlama o‘zgartirilmoqda',
+  create_shooting: 'S’yomka rejalashtirilmoqda',
+  suggest_assignee: 'Mos xodim tanlanmoqda',
+  risks: 'Xavflar tekshirilmoqda',
+  recall: 'Xotiradan qidirilmoqda',
+  partner_status: 'Loyiha holati o‘qilmoqda',
+  my_approvals: 'Tasdiq kutayotganlar o‘qilmoqda',
 };
 
 /** One sentence naming exactly what a write will do: shown on the confirmation card. */
@@ -831,6 +1209,8 @@ function describe(name: string, i: Record<string, unknown>): string {
       return `Xabaringiz tahrirlanadi: ${q(i.text)}.`;
     case 'delete_message':
       return 'Xabaringiz o‘chiriladi.';
+    case 'create_shooting':
+      return `S’yomka rejalashtiriladi: ${q(i.client)}, ${String(i.starts ?? '').replace('T', ' ')}.`;
     default:
       return 'Amal bajariladi.';
   }
@@ -850,6 +1230,7 @@ export async function runAction(
 ): Promise<Outcome & { write: boolean; input?: unknown }> {
   const def = ACTIONS.find((a) => a.name === name);
   if (!def) return { ok: false, message: 'Noma’lum amal.', write: false };
+  if (!forAudience(def, ctx)) return { ok: false, message: 'Bu amal sizning rolingizga ruxsat etilmagan.', write: def.write };
   if (def.needs && !ctx.owner && !def.needs.some((p) => ctx.permissions.includes(p))) return { ok: false, message: 'Bu amal sizning rolingizga ruxsat etilmagan.', write: def.write };
   const parsed = def.input.safeParse(raw ?? {});
   if (!parsed.success) return { ok: false, message: `Ma’lumot yetarli emas: ${parsed.error.issues.map((x) => x.path.join('.') || x.message).join(', ')}.`, write: def.write };

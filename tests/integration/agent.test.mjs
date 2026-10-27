@@ -64,6 +64,10 @@ function cleanup() {
     delete from task_assignments where task_id in (select id from tasks where title like 'TEST·%');
     delete from tasks where title like 'TEST·%';
     delete from messages where body like 'TEST·%';
+    delete from shootings where title like 'TEST·%';
+    delete from attendance where note = 'TEST·';
+    delete from employee_skills where user_id = (select id from auth.users where email = 'editor@sunmedia.local')
+      and skill_id = (select id from skills where workflow_role = 'editor');
     update content_items set status = 'shooting' where title = '5 ta eng qimmat tovuq taomi';
     update content_items set status = 'idea' where title = 'Yangi menyu karuseli';
     update content_items set status = 'editing' where title = 'WeDrink yozgi kolleksiya';
@@ -395,4 +399,182 @@ test('19. memory: a person’s own notes only — saved, listed without the AI, 
   const gone = await runTool('forget', { text: note.slice(6, 30) }, ctx);
   assert.match(gone.content, /"holat":"BAJARILDI"/);
   assert.equal(one(`select count(*) from assistant_memories where body = '${note}'`), '0');
+});
+
+// ---------------------------------------------------------------------------
+// Phase 6: missions, delegation, risks, universal search, partner concierge
+// ---------------------------------------------------------------------------
+const asPartner = (ctx) => ({ ...ctx, audience: 'client', visitorKey: null, userAgent: 'test', tainted: false });
+/** The next working day (Monday–Saturday) after today, in Tashkent. */
+function nextWorkday() {
+  for (let i = 1; ; i++) {
+    const d = new Date(Date.now() + i * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Tashkent' });
+    if (new Date(`${d}T12:00:00+05:00`).getUTCDay() !== 0) return d;
+  }
+}
+
+test('20. a mission: facts first, then a shooting and a task — one step fails, and the reply says so, whatever the model writes', { skip }, async () => {
+  const day = nextWorkday();
+  const gemini = fakeGemini([
+    () => [
+      { functionCall: { name: 'client_work', args: { client: 'SAFI' } } },
+      { functionCall: { name: 'suggest_assignee', args: { task_type: 'shooting', client: 'SAFI', date: day } } },
+    ],
+    () => [
+      { functionCall: { name: 'create_shooting', args: { client: 'SAFI', starts: `${day}T10:00`, hours: 3, title: 'TEST· SAFI menyu', location: 'Yunusobod', crew: [{ person: 'Anisjon', role: 'operator' }] } } },
+      // A name nobody has: this step fails, the rest of the mission does not pretend otherwise.
+      { functionCall: { name: 'create_task', args: { title: 'TEST· SAFI montaj', task_type: 'editing', client: 'SAFI', due: `${day}T18:00`, assignees: ['Azizbek Noma’lum'] } } },
+    ],
+    () => [{ text: 'Hammasi tayyor, reja bajarildi!' }],
+  ]);
+  try {
+    const { reply, actions } = await assistantReply([{ role: 'user', text: 'Ertangi SAFI s’yomkasini tashkil qil' }], { ...asTool(admin) }, 'Admin');
+    const reads = gemini.sent[1].contents.at(-1).parts.map((p) => p.functionResponse.name);
+    assert.deepEqual(reads, ['client_work', 'suggest_assignee'], 'facts were gathered before any change');
+
+    // The shooting is in the database with its crew, exactly as reported.
+    assert.equal(one(`select count(*) from shootings s join shooting_members m on m.shooting_id = s.id join profiles p on p.id = m.user_id where s.title = 'TEST· SAFI menyu' and m.role = 'operator' and p.full_name = 'Anisjon Abdullayev'`), '1');
+    assert.equal(one(`select to_char(starts_at at time zone 'Asia/Tashkent', 'YYYY-MM-DD HH24:MI') || '|' || (extract(epoch from ends_at - starts_at) / 3600)::int from shootings where title = 'TEST· SAFI menyu'`), `${day} 10:00|3`);
+    assert.equal(one(`select count(*) from tasks where title = 'TEST· SAFI montaj'`), '0');
+
+    // The model said "all done"; the system's own account follows it and tells the truth.
+    assert.match(reply, /Natija — 1 ta bajarildi, 1 ta bajarilmadi:/);
+    assert.match(reply, /✅ S’yomka: S’yomka rejalashtirildi: “TEST· SAFI menyu”/);
+    assert.match(reply, /❌ Vazifa: .*topilmadi/);
+    assert.deepEqual(actions.filter((a) => a.type === 'did').map((a) => `${a.name}:${a.ok}`), ['create_shooting:true', 'create_task:false']);
+  } finally {
+    gemini.restore();
+  }
+
+  // The same request again finds the shooting already made; the same operator elsewhere at that time is a warning.
+  const again = await runAction('create_shooting', { client: 'SAFI', starts: `${day}T10:00`, title: 'TEST· SAFI menyu' }, admin);
+  assert.equal(again.data.takror, true);
+  assert.equal(one(`select count(*) from shootings where title = 'TEST· SAFI menyu'`), '1');
+  const clash = await runAction('create_shooting', { client: 'WeDrink', starts: `${day}T11:00`, hours: 2, title: 'TEST· WeDrink', crew: [{ person: 'Anisjon', role: 'operator' }] }, admin);
+  assert.equal(clash.ok, true, clash.message);
+  assert.match(clash.message, /Diqqat: Anisjon Abdullayev shu vaqtda “TEST· SAFI menyu” s’yomkasida/);
+
+  // Only for whoever may plan shootings: not offered to an operator, and refused if asked anyway.
+  assert.ok(!toolsFor({ audience: 'staff', ...operator }).some((t) => t.name === 'create_shooting'));
+  const refused = await runAction('create_shooting', { client: 'SAFI', starts: `${day}T15:00`, title: 'TEST· operator' }, operator);
+  assert.equal(refused.ok, false);
+  assert.equal(one(`select count(*) from shootings where title = 'TEST· operator'`), '0');
+});
+
+test('21. delegation: the skilled editor is suggested for editing from real data; on vacation, he goes last; reasons are facts only', { skip }, async () => {
+  const day = nextWorkday();
+  sql(`insert into employee_skills (user_id, skill_id) select u.id, s.id from auth.users u, skills s where u.email = 'editor@sunmedia.local' and s.workflow_role = 'editor' on conflict do nothing`);
+  const first = await runAction('suggest_assignee', { task_type: 'editing', client: 'SAFI', date: day }, admin);
+  assert.equal(first.ok, true, first.message);
+  const [top] = first.data.nomzodlar;
+  assert.equal(top.ism, 'Jasur');
+  assert.equal(top.tavsiya, true);
+  assert.equal(top.sabablar[0], 'ko‘nikmasi: Montajyor');
+  const FACT = /^(ko‘nikmasi: |lavozimi: |so‘nggi 90 kunda \d+ ta |.+ bilan \d+ ta vazifada ishlagan$|ochiq vazifa|o‘sha kuni )/;
+  for (const c of first.data.nomzodlar) for (const why of c.sabablar) assert.match(why, FACT, `not a fact: ${why}`);
+  assert.match(first.message, /yakuniy qarorni rahbar qiladi/);
+
+  sql(`set session_replication_role = replica; insert into attendance (user_id, work_date, status, note) select id, '${day}', 'vacation', 'TEST·' from auth.users where email = 'editor@sunmedia.local'`);
+  const away = await runAction('suggest_assignee', { task_type: 'editing', date: day }, admin);
+  const jasur = away.data.nomzodlar.find((c) => c.ism === 'Jasur');
+  assert.notEqual(away.data.nomzodlar[0].ism, 'Jasur');
+  assert.equal(jasur?.band ?? 'not listed (only the top five)', jasur ? 'o‘sha kuni ta’tilda' : 'not listed (only the top five)');
+  assert.equal(jasur?.tavsiya ?? false, false);
+
+  // Assigning work is a manager's: an operator is not offered it and is refused.
+  assert.ok(!toolsFor({ audience: 'staff', ...operator }).some((t) => t.name === 'suggest_assignee'));
+  assert.equal((await runAction('suggest_assignee', { task_type: 'editing' }, operator)).ok, false);
+});
+
+test('22. risks: a script not approved before its shooting is found by the rule, said as a forecast, without any AI call', { skip }, async () => {
+  const shoot = one(`select s.id || '|' || s.starts_at || '|' || s.ends_at from content_items c join shootings s on s.id = c.shooting_id where c.title = 'Mahsulot qanday tayyorlanadi?'`).split('|');
+  sql(`update shootings set starts_at = now() + interval '20 hours', ends_at = now() + interval '23 hours' where id = '${shoot[0]}'`);
+  const post = one(`select coalesce(post_at::text, 'null') from content_items where title = 'WeDrink yozgi kolleksiya'`);
+  const stage = one(`select status from content_items where title = 'WeDrink yozgi kolleksiya'`);
+  sql(`set session_replication_role = replica; update content_items set status = 'editing', post_at = now() + interval '8 hours' where title = 'WeDrink yozgi kolleksiya'`);
+  const gemini = fakeGemini([() => [{ text: 'AI should not be asked' }]]);
+  try {
+    const out = await runAction('risks', {}, admin);
+    assert.equal(out.ok, true, out.message);
+    const found = out.data.find((r) => r.tur === 'ssenariy tasdiqlanmagan' && r.nima.includes('Mahsulot qanday tayyorlanadi?'));
+    assert.ok(found, JSON.stringify(out.data));
+    assert.equal(found.daraja, 'yuqori');
+    assert.match(out.message, /taxmin, fakt emas/);
+
+    const { reply } = await assistantReply([{ role: 'user', text: 'Nima kechikishi mumkin?' }], { ...asTool(admin) }, 'Admin');
+    assert.equal(gemini.sent.length, 0, 'no AI request');
+    assert.match(reply, /^Qoidalar bo‘yicha \d+ ta ehtimoliy xavf.*\(bu taxmin, fakt emas\):/);
+    assert.match(reply, /Mahsulot qanday tayyorlanadi\?/);
+
+    // Each person gets what their role shows them (row-level security): a WeDrink post that is close and not ready
+    // reaches the admin, while the operator — on SAFI's team, not WeDrink's — is warned about SAFI only.
+    assert.ok(out.data.some((r) => r.tur === 'post tayyor emas' && r.nima.includes('WeDrink yozgi kolleksiya')), JSON.stringify(out.data));
+    const crew = await runAction('risks', {}, operator);
+    assert.equal(crew.ok, true, crew.message);
+    assert.ok(crew.data.some((r) => r.nima.includes('Mahsulot qanday tayyorlanadi?')), 'SAFI is the operator’s client');
+    assert.ok(!crew.data.some((r) => r.nima.includes('WeDrink yozgi kolleksiya')), 'WeDrink’s content is not');
+  } finally {
+    gemini.restore();
+    sql(`update shootings set starts_at = '${shoot[1]}', ends_at = '${shoot[2]}' where id = '${shoot[0]}'`);
+    sql(`set session_replication_role = replica; update content_items set status = '${stage}', post_at = ${post === 'null' ? 'null' : `'${post}'`} where title = 'WeDrink yozgi kolleksiya'`);
+  }
+});
+
+test('23. universal search: an agreement in the SAFI chat is found with its source — only by those who can read that chat', { skip }, async () => {
+  sql(`insert into messages (room_id, sender_id, body, created_at)
+    select r.id, u.id, 'TEST· SAFI videosi uchun musiqa: lo-fi, 19:00 da chiqaramiz', now() - interval '20 days'
+    from chat_rooms r, auth.users u where r.kind = 'project' and r.name = 'SAFI' and u.email = 'admin@sunmedia.local'`);
+  const ctx = { ...asTool(admin) };
+  const out = await runTool('recall', { query: 'O‘tgan oy SAFI videosi bo‘yicha musiqa haqida nima kelishgandik?', days: 60 }, ctx);
+  const r = JSON.parse(out.content);
+  assert.equal(r.holat, 'OK', out.content);
+  const hit = r.malumot.topildi[0];
+  assert.equal(hit.manba, 'chat');
+  assert.equal(hit.joy, 'SAFI');
+  assert.equal(hit.kim, 'Admin');
+  assert.match(hit.parcha, /lo-fi, 19:00/);
+  assert.equal(ctx.tainted, true, 'found text is other people’s words: later changes in this turn wait for a click');
+
+  // The operator is not in the SAFI chat, and WeDrink is another company: neither finds it.
+  const operatorSees = JSON.parse((await runTool('recall', { query: 'SAFI videosi musiqa', days: 60 }, { ...asTool(operator) })).content);
+  assert.ok(!JSON.stringify(operatorSees).includes('lo-fi'));
+  const wedrink = await signIn('wedrink@client.local');
+  const partnerSees = JSON.parse((await runTool('recall', { query: 'SAFI videosi musiqa', days: 60 }, asPartner(wedrink))).content);
+  assert.ok(!JSON.stringify(partnerSees).includes('lo-fi'));
+  // SAFI's own people do.
+  const safi = await signIn('safi@client.local');
+  const safiSees = JSON.parse((await runTool('recall', { query: 'SAFI videosi musiqa', days: 60 }, asPartner(safi))).content);
+  assert.ok(JSON.stringify(safiSees).includes('lo-fi'), JSON.stringify(safiSees));
+});
+
+test('24. partner concierge: each partner sees its own project only; staff tools stay closed; exact questions need no AI', { skip }, async () => {
+  const safi = await signIn('safi@client.local');
+  const wedrink = await signIn('wedrink@client.local');
+  const offered = toolsFor(asPartner(safi)).map((t) => t.name);
+  for (const name of ['partner_status', 'my_approvals', 'recall', 'content_status']) assert.ok(offered.includes(name), name);
+  for (const name of ['create_task', 'create_shooting', 'send_message', 'suggest_assignee', 'risks', 'team', 'remember']) assert.ok(!offered.includes(name), name);
+
+  const mine = JSON.parse((await runTool('partner_status', {}, asPartner(safi))).content);
+  assert.equal(mine.malumot.hamkor, 'SAFI', JSON.stringify(mine));
+  assert.ok(mine.malumot.kontent.some((k) => k.kontent === 'Mahsulot qanday tayyorlanadi?'));
+  const theirs = JSON.parse((await runTool('partner_status', {}, asPartner(wedrink))).content);
+  assert.equal(theirs.malumot.hamkor, 'WeDrink');
+  assert.ok(!JSON.stringify(theirs).includes('SAFI'), 'nothing of another partner');
+
+  // A partner asking for a staff action, or staff for a partner one: refused by the registry.
+  assert.match((await runTool('create_task', { title: 'TEST· partner', task_type: 'other' }, asPartner(safi))).content, /"holat":"BAJARILMADI"/);
+  assert.equal((await runAction('create_task', { title: 'TEST· partner', task_type: 'other' }, { ...safi, audience: 'client' })).ok, false);
+  assert.equal((await runAction('partner_status', {}, admin)).ok, false);
+  assert.equal(one(`select count(*) from tasks where title = 'TEST· partner'`), '0');
+
+  const gemini = fakeGemini([() => [{ text: 'AI should not be asked' }]]);
+  try {
+    const status = await assistantReply([{ role: 'user', text: 'Loyihamiz holati qanday?' }], asPartner(safi), 'SAFI');
+    const queue = await assistantReply([{ role: 'user', text: 'Qaysi postlar tasdiqlashimni kutyapti?' }], asPartner(safi), 'SAFI');
+    assert.equal(gemini.sent.length, 0, 'no AI request');
+    assert.match(status.reply, /^SAFI: /);
+    assert.equal(queue.reply, 'Hozir tasdiqingizni kutayotgan kontent yo‘q.');
+  } finally {
+    gemini.restore();
+  }
 });

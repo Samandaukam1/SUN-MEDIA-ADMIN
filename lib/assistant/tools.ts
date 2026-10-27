@@ -168,10 +168,10 @@ const STAFF_TOOLS: (ToolDef & { needs?: string[] })[] = [
 export function toolsFor(ctx: Pick<AssistantContext, 'audience' | 'permissions' | 'owner'>): ToolDef[] {
   if (ctx.audience === 'public') return PUBLIC_TOOLS;
   const link = PUBLIC_TOOLS.filter((t) => t.name === 'show_link');
-  if (ctx.audience === 'client') return WORK_TOOLS.filter((t) => t.name !== 'my_tasks').concat(link);
-  const allowed = (t: { needs?: string[] }) => !t.needs || ctx.owner || t.needs.some((p) => ctx.permissions.includes(p));
-  // Staff: the read tools, then the actions (list_tasks replaces my_tasks).
+  // Staff: the read tools, then the actions (list_tasks replaces my_tasks). Partners: their own project's reads.
   const actions = offeredActions(ctx).map(({ name, description, params }) => ({ name, description, input_schema: params }));
+  if (ctx.audience === 'client') return [...actions, ...WORK_TOOLS.filter((t) => t.name !== 'my_tasks'), ...link];
+  const allowed = (t: { needs?: string[] }) => !t.needs || ctx.owner || t.needs.some((p) => ctx.permissions.includes(p));
   return [
     ...STAFF_TOOLS.filter(allowed).map(({ name, description, input_schema }) => ({ name, description, input_schema })),
     ...actions,
@@ -466,7 +466,7 @@ async function agentAction(name: string, input: Record<string, unknown>, ctx: As
   }
   const out = await runAction(name, input, ctx, { tainted: !!turn.tainted });
   // Other people's words entered the conversation: from here on, every change in this turn needs the person's click.
-  if (out.ok && (name === 'read_chat' || name === 'list_chats')) turn.tainted = true;
+  if (out.ok && (name === 'read_chat' || name === 'list_chats' || name === 'recall')) turn.tainted = true;
 
   const actions: AssistantAction[] = [];
   if (out.confirm) {

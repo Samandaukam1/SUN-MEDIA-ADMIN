@@ -41,6 +41,7 @@ const DID: Record<string, [string, string]> = {
   company_rule: ['Kompaniya qoidasi saqlandi', 'Saqlanmadi'],
   teach_style: ['Uslub o‘rganildi', 'O‘rganilmadi'],
   set_personality: ['Sozlama yangilandi', 'Yangilanmadi'],
+  create_shooting: ['S’yomka rejalashtirildi', 'S’yomka yaratilmadi'],
 };
 
 /** Who the chat is for: the public site, the team's internal system, or a client's cabinet. */

@@ -6,7 +6,7 @@ Bu fayl har sessiyada yangilanadi: yangi sessiya shu yerdan davom etadi. Holat f
 
 Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ tashqi to‘siq
 
-## Joriy holat (2026-10-27, 5-sessiya)
+## Joriy holat (2026-10-27, 6-sessiya)
 
 | Bosqich | Holat | Izoh |
 |---|---|---|
@@ -14,10 +14,10 @@ Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ t
 | 2. Living character | 🟡 | emotsiya, mood physics, avtonom hayot, thruster, jismoniy reaksiyalar ✅; bitta renderer va 2D↔3D solishtirish yo‘q |
 | 3. Voice assistant | ✅ | wake-word, summon, barge-in, spatial audio; ovoz rejimida robot turgan joyida gapiradi |
 | 4. AI intelligence (Gemini) | 🟡 | provayder registri, tokensiz buyruqlar, deterministik backend buyruqlari ✅; byudjet va xulosa — DB kerak |
-| 5. Memory & personality | 🟡 | xotira, uslub, sozlamalar, rolga mos ohang ✅ (lokal bazada); **production migratsiyasi qo‘llanmagan** |
-| 6. Action agent | 🟡 | mavjud asboblar + Sunny Vision (sahifa konteksti) ✅; mission/delegation/predictive yo‘q |
+| 5. Memory & personality | 🟡 | xotira, uslub, sozlamalar, rolga mos ohang ✅ — production'da (migratsiya qo‘llangan); xotira sahifasi va avtomatik takliflar yo‘q |
+| 6. Action agent | 🟡 | mission mode, smart delegation, predictive, universal search, partner concierge ✅ (lokal bazada sinalgan, deploy qilinmagan); hamkor tasdiqlashi — ilovada |
 | 7. Advanced experiences | 🟡 | easter egg'lar, ovoz kartochkasi; rituals/proactive/briefing yo‘q |
-| 8. Cross-platform app | 🟡 | PWA + Web Push oldin qilingan (7ed0570); bu sessiyada audit qilinmadi |
+| 8. Cross-platform app | 🟡 | PWA + Web Push (7ed0570) production'da yoqildi: migratsiya, push-dispatch v4, VAPID (2026-10-27); to‘liq audit qilinmagan |
 | 9. Integration & release | ⬜ | |
 
 ## 1-bosqich — bajarildi (2026-10-27)
@@ -154,11 +154,44 @@ migratsiyasiz toza bazada ham yiqiladi: oldindan mavjud, Sunny'ga aloqasi yo‘q
 3. ⬜ Hamkorlar o‘zi "eslab qol" deya olishi (mijoz auditoriyasiga amallar berilmaydi — alohida, cheklangan amal kerak).
 4. ⬜ Avtomatik xotira takliflari (ishonch darajasi bilan, foydalanuvchi tasdig‘ida), suhbat xulosasi.
 
-### 6-bosqich — Action agent
-Mavjud (✅, `lib/assistant/tools.ts`, `agent.ts`): attendance, overview, issues, team, search, check_in, create_task,
-update_task, set_content_status, send/edit/delete_message, tasdiqlash tokenlari. ⬜ Mission mode (ko‘p qadamli reja +
-qisman natija hisoboti), Smart delegation (real yuklama/ko‘nikma), Sunny Vision (joriy route/entity kontekstini
-yuborish), Universal search kengaytmasi, Predictive (qoidalarga asoslangan), Partner concierge.
+## 6-bosqich — bajarildi (2026-10-27, 6-sessiya) — migratsiya kerak emas
+
+- **Mission mode (§29)** — [mission.ts](../lib/assistant/mission.ts), engine: bir so‘rovdagi har bir o‘zgarish tizimning
+  o‘z hisobotiga yoziladi; 2+ o‘zgarish bo‘lsa javob oxiriga "Natija — 1 ta bajarildi, 1 ta bajarilmadi: ✅ … ❌ … ⏳ …"
+  qo‘shiladi — model "hammasi tayyor" desa ham, haqiqiy holat ko‘rinadi. Prompt: avval faktlar (client_work,
+  suggest_assignee), keyin reja va "Bajaraveraymi?", bog‘liq qadam yiqilsa to‘xtash. Yangi amal **`create_shooting`**
+  (`shootings.manage`, `save_shooting` RPC — panel bilan bir xil; jamoa rollari bilan; takror yaratilmaydi; jamoadan kimdir
+  shu vaqtda boshqa s’yomkada bo‘lsa — ogohlantirish, rad emas).
+- **Smart delegation (§30)** — [delegation.ts](../lib/assistant/delegation.ts), `suggest_assignee` (`tasks.manage`):
+  ko‘nikma (`employee_skills`, egasining workflow roli), so‘nggi 90 kunda shu turdagi yakunlangan ishlar, shu mijoz bilan
+  ishlagani, ochiq/muddati o‘tgan vazifalar, o‘sha kungi muddat va s’yomkalar, ta’til/dam olish kuni. Ball ko‘rsatilmaydi —
+  faqat tekshirsa bo‘ladigan faktlar; yakuniy qaror rahbarniki.
+- **Predictive (§31)** — [predict.ts](../lib/assistant/predict.ts), `risks` (har bir xodim, RLS bo‘yicha o‘zi ko‘radigani):
+  9 ta oshkora qoida — muddat yaqin/boshlanmagan, mas’ulsiz vazifa, s’yomka oldidan tasdiqlanmagan ssenariy, tayyor
+  bo‘lmagan jihoz, montaj navbati, kechikkan mijoz/ichki tasdiq, tayyor bo‘lmagan post, s’yomkalar to‘qnashuvi. Har bir
+  xavf o‘z qoidasini aytadi; javob "taxmin, fakt emas". "Nima kechikishi mumkin?" — AI'siz (router).
+- **Universal search (§32)** — [recall.ts](../lib/assistant/recall.ts), `recall` (xodim va hamkor): chat xabarlari,
+  kontent (nom, ssenariy, tavsif, caption), eslatmalar; xodimga vazifa va izohlari ham. Faqat foydalanuvchining o‘z sessiyasi
+  (RLS), so‘zlar `ilike` bilan, eng mos 8 tasi manbasi (chat/vazifa, kim, sana) bilan. Topilgan matn — begona matn:
+  shu turdagi keyingi o‘zgarishlar tasdiq kutadi (`tainted`).
+- **Partner concierge (§33)** — `partner_status`, `my_approvals` (faqat hamkor auditoriyasi; amallar registrida `for`):
+  loyiha holati (`get_client_home` + kontent bosqichlari), tasdiq kutayotganlar. "Loyihamiz holati qanday?", "Qaysi
+  postlar tasdiqlashimni kutyapti?" — AI'siz. Hamkorga xodim amallari taklif qilinmaydi va registr rad etadi.
+
+Tekshiruv: 146 unit (yangi 10: delegation, 9 qoida, qidiruv so‘zlari, missiya hisoboti, routerlar), `tsc`, `eslint`;
+agent integratsiya 21/21 (yangi #20–#24, haqiqiy lokal baza, simulyatsiya qilingan Gemini): missiyada bir qadam yiqilsa
+hisobot buni aytadi va bazada faqat bajarilgani bor; takror s’yomka yo‘q, to‘qnashuv ogohlantiriladi, operatorga yopiq;
+ko‘nikmali montajchi tavsiya qilinadi, ta’tilda bo‘lsa oxirga tushadi, sabablar faqat faktlar; xavflar rolga qarab
+(WeDrink kontenti SAFI jamoasidagi operatorga ko‘rinmaydi); SAFI chatidagi kelishuv manbasi bilan topiladi — operator va
+WeDrink topa olmaydi, SAFI topadi; har hamkor faqat o‘z loyihasini ko‘radi.
+
+Sinalmagan: haqiqiy Gemini missiyani shu tartibda rejalashtirishi (lokalda AI kaliti yo‘q — model simulyatsiya qilingan).
+
+### 6-bosqichdan qolgan
+1. ⬜ Hamkor tasdiqlashi/izohi chatdan (`review_content_version`, `client.approve`) — ataylab qilinmadi: hamkor videoni
+   ko‘rib tasdiqlashi kerak; hozir Sunny ilovadagi «Tasdiqlash» bo‘limiga yo‘naltiradi.
+2. ⬜ Qidiruv uchun indeks (pg_trgm `messages.body`) — katta hajmda kerak bo‘lsa, migratsiya bilan.
+3. ⬜ Missiyada jamoaga avtomatik xabar — hozir faqat rejada tasdiqlangan `send_message`.
 
 ### 7–8-bosqich
 ⬜ Holographic task cards (ovoz kartochkasi asos), daily rituals, proactive reminders, daily briefing (real ma’lumot),

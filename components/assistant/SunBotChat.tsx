@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { openApplication } from '@/components/site/ApplyButton';
-import { localIntent, type LocalAct } from '@/lib/assistant/intents';
+import { localIntent, sentiment, type LocalAct } from '@/lib/assistant/intents';
+import type { Emotion, FeelEvent } from './robot/emotion';
 import { RobotFace, type RobotMood } from './RobotFace';
 import { answers } from './answers';
 import { quip } from './qitmir/quips';
@@ -176,6 +177,8 @@ export function SunBotChat({
   onReplied,
   onOutcome,
   onAct,
+  onFeel,
+  feeling,
   voiceAsk = 0,
   head,
 }: {
@@ -190,6 +193,10 @@ export function SunBotChat({
   onFace: (face: ChatFace) => void;
   /** A short playful command answered locally (no AI): the robot plays it. */
   onAct?: (act: LocalAct) => void;
+  /** A message touched Sunny's feelings (an insult, praise). */
+  onFeel?: (kind: FeelEvent) => void;
+  /** How Sunny feels now: the assistant's tone follows it (never its accuracy or what it does). */
+  feeling?: Emotion;
   /** Voice mode: each increment is a press of the robot's mic — listen without opening the panel. */
   voiceAsk?: number;
   /** A reply was given (and spoken, if the voice is on): the 3D robot nods. */
@@ -223,6 +230,8 @@ export function SunBotChat({
   qitmirRef.current = qitmir;
   const actRef = useRef(onAct);
   actRef.current = onAct;
+  const feelRef = useRef({ onFeel, feeling });
+  feelRef.current = { onFeel, feeling };
   // Voice mode: a spoken conversation with the panel closed. Sunny listens, thinks and speaks where it is, and its words
   // show on a small card by the robot; the panel is not needed for any of it (the same conversation continues there).
   const [voiceOnly, setVoiceOnly] = useState(false);
@@ -363,6 +372,9 @@ export function SunBotChat({
         if (local.act !== 'stop' && (via === 'voice' || !mutedRef.current) && (openRef.current || voiceOnlyRef.current)) void voice.speak(reply, lang, voiceStyle(qitmirRef.current));
         return;
       }
+      // Kind or rude words touch Sunny's mood (the question itself still goes to the assistant).
+      const touched = sentiment(text);
+      if (touched) feelRef.current.onFeel?.(touched);
       // A new question while the last one is still being answered replaces it.
       if (busyRef.current) interrupt(false);
       voice.stopSpeaking();
@@ -409,6 +421,7 @@ export function SunBotChat({
             messages: history.slice(-HISTORY).map(({ role, text }) => ({ role, text: text.slice(0, MAX_TEXT) })),
             stream: true,
             ...(qitmirRef.current ? { mode: 'qitmir' } : {}),
+            ...(feelRef.current.feeling && feelRef.current.feeling !== 'friendly' ? { feeling: feelRef.current.feeling } : {}),
           }),
           signal: ctl.signal,
         });

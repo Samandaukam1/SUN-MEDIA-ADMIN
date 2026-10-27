@@ -34,3 +34,11 @@ test('real questions and look-alike words still go to the assistant', () => {
     assert.equal(localIntent(text), null, text);
   }
 });
+
+test('kind and rude words touch Sunny’s mood (the message itself still goes to the assistant)', async () => {
+  const { sentiment } = await import('../lib/assistant/intents.ts');
+  assert.equal(sentiment('Sunny, sen hech narsani bilmaysan!'), 'insult');
+  assert.equal(sentiment('barakalla, zo‘rsan'), 'praise');
+  assert.equal(sentiment('rahmat'), 'praise');
+  assert.equal(sentiment('Bugungi vazifalarim qanday?'), null);
+});

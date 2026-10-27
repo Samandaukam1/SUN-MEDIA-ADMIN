@@ -1,3 +1,4 @@
+import type { Expression, FeelEvent } from '../robot/emotion';
 import type { MotionMood } from '../robot/motion';
 
 /**
@@ -42,6 +43,11 @@ export type QState =
   | 'SLEEPING'
   | 'SURPRISED'
   | 'VICTORY'
+  | 'NOTICED'
+  | 'PATTED'
+  | 'BUMPED'
+  | 'ANNOYED'
+  | 'HIGH_FIVE'
   | 'RETURNING'
   | 'LISTENING'
   | 'THINKING'
@@ -52,8 +58,11 @@ export type QState =
 /** Home, in its launcher: the normal robot is drawn there instead (the label then says what the chat is doing). */
 type Mode = Exclude<QState, 'NORMAL_IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING' | 'EXECUTING_ACTION' | 'SUCCESS' | 'ERROR'> | 'DOCKED';
 
-export type SayKey = 'grab' | 'miss' | 'thrown' | 'angry' | 'logo' | 'hide' | 'found' | 'wake' | 'text' | 'tap' | 'bored';
-export type QEvent = { type: 'out' } | { type: 'docked' } | { type: 'say'; key: SayKey } | { type: 'poke'; id: number };
+export type SayKey = 'grab' | 'miss' | 'thrown' | 'angry' | 'logo' | 'hide' | 'found' | 'wake' | 'text' | 'tap' | 'bored' | 'hit' | 'five' | 'nofive' | 'pat' | 'push';
+export type QEvent = { type: 'out' } | { type: 'docked' } | { type: 'say'; key: SayKey } | { type: 'poke'; id: number } | { type: 'feel'; kind: FeelEvent };
+/** 'qitmir' chases and grabs the cursor; 'calm' (normal mode) only takes short trips round the page while the person is
+ * idle and always comes home. */
+export type Persona = 'qitmir' | 'calm';
 
 /** The page as the robot sees it, viewport rectangles (see dom.ts). */
 export type QTargets = {
@@ -70,6 +79,8 @@ export type QTargets = {
 
 export type QPose = {
   visible: boolean;
+  /** Anti-gravity thruster under it, 0–1: soft while hovering, strong when accelerating, off when resting. */
+  thrust: number;
   alpha: number;
   /** The robot's origin (the middle of its height), viewport px. */
   x: number;
@@ -113,6 +124,10 @@ export const GRIP_ARM: Vec3 = [0.12, 0, -2.05];
 
 /** Busy with itself: a cursor appearing right next to it now makes it jump. */
 const STARTLED = new Set<string>(['QITMIR_IDLE', 'WATCHING_PAGE', 'LOGO_LANDING', 'TEXT_INTERACTION']);
+/** Being thrown about or holding on: no other reaction until it is steady. */
+const PHYSICAL = new Set<string>(['THROWN_AWAY', 'TUMBLING', 'DIZZY', 'RECOVERING', 'CURSOR_GRAB', 'CURSOR_ATTACHED', 'BUMPED', 'SURPRISED']);
+/** Playing with the cursor (or home): the cursor running into it is not a push. */
+const CURSOR_GAME = new Set<string>(['WATCHING_CURSOR', 'CHASING_CURSOR', 'CURSOR_APPROACH', 'CURSOR_GRAB', 'CURSOR_ATTACHED', 'DOCKED', 'RETURNING']);
 /** Not in the middle of something physical: a touch may call it. */
 const FREE = new Set<string>(['QITMIR_IDLE', 'WATCHING_PAGE', 'LOGO_LANDING', 'TEXT_INTERACTION', 'ACROBATIC_FLIGHT', 'CHASING_CURSOR']);
 
@@ -214,7 +229,7 @@ type Gesture = {
   float: number;
   sleep: boolean;
 };
-const gesture = (): Gesture => ({
+const gesture = (qitmir: boolean): Gesture => ({
   head: [0, 0, 0],
   body: [0, 0, 0],
   armL: [0, 0, 0],
@@ -223,10 +238,11 @@ const gesture = (): Gesture => ({
   lookAt: null,
   lookK: 1,
   eyeOpen: 1,
-  squint: 0.35,
-  smirk: 0.65,
+  // Qitmir's resting look is sly; the normal robot's is its original friendly face.
+  squint: qitmir ? 0.35 : 0,
+  smirk: qitmir ? 0.65 : 0,
   smile: 1,
-  glow: 0.35,
+  glow: qitmir ? 0.35 : 0.25,
   anger: 0,
   energy: 0,
   float: 1,
@@ -238,6 +254,7 @@ export type BrainOptions = {
   box: number;
   /** Touch screen: no cursor to chase or hold; it follows fingers instead. */
   touch?: boolean;
+  persona?: Persona;
   random?: () => number;
   now?: number;
   home?: { x: number; y: number; scale: number } | null;
@@ -260,7 +277,22 @@ export class QitmirBrain {
   private since: number;
   private last: number;
   private plan: Plan = {};
-  private g: Gesture = gesture();
+  private g: Gesture = gesture(true);
+  private persona: Persona;
+  /** The feeling (emotion.ts), eased toward `feelTo`: face, posture and mood physics. */
+  private feel: Expression | null = null;
+  private feelTo: Expression | null = null;
+  private thrust = 0;
+  /** Physical interaction: strokes over the head, taps on the body, a fast swipe through it. */
+  private pat = { dir: 0, times: [] as number[], at: -1e9 };
+  private taps: number[] = [];
+  private pushed = { at: -1e9, vx: 0, vy: 0 };
+  private hit = -1e9;
+  private poked = -1e9;
+  private fived = -1e9;
+  private dodgeUntil = -1e9;
+  /** Going home by its own choice (end of a calm trip), not because something needs the robot home. */
+  private voluntary = false;
 
   private pos: Vec2;
   private vel: Vec2 = [0, 0];
@@ -293,9 +325,12 @@ export class QitmirBrain {
   private boost = { k: 1, until: -1e9 };
   private events: QEvent[] = [];
 
-  constructor({ box, touch = false, random = Math.random, now = 0, home = null, viewport = [1280, 800] }: BrainOptions) {
+  constructor({ box, touch = false, persona = 'qitmir', random = Math.random, now = 0, home = null, viewport = [1280, 800] }: BrainOptions) {
     this.box = box;
     this.touch = touch;
+    this.persona = persona;
+    // A calm robot waits a little before its first trip.
+    this.cool.trip = now + 10;
     this.random = random;
     this.since = this.last = this.userAt = now;
     [this.W, this.H] = viewport;
@@ -340,6 +375,27 @@ export class QitmirBrain {
   setFlags(f: Partial<QitmirBrain['flags']>) {
     Object.assign(this.flags, f);
   }
+  setPersona(persona: Persona) {
+    this.persona = persona;
+  }
+  /** The feeling to show (emotion.ts). */
+  setEmotion(e: Expression) {
+    this.feelTo = e;
+    this.feel ??= { ...e, head: [...e.head], body: [...e.body], armL: [...e.armL], armR: [...e.armR], look: [...e.look] };
+  }
+
+  /** A calm robot waiting in its launcher: would it go on a trip now? (The stage asks this about once a second.) */
+  wantsOut(now: number): boolean {
+    return this.mode === 'DOCKED' && !this.flags.dock && !!this.home && (this.persona === 'qitmir' || this.tripDue(now));
+  }
+
+  /** Calm trips: only while the person is idle (no pointer, keys or scrolling for a few seconds), with a cooldown, never
+   * while they are away for long, and only when there is something worth visiting. */
+  private tripDue(now: number): boolean {
+    const quiet = now - this.userAt;
+    const t = this.targets;
+    return quiet > 7 && quiet < 120 && now >= (this.cool.trip ?? 0) && (!!this.perch() || t.texts.some((x) => x.letters.length) || t.sights.length > 0);
+  }
 
   /** The person typed, scrolled or otherwise showed they are there. */
   activity(now: number) {
@@ -367,6 +423,24 @@ export class QitmirBrain {
     const near = Math.hypot(x - this.pos[0], y - this.pos[1]) < 1.1 * this.box * this.size;
     // Out of nowhere right next to the robot (it was away, or it jumped there): a start.
     if (near && (!p.inside || Math.hypot(x - p.x, y - p.y) > 2.2 * this.box)) this.startle = now;
+    // Physical interaction with the robot's body (not while it rests in its launcher or is thrown about).
+    const s = this.size;
+    const B = this.box;
+    const rx = x - this.pos[0];
+    const ry = y - this.pos[1];
+    const body = this.mode !== 'DOCKED' && this.mode !== 'RETURNING' && Math.hypot(rx / (0.42 * B * s), ry / (0.48 * B * s)) < 1;
+    if (kind === 'down' && body) {
+      if (this.mode === 'HIGH_FIVE' && Math.hypot(x - this.hand()[0], y - this.hand()[1]) < 0.4 * B * s) this.fived = now;
+      else if (now < this.dodgeUntil) this.poked = now;
+      else {
+        this.taps = this.taps.filter((t0) => now - t0 < 2.5);
+        this.taps.push(now);
+        if (this.taps.length >= 3) {
+          this.hit = now;
+          this.taps = [];
+        } else if (!this.touch) this.poked = now;
+      }
+    }
     if (kind === 'down') {
       p.down = true;
       if (this.touch) {
@@ -378,6 +452,22 @@ export class QitmirBrain {
       const dt = Math.max(0.004, now - p.t);
       const vx = (x - p.x) / dt;
       const vy = (y - p.y) / dt;
+      const sp = Math.hypot(vx, vy);
+      // Strokes back and forth over its head (no button held): a pat.
+      if (kind === 'move' && body && ry < -0.05 * B * s && (this.touch || !p.down) && sp > 40 && sp < 1100 && Math.abs(vx) > 30) {
+        const dir = Math.sign(vx);
+        if (dir !== this.pat.dir) {
+          this.pat.dir = dir;
+          this.pat.times = this.pat.times.filter((t0) => now - t0 < 1.6);
+          this.pat.times.push(now);
+          if (this.pat.times.length >= 3) this.pat.at = now;
+        }
+      }
+      // A fast swipe straight through its body: a push.
+      const mid = [(x + p.x) / 2 - this.pos[0], (y + p.y) / 2 - this.pos[1]];
+      const through = body || Math.hypot(mid[0] / (0.42 * B * s), mid[1] / (0.48 * B * s)) < 1;
+      // (Not while it plays with the cursor itself — running into it is part of that game.)
+      if (kind === 'move' && through && (this.touch || !p.down) && sp > 1300 && !CURSOR_GAME.has(this.mode)) this.pushed = { at: now, vx, vy };
       const k = 1 - Math.exp(-dt / 0.05);
       p.vx += (vx - p.vx) * k;
       p.vy += (vy - p.vy) * k;
@@ -410,7 +500,7 @@ export class QitmirBrain {
   }
 
   /** A one-off signal from the pointer handler, used once. */
-  private take(name: 'shook' | 'startle' | 'tapped' | 'touched', now: number): boolean {
+  private take(name: 'shook' | 'startle' | 'tapped' | 'touched' | 'fived' | 'hit' | 'poked', now: number): boolean {
     if (now - this[name] > (name === 'touched' || name === 'tapped' ? 1 : 0.25)) return false;
     this[name] = -1e9;
     return true;
@@ -433,13 +523,13 @@ export class QitmirBrain {
     }
     p.travel *= Math.exp(-dt / 0.6);
     this.acc = [0, 0];
-    this.g = gesture();
+    this.g = gesture(this.persona === 'qitmir');
     this.extra = UPRIGHT;
     this.offY = 0;
 
     if (this.flags.dock && this.mode !== 'DOCKED' && this.mode !== 'RETURNING') this.goHome(now);
     // The reason to go home went away on the way there (a field lost focus, the chat finished): play on from here.
-    else if (!this.flags.dock && this.mode === 'RETURNING' && this.home) {
+    else if (!this.flags.dock && this.mode === 'RETURNING' && this.home && !this.voluntary) {
       this.sizeTo = 1;
       this.enter('QITMIR_IDLE', now, { until: now + 1 + this.random() });
     }
@@ -457,10 +547,112 @@ export class QitmirBrain {
       }
     }
 
+    this.react(now);
     this.think(now, dt);
+    this.express(dt);
     if (this.mode !== 'DOCKED') this.move(dt);
     this.size += (this.sizeTo - this.size) * damp(5, dt);
+    this.thrustFor(dt);
     return this.pose(now);
+  }
+
+  private feelEvent(kind: FeelEvent) {
+    this.events.push({ type: 'feel', kind });
+  }
+
+  /** The person touched it: a pat, a tap, several hits, a push, a high five. */
+  private react(now: number) {
+    const free = !PHYSICAL.has(this.mode) && this.mode !== 'DOCKED' && this.mode !== 'RETURNING';
+    if (!free) return;
+    const B = this.box;
+    if (this.take('fived', now)) {
+      this.say('five');
+      this.feelEvent('five');
+      this.vel = [this.vel[0] * 0.3, -1.5 * B];
+      return this.enter('VICTORY', now);
+    }
+    if (now - this.pushed.at < 0.25) {
+      const { vx, vy } = this.pushed;
+      this.pushed.at = -1e9;
+      const v = Math.hypot(vx, vy) || 1;
+      const k = Math.min(1, v / 3000) * 6 * B;
+      this.vel = [this.vel[0] + (vx / v) * k, this.vel[1] + (vy / v) * k];
+      this.w = [this.w[0] + (vy / v) * 3, this.w[1], this.w[2] - (vx / v) * 6];
+      this.tether = this.clip = this.shadow = null;
+      this.sizeTo = 1;
+      this.say('push', 0.6);
+      this.feelEvent('push');
+      return this.enter('BUMPED', now);
+    }
+    if (this.take('hit', now)) {
+      this.say('hit');
+      this.feelEvent('hits');
+      this.dodgeUntil = now + 5;
+      this.dodge();
+      return this.enter('ANNOYED', now);
+    }
+    if (this.take('poked', now)) {
+      if (now < this.dodgeUntil) {
+        // Still cross: it slips away from the next poke.
+        this.dodge();
+        return;
+      }
+      this.feelEvent('tap');
+      return this.enter('NOTICED', now);
+    }
+    if (now - this.pat.at < 0.25 && this.mode !== 'PATTED') {
+      this.say('pat', 0.5);
+      this.feelEvent('pat');
+      this.shadow = this.clip = null;
+      this.enter('PATTED', now, { until: now + 1.4 });
+    } else if (this.mode === 'PATTED' && now - this.pat.at < 0.25) this.plan.until = now + 1.4;
+  }
+
+  private dodge() {
+    const B = this.box;
+    const dx = this.pos[0] - this.ptr.x;
+    const dy = this.pos[1] - this.ptr.y;
+    const d = Math.hypot(dx, dy) || 1;
+    this.vel = [(dx / d) * 5 * B, (dy / d) * 3 * B - 1.5 * B];
+  }
+
+  /** The feeling on top of what the robot does (not while it is thrown about or asleep). */
+  private express(dt: number) {
+    const f = this.feel;
+    const t = this.feelTo;
+    if (!f || !t) return;
+    const k = damp(2.5, dt);
+    for (const key of ['eye', 'squint', 'smile', 'smirk', 'glow', 'energy', 'float', 'speed', 'hover', 'turn', 'neon'] as const) f[key] += (t[key] - f[key]) * k;
+    for (const key of ['head', 'body', 'armL', 'armR'] as const) f[key] = [0, 1, 2].map((i) => f[key][i] + (t[key][i] - f[key][i]) * k) as Vec3;
+    f.look = [f.look[0] + (t.look[0] - f.look[0]) * k, f.look[1] + (t.look[1] - f.look[1]) * k];
+    if (PHYSICAL.has(this.mode) || this.mode === 'SLEEPING' || this.mode === 'DOCKED') return;
+    const g = this.g;
+    for (let i = 0; i < 3; i++) {
+      g.head[i] += f.head[i];
+      g.body[i] += f.body[i];
+      g.armL[i] += f.armL[i];
+      g.armR[i] += f.armR[i];
+    }
+    if (g.eyeOpen > 0.5) g.eyeOpen *= f.eye;
+    g.squint = Math.max(g.squint, f.squint);
+    g.smirk = Math.max(g.smirk, f.smirk);
+    g.smile *= f.smile;
+    g.glow = Math.max(0, g.glow + f.glow);
+    g.energy = Math.max(g.energy, f.energy);
+    g.float *= f.float;
+    g.look = [g.look[0] + f.look[0], g.look[1] + f.look[1]];
+    this.offY -= f.hover * 0.9 * this.box;
+  }
+
+  private thrustFor(dt: number) {
+    const B = this.box;
+    const m = this.mode;
+    const resting =
+      m === 'DOCKED' || m === 'SLEEPING' || m === 'HIDE_AND_SEEK' || (m === 'LOGO_LANDING' && this.plan.phase === 'rest') || (m === 'TEXT_INTERACTION' && this.plan.phase === 'look');
+    const speed = Math.hypot(...this.vel) / (10 * B);
+    const push = Math.hypot(...this.acc) / (30 * B);
+    const want = resting ? 0.04 : Math.min(1, 0.22 + speed * 0.45 + push * 0.35) * (this.feel?.neon ?? 1);
+    this.thrust += (Math.min(1, want) - this.thrust) * damp(want > this.thrust ? 8 : 3, dt);
   }
 
   // ---------- states ----------
@@ -476,6 +668,7 @@ export class QitmirBrain {
   }
 
   private sleepy(): boolean {
+    if (this.persona === 'calm') return false;
     const m = this.mode;
     return m === 'QITMIR_IDLE' || m === 'WATCHING_PAGE' || m === 'WATCHING_CURSOR' || m === 'CHASING_CURSOR' || (m === 'LOGO_LANDING' && this.plan.phase === 'rest');
   }
@@ -483,10 +676,17 @@ export class QitmirBrain {
   /** Is the person actually moving the pointer now (not a twitch)? */
   private moving(now: number, travel = 1.2): boolean {
     const p = this.ptr;
-    return p.known && p.inside && now - p.moved < 0.3 && p.travel > travel * this.box;
+    return p.known && p.inside && now - p.moved < 0.3 && p.travel > travel * this.box && !this.approaching();
   }
 
-  private goHome(now: number) {
+  /** The pointer is slowly coming to the robot itself (to look, to pat it): curiosity, not the person at work. */
+  private approaching(): boolean {
+    const p = this.ptr;
+    return Math.hypot(p.x - this.pos[0], p.y - this.pos[1]) < 1.5 * this.box * this.size && Math.hypot(p.vx, p.vy) < 600;
+  }
+
+  private goHome(now: number, voluntary = false) {
+    this.voluntary = voluntary;
     if (this.mode === 'CURSOR_ATTACHED') this.armed = false;
     this.tether = null;
     // Behind a card: rise out first (the clip stays until it is clear).
@@ -518,11 +718,19 @@ export class QitmirBrain {
     this.shadow = null;
     this.sizeTo = 1;
     this.cool.any = now + GAME_GAP;
+    // A calm robot's trip ends at home.
+    if (this.persona === 'calm') return this.homeFromTrip(now);
     if (next === 'CHASING_CURSOR') this.chase(now);
     else this.enter(next, now, { until: now + 1.5 + this.random() * 2 });
   }
 
+  private homeFromTrip(now: number) {
+    this.cool.trip = now + 35 + this.random() * 45;
+    this.goHome(now, true);
+  }
+
   private chase(now: number, lead = 1) {
+    if (this.persona === 'calm') return this.homeFromTrip(now);
     this.enter('CHASING_CURSOR', now, { still: 1.5 + this.random(), bored: now + 12 + this.random() * 6, lead });
   }
 
@@ -544,7 +752,7 @@ export class QitmirBrain {
         this.q = [0, 0, 0, 1];
         this.size = this.sizeTo = this.home?.scale ?? 1;
         this.clip = this.shadow = this.tether = null;
-        if (!this.flags.dock && this.home) this.liftOff(now);
+        if (!this.flags.dock && this.home && (this.persona === 'qitmir' || this.tripDue(now))) this.liftOff(now);
         return;
       }
 
@@ -574,6 +782,11 @@ export class QitmirBrain {
         // Just out of the launcher: rises off its pad first (thrust, not a jump).
         if (s.from && t < 0.7) return this.seek(s.from[0], s.from[1], 4, 14, 1);
         this.hover(dt);
+        // Calm: a trip is one visit (the logo, a heading, a card…), then home.
+        if (this.persona === 'calm') {
+          if (t > 0.9 && !this.startGame(now)) this.homeFromTrip(now);
+          return;
+        }
         if (this.touch) {
           this.park(dt, now);
         } else if (cursor && this.moving(now)) {
@@ -879,6 +1092,86 @@ export class QitmirBrain {
         return;
       }
 
+      case 'NOTICED': {
+        // A tap: it looks at the person, a little hop and a head tilt.
+        g.lookAt = p.known ? [p.x, p.y] : null;
+        g.lookK = 1.1;
+        g.head[2] += 0.15 * Math.sin(Math.PI * clamp(t / 0.6, 0, 1));
+        g.eyeOpen = 1.12;
+        this.offY -= 0.08 * B * Math.sin(Math.PI * clamp(t / 0.4, 0, 1));
+        this.hover(dt);
+        if (t > 0.8) this.endGame(now);
+        return;
+      }
+
+      case 'PATTED': {
+        // Stroked on the head: eyes soften into happy arcs, it leans into the hand, its light warms.
+        const side = p.x < this.pos[0] ? 1 : -1;
+        g.body[2] += 0.12 * side;
+        g.head[2] += 0.18 * side;
+        g.head[0] -= 0.05;
+        g.eyeOpen = 0.5;
+        g.smile = 1.35;
+        g.squint = 0;
+        g.smirk = 0.2;
+        g.glow = 0.55;
+        g.float = 0.5;
+        this.vel[0] *= 1 - damp(6, dt);
+        this.vel[1] *= 1 - damp(6, dt);
+        if (now > (s.until ?? 0)) this.endGame(now);
+        return;
+      }
+
+      case 'BUMPED': {
+        // Pushed: knocked off balance, wobbles, catches itself.
+        this.vel[0] *= 1 - damp(2.2, dt);
+        this.vel[1] *= 1 - damp(2.2, dt);
+        if (t > 0.25) this.turn(UPRIGHT, 30, 0.4, dt);
+        g.eyeOpen = 1.25;
+        g.squint = 0;
+        g.smirk = 0;
+        g.smile = 0.7;
+        g.armL = [-0.2, 0, -0.5];
+        g.armR = [-0.2, 0, 0.5];
+        g.float = 0;
+        if ((t > 1.1 && qAngle(this.q) < 0.25) || t > 2) this.endGame(now);
+        return;
+      }
+
+      case 'ANNOYED': {
+        // Hit several times: arms folded, eyes narrowed, turned half away — and it keeps its distance for a while.
+        g.armL = [0.1, 0, 0.55];
+        g.armR = [0.1, 0, -0.55];
+        g.squint = 0.85;
+        g.smile = 0.2;
+        g.smirk = 0;
+        g.head[1] += p.x < this.pos[0] ? 0.35 : -0.35;
+        g.head[0] += 0.06;
+        g.glow = 0.5;
+        g.anger = 0.4;
+        this.vel[0] *= 1 - damp(2.5, dt);
+        this.vel[1] *= 1 - damp(2.5, dt);
+        if (t > 2.2) this.endGame(now);
+        return;
+      }
+
+      case 'HIGH_FIVE': {
+        // Hand up, waiting for a high five (a click or a tap on the hand).
+        g.armL = [...GRIP_ARM];
+        g.eyeOpen = 1.15;
+        g.smile = 1.25;
+        g.squint = 0;
+        g.lookAt = p.known ? [p.x, p.y] : null;
+        g.float = 0.4;
+        this.hover(dt);
+        if (t > 3.5) {
+          this.say('nofive', 0.8);
+          this.feelEvent('nofive');
+          this.endGame(now);
+        }
+        return;
+      }
+
       case 'LOGO_LANDING':
         return this.logo(now, dt);
       case 'TEXT_INTERACTION':
@@ -898,7 +1191,7 @@ export class QitmirBrain {
 
   private canGrab(now: number): boolean {
     const p = this.ptr;
-    return !this.touch && this.armed && (this.cool.grab ?? 0) <= now && !this.flags.interactive && !this.flags.selecting && !p.down;
+    return this.persona === 'qitmir' && !this.touch && this.armed && (this.cool.grab ?? 0) <= now && !this.flags.interactive && !this.flags.selecting && !p.down;
   }
 
   private surprise(now: number) {
@@ -1019,6 +1312,8 @@ export class QitmirBrain {
    * move — not on the way home, not while thrown or dizzy. Returns whether it obeyed.
    */
   command(act: string, now: number): boolean {
+    // Resting in the launcher: comes out for it (unless something needs it home).
+    if (this.mode === 'DOCKED' && !this.flags.dock && this.home && ['salto', 'dance', 'happy', 'wave'].includes(act)) this.liftOff(now);
     const busy = ['DOCKED', 'RETURNING', 'THROWN_AWAY', 'TUMBLING', 'DIZZY', 'CURSOR_GRAB'];
     if (busy.includes(this.mode)) return false;
     this.tether = this.clip = this.shadow = null;
@@ -1032,7 +1327,8 @@ export class QitmirBrain {
     } else if (act === 'chase') {
       this.armed = true;
       this.chase(now);
-    } else if (act === 'dance' || act === 'happy' || act === 'wave' || act === 'peace') {
+    } else if (act === 'wave') this.enter('HIGH_FIVE', now);
+    else if (act === 'dance' || act === 'happy' || act === 'peace') {
       this.vel = [this.vel[0] * 0.3, -1.5 * this.box];
       this.enter('VICTORY', now);
     } else return false;
@@ -1056,7 +1352,8 @@ export class QitmirBrain {
     if (ok('text') && T2.texts.some((x) => x.letters.length)) options.push(['text', 3]);
     if (ok('hide') && T2.hides.length) options.push(['hide', 2.5]);
     if (ok('watch') && T2.sights.length) options.push(['watch', 2]);
-    if (ok('salto')) options.push(['salto', 1]);
+    // A calm robot does not leave its launcher just for a salto (it does one when asked).
+    if (ok('salto') && (this.persona === 'qitmir' || only)) options.push(['salto', 1]);
     if (!options.length) return false;
     let r = this.random() * options.reduce((a, [, w]) => a + w, 0);
     let game = options[options.length - 1][0];
@@ -1154,7 +1451,8 @@ export class QitmirBrain {
     const feetY = this.pos[1] + 0.45 * B * this.size;
     // The cursor moved since it began to land: off again.
     const ptr = s.ptr ?? [p.x, p.y];
-    const left = p.known && Math.hypot(p.x - ptr[0], p.y - ptr[1]) > 0.25 * B && now - p.moved < 0.25;
+    // A real move (not a twitch, not the pointer slowly coming over to it) sends it off again.
+    const left = p.known && Math.hypot(p.x - ptr[0], p.y - ptr[1]) > 0.25 * B && this.moving(now, 2);
     if (left || (s.phase === 'rest' && now - (s.t1 ?? now) > 9)) {
       this.vel = [0, -4 * B];
       return this.endGame(now, left && !this.touch ? 'CHASING_CURSOR' : 'QITMIR_IDLE');
@@ -1201,7 +1499,7 @@ export class QitmirBrain {
     const letter = word?.letters[s.i ?? 0];
     if (!word || !letter) return this.endGame(now);
     const spot = this.letterSpot(letter);
-    if (this.moving(now, 2.5) || (this.ptr.inside && Math.hypot(this.ptr.x - this.pos[0], this.ptr.y - this.pos[1]) < 0.8 * B && now - this.ptr.moved < 0.2)) {
+    if (this.moving(now, 2.5) || (this.ptr.inside && Math.hypot(this.ptr.x - this.pos[0], this.ptr.y - this.pos[1]) < 0.8 * B && now - this.ptr.moved < 0.2 && !this.approaching())) {
       return this.endGame(now, this.touch ? 'QITMIR_IDLE' : 'CHASING_CURSOR');
     }
     g.lookAt = [letter.x + letter.w / 2, letter.y + letter.h / 2];
@@ -1367,6 +1665,8 @@ export class QitmirBrain {
 
   private seek(tx: number, ty: number, top: number, accel: number, arrive: number) {
     const B = this.box;
+    // Mood physics: a happy or angry robot flies faster, a sad or sleepy one slower.
+    top *= this.feel?.speed ?? 1;
     const dx = tx - this.pos[0];
     const dy = ty - this.pos[1];
     const d = Math.hypot(dx, dy);
@@ -1412,7 +1712,7 @@ export class QitmirBrain {
 
   private move(dt: number) {
     const B = this.box;
-    const physical = this.mode === 'THROWN_AWAY' || this.mode === 'TUMBLING';
+    const physical = this.mode === 'THROWN_AWAY' || this.mode === 'TUMBLING' || this.mode === 'BUMPED';
     const kinematic = this.mode === 'CURSOR_GRAB' || this.mode === 'CURSOR_ATTACHED';
     if (!kinematic) {
       this.vel[0] += this.acc[0] * dt;
@@ -1431,11 +1731,11 @@ export class QitmirBrain {
     if (this.mode !== 'CURSOR_GRAB') this.hop *= 1 - damp(3, dt);
     if (this.mode !== 'RETURNING') this.edges(physical);
     // Banks into its flight (roll and a turn toward where it goes); physics states and the rope set their own.
-    const own = physical || this.mode === 'CURSOR_ATTACHED' || this.mode === 'DIZZY' || this.mode === 'RECOVERING' || this.mode === 'ANGRY' || this.mode === 'RETURNING';
+    const own = physical || this.mode === 'PATTED' || this.mode === 'CURSOR_ATTACHED' || this.mode === 'DIZZY' || this.mode === 'RECOVERING' || this.mode === 'ANGRY' || this.mode === 'RETURNING';
     if (!own) {
       const [vx, vy] = this.vel;
       const target = qEuler(clamp(vy / (12 * B), -0.22, 0.22), clamp(vx / (16 * B), -0.45, 0.45), clamp(-vx / (22 * B) - this.acc[0] / (260 * B), -0.4, 0.4));
-      this.turn(target, 70, 0.85, dt);
+      this.turn(target, 70 * (this.feel?.turn ?? 1), 0.85, dt);
     }
     this.spin(dt);
   }
@@ -1530,6 +1830,7 @@ export class QitmirBrain {
       energy: g.energy,
       sleep: g.sleep,
       speed: Math.hypot(...this.vel),
+      thrust: this.thrust,
       clip: this.clip,
       shadow: this.shadow,
       tether: this.mode === 'CURSOR_ATTACHED' ? this.tether : null,

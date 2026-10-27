@@ -6,12 +6,12 @@ Bu fayl har sessiyada yangilanadi: yangi sessiya shu yerdan davom etadi. Holat f
 
 Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ tashqi to‘siq
 
-## Joriy holat (2026-10-27)
+## Joriy holat (2026-10-27, 2-sessiya)
 
 | Bosqich | Holat | Izoh |
 |---|---|---|
 | 1. Core foundation | ✅ | branch `feat/sunny-phase1`, production'ga **deploy qilinmagan** |
-| 2. Living character | 🟡 | 10 ta asosiy animatsiya va Qitmir rejimi bor; emotsiya, mood physics, thruster, jismoniy reaksiyalar yo‘q |
+| 2. Living character | 🟡 | emotsiya, mood physics, avtonom hayot, thruster, jismoniy reaksiyalar ✅; bitta renderer va 2D↔3D solishtirish yo‘q |
 | 3. Voice assistant | 🟡 | panelsiz ovoz rejimi bor; wake-word, spatial audio, summon yo‘q |
 | 4. AI intelligence (Gemini) | 🟡 | provayder registri, tokensiz buyruqlar bor; byudjet nazorati, deterministik backend buyruqlari yo‘q |
 | 5. Memory & personality | ⬜ | DB migratsiya + RLS kerak |
@@ -40,19 +40,39 @@ Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ t
 Tekshiruv: 107 unit test, `tsc`, `eslint` toza; brauzer smoke 5/5 (lokal izolyatsiyalangan Supabase).
 **Tekshirilmagan:** haqiqiy mikrofonli ovozli savol → AI javobi → ovozli o‘qish zanjiri (lokal AI/TTS kaliti yo‘q).
 
+## 2-bosqich — bajarildi (2026-10-27, 2-sessiya)
+
+- **Emotional State Controller** — [emotion.ts](../components/assistant/robot/emotion.ts): 20 holat, intensivlik,
+  yarim yemirilish, mantiqiy o‘tishlar (xafa → avval tinchlanadi; yarashish/haqiqiy muvaffaqiyat — darrov), offended →
+  sulking → do‘stona (cheksiz arazlash yo‘q). Hodisalar: tasdiqlangan amal, xato, maqtov/haqorat (matndan,
+  [intents.ts](../lib/assistant/intents.ts) `sentiment`), mahalliy buyruqlar, silash/urish/surish/beshlik, Qitmir,
+  90 s harakatsizlik → uyqusirash, qaytish → cho‘chib uyg‘onish. Ko‘rinishi: launcher robotida `MotionDirector`
+  emotsiya qatlami (faqat bo‘sh/xursand holatda; tinglash/gapirish ustun), sahna robotida `brain.setEmotion`.
+  AI ohangi: so‘rovda `feeling` → [qitmir.ts](../lib/assistant/qitmir.ts) `feelingPrompt` (faqat ohang; ish va faktlar
+  o‘zgarmaydi). Test: `tests/assistant-emotion.test.mjs`.
+- **Mood physics (§11)** — parvoz tezligi, suzish amplitudasi, balandlik, burilish keskinligi, neon kuchi emotsiyaga
+  bog‘liq (test: g‘amgin robot xursanddan sekinroq).
+- **Avtonom hayot oddiy rejimda (§7)** — `brain` `persona: 'calm'`: foydalanuvchi 7 s+ harakatsiz bo‘lsa (lekin 2
+  daqiqadan ko‘p emas) launcher'dan chiqib bitta joyga boradi (logo, sarlavha harflari, karta, tomosha), keyin uyga
+  qaytadi; sayohatlar orasida 35–80 s. Kursorni quvlamaydi; foydalanuvchi ishlasa — uyga. Uyda kadr tsikli to‘xtaydi
+  (sekundiga bir marta tekshiriladi). ⏸ ikkala rejimda. Brauzerda tekshirildi.
+- **Neon thruster (§6)** — sahna robotining tanasi ostida glow + nur, tezlik/tezlanishga bog‘liq, dam olishda deyarli
+  o‘chadi; oddiy rejimda lime, Qitmir'da qizil.
+- **Jismoniy reaksiyalar (§10)** — boshini silash (launcher va uchayotgan robotda), bitta tegish (qaraydi), 3 marta
+  urish (qo‘l qovushtiradi, "Hoy, tinchlikmi?…", keyingisidan qochadi), tez surish (muvozanatini yo‘qotib tiklanadi),
+  "qo‘l ber" → qo‘lini ko‘tarib beshlik kutadi. Sahifa click'i o‘g‘irlanmaydi (canvas `pointer-events:none`).
+  Test: `tests/sunny-life.test.mjs`. **Brauzerda faqat unit darajasida** — sichqoncha imo-ishoralari real qurilmada
+  sinalmagan.
+
+Tekshiruv: 121 unit test, `tsc`, `eslint` toza; brauzer smoke 7/7 (sayohat, uyda qolish, pauza, lime ko‘zlar, Qitmir).
+
 ## Keyingi qadamlar (tartib bilan)
 
-### 2-bosqich — Living character
-1. ⬜ **Bitta doimiy renderer** (§45): hozir 3 ta canvas (launcher, chat sarlavhasi, Qitmir sahnasi). Bitta "stage"
-   renderer'ga birlashtirish → robot sahifa bo‘ylab har ikki rejimda yashaydi, route almashganda saqlanadi.
-2. ⬜ **Autonomous life mode normal rejimda (§7)**: `qitmir/brain.ts` o‘yinlaridan (logo, harflar, karta, tomosha,
-   uyqu) kursor quvishsiz "yumshoq" profil. Sozlama bilan (default — mo‘tadil), forma/modal'da uyga qaytish bor.
-3. ⬜ **Neon thruster (§6)**: uchayotgan robot ostida tezlikka bog‘liq sprite/konus (launcher halqasi uslubida).
-4. ⬜ **Emotional State Controller (§9, §11, §20)**: 20 holat, intensivlik, decay, o‘tishlar; ko‘z/bosh/qo‘l/parvoz
-   tezligi/neon/ovoz prosodiyasi/so‘z tanloviga ta’sir. `MotionDirector` + `QitmirBrain` ustidan bitta qatlam.
-5. ⬜ **Jismoniy reaksiyalar (§10)**: head-pat, tap, push/flick, ketma-ket urish → jahl/chetlab o‘tish. Canvas
-   `pointer-events:none` — hit-test robot doirasida, sahifa click'ini o‘g‘irlamasdan. High-five: chap qo‘l rigi bor.
-6. ⬜ Asl 2D↔3D old ko‘rinishini ortografik solishtirish (avvalgi rekonstruksiya: `robot/sculpt.ts`).
+### 2-bosqichdan qolgan
+1. ⬜ **Bitta doimiy renderer** (§45): hozir 3 ta canvas (launcher, chat sarlavhasi, sahna). Birlashtirish → robot
+   uyda ham, sayohatda ham bitta canvas'da; route almashganda saqlanadi.
+2. ⬜ Asl 2D↔3D old ko‘rinishini ortografik solishtirish (avvalgi rekonstruksiya: `robot/sculpt.ts`).
+3. ⬜ Emotsiya → ovoz prosodiyasi (hozir faqat matn ohangi va harakat).
 
 ### 3-bosqich — Voice
 1. ⬜ **"Sunny" wake-word (§12)**: foreground, ixtiyoriy (🎙 yonida "quloq" tugmasi), `SpeechRecognition` continuous

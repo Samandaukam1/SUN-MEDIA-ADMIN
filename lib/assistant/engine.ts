@@ -3,7 +3,7 @@ import 'server-only';
 import { AiNotConfiguredError } from '@/lib/ai';
 import { agencyKnowledge, budgetHints } from './knowledge';
 import { configuredProviders, type ChatTurn } from './providers';
-import { modePrompt, type AssistantMode } from './qitmir';
+import { feelingPrompt, modePrompt, type AssistantMode, type Feeling } from './qitmir';
 import { agencyDateKey } from '@/lib/time';
 import { textLanguage } from './speech';
 import { runTool, toolLabel, type AssistantAction, type AssistantContext } from './tools';
@@ -84,7 +84,7 @@ function nextDays(): string {
 
 const REPLY_IN = { 'uz-UZ': 'o‘zbek tilida', 'ru-RU': 'rus tilida', 'en-US': 'ingliz tilida' } as const;
 
-async function systemPrompt(ctx: AssistantContext, name: string | null, lastQuestion: string, mode?: AssistantMode): Promise<string> {
+async function systemPrompt(ctx: AssistantContext, name: string | null, lastQuestion: string, mode?: AssistantMode, feeling?: Feeling): Promise<string> {
   const reply = textLanguage(lastQuestion);
   const now = new Date().toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent', dateStyle: 'full', timeStyle: 'short' });
   const role = ctx.audience === 'public' ? SALES : ctx.audience === 'staff' ? STAFF : CLIENT;
@@ -98,6 +98,7 @@ async function systemPrompt(ctx: AssistantContext, name: string | null, lastQues
     '# SUN MEDIA haqida bilimlar\n' + (await agencyKnowledge()),
     // The manner only (Qitmir mode): tools, permissions and confirmations above stay exactly the same.
     modePrompt(mode),
+    feelingPrompt(feeling),
     // Last, so it is fresh when the model starts writing: the knowledge above is Uzbek, the reply follows the visitor.
     `Eslatma: bu javobni ${REPLY_IN[reply.lang]}${reply.cyrillic && reply.lang === 'uz-UZ' ? ', kirill yozuvida' : ''} yoz (boshqa tilda matn so‘ralsa, o‘sha matnning o‘zi so‘ralgan tilda).`,
   ]
@@ -114,7 +115,13 @@ export async function assistantReply(
   history: ChatTurn[],
   ctx: AssistantContext,
   name: string | null,
-  { onText, onStep, signal, mode }: { onText?: (delta: string) => void; onStep?: (e: StepEvent) => void; signal?: AbortSignal; mode?: AssistantMode } = {},
+  {
+    onText,
+    onStep,
+    signal,
+    mode,
+    feeling,
+  }: { onText?: (delta: string) => void; onStep?: (e: StepEvent) => void; signal?: AbortSignal; mode?: AssistantMode; feeling?: Feeling } = {},
 ): Promise<{ reply: string; actions: AssistantAction[] }> {
   const step = async (tool: string, input: Record<string, unknown>) => {
     onStep?.({ phase: 'start', name: tool, label: toolLabel(tool) });
@@ -124,7 +131,7 @@ export async function assistantReply(
   };
   const providers = configuredProviders();
   if (!providers.length) throw new AiNotConfiguredError();
-  const system = await systemPrompt(ctx, name, history[history.length - 1]?.text ?? '', mode);
+  const system = await systemPrompt(ctx, name, history[history.length - 1]?.text ?? '', mode, feeling);
   let failure: unknown;
   for (const provider of providers) {
     // One that fails before writing anything hands over to the next; one that already wrote part of a reply does not

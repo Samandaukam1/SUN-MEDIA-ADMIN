@@ -76,3 +76,13 @@ test('the voice: unchanged SSML normally; in Qitmir mode the same voice with sho
   assert.match(playful, /chi!<break time="280ms"\/> Tamom/);
   assert.ok(!/<break[^>]*>\s*<\/prosody>/.test(playful), 'no pause at the very end');
 });
+
+test('a mood only colours the tone: facts, actions and serious matters stay professional', async () => {
+  const { feelingPrompt } = await import('../lib/assistant/qitmir.ts');
+  assert.equal(feelingPrompt(undefined), '');
+  assert.equal(feelingPrompt('calm'), '');
+  const sulky = feelingPrompt('offended');
+  assert.match(sulky, /arazlab/);
+  assert.match(sulky, /so‘ralgan ishni to‘liq va aniq bajar/);
+  assert.match(sulky, /professional javob ber/);
+});

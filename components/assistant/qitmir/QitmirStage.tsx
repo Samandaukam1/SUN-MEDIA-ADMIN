@@ -5,11 +5,12 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import * as THREE from 'three';
 
-import { buildRobot, FRAME_OFFSET_Y, FRAME_WORLD } from '../robot/model';
+import type { Expression, FeelEvent } from '../robot/emotion';
+import { buildRobot, FRAME_OFFSET_Y, FRAME_WORLD, HEIGHT } from '../robot/model';
 import type { MotionMood } from '../robot/motion';
 import { Boundary, loadPicture, Studio } from '../robot/Robot3D';
 import type { Sculpted } from '../robot/sculpt';
-import { GRIP_ARM, QitmirBrain, type Game, type QPose, type Vec2, type Vec3 } from './brain';
+import { GRIP_ARM, QitmirBrain, type Game, type Persona, type QPose, type Vec2, type Vec3 } from './brain';
 import { interactive, QitmirDom } from './dom';
 import { QITMIR_LIGHT, QITMIR_RED, qitmirTurns, smirked, squinted } from './face';
 import { say } from './quips';
@@ -29,6 +30,12 @@ type Props = {
   cursorFx: boolean;
   /** A local command for one of its tricks ("salto qil"…), new on each id. */
   command?: { name: string; id: number };
+  /** 'qitmir' plays with the cursor; 'calm' (normal mode) takes short trips while the person is idle. */
+  persona: Persona;
+  /** The current feeling (emotion.ts): posture, face and mood physics. */
+  emotion?: Expression;
+  /** Something happened to the robot (a pat, a push, a high five…) for the emotion engine. */
+  onFeel?: (kind: FeelEvent) => void;
   /** The tab is visible. */
   active: boolean;
   /** The launcher's robot square: where the robot takes off and lands. */
@@ -110,6 +117,43 @@ function Player({
     s.renderOrder = 1;
     return s;
   }, []);
+  // The anti-gravity thruster: a soft glow under the robot and a short beam, brighter as it accelerates (lime; red in
+  // Qitmir mode). Fixed to the body, so it tilts with it. Additive, no post-processing.
+  const thruster = useMemo(() => {
+    const group = new THREE.Group();
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: LIME, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    glow.scale.set(0.7, 0.26, 1);
+    const fade = document.createElement('canvas');
+    fade.width = 4;
+    fade.height = 64;
+    const fg = fade.getContext('2d')!;
+    const grad = fg.createLinearGradient(0, 0, 0, 64);
+    grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    fg.fillStyle = grad;
+    fg.fillRect(0, 0, 4, 64);
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.15, 0.03, 1, 20, 1, true).translate(0, -0.5, 0),
+      new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(fade), color: LIME, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }),
+    );
+    group.add(glow, beam);
+    group.position.set(0.03, -HEIGHT / 2 + 0.04, 0);
+    return { group, glow, beam };
+  }, []);
+  useEffect(() => {
+    rig.spin.add(thruster.group);
+    return () => {
+      rig.spin.remove(thruster.group);
+      const gm = thruster.glow.material as THREE.SpriteMaterial;
+      gm.map?.dispose();
+      gm.dispose();
+      const bm = thruster.beam.material as THREE.MeshBasicMaterial;
+      bm.map?.dispose();
+      bm.dispose();
+      thruster.beam.geometry.dispose();
+    };
+  }, [rig, thruster]);
+
   useEffect(() => {
     rig.eyes.add(halo);
     halo.position.set(0, 0, 0.01);
@@ -178,6 +222,7 @@ function Player({
         R.fadeFrom = R.last?.alpha ?? 1;
         P.onDocked();
       } else if (e.type === 'poke') dom.poke(e.id);
+      else if (e.type === 'feel') P.onFeel?.(e.kind);
       else if (e.type === 'say' && t - R.sayAt > 4.5 && F.bubble) {
         R.sayAt = t;
         R.bubbleUntil = t + 1.9;
@@ -263,6 +308,16 @@ function Player({
     rig.particles.visible = pm.opacity > 0.01;
     if (rig.particles.visible) rig.particles.rotation.y += dt * (1.2 + shown.energy * 3);
     rig.ring.visible = false;
+    const th = shown.thrust;
+    const gm = thruster.glow.material as THREE.SpriteMaterial;
+    const bm = thruster.beam.material as THREE.MeshBasicMaterial;
+    gm.color.copy(LIME).lerp(QITMIR_LIGHT, q);
+    bm.color.copy(gm.color);
+    gm.opacity = 0.12 + 0.5 * th;
+    thruster.glow.scale.set(0.55 + 0.35 * th, 0.2 + 0.1 * th, 1);
+    bm.opacity = Math.max(0, th - 0.15) * 0.55;
+    thruster.beam.visible = bm.opacity > 0.01;
+    thruster.beam.scale.set(1, 0.12 + 0.75 * th, 1);
 
     // Page effects: the contact shadow where it stands, the tether while it holds the cursor, a short trail at speed.
     const B = P.box;
@@ -338,7 +393,7 @@ export default function QitmirStage(props: Props) {
   const [docked, setDocked] = useState(true);
   const fx = useRef<Fx>({ stage: null, wrap: null, shadow: null, tether: null, ring: null, bubble: null, zzz: null, trail: [] });
   // One brain and one page reader per stage; the props are read every frame instead.
-  const [brain] = useState(() => new QitmirBrain({ box: props.box, touch: props.touch, now: now(), home: homeOf(props.home.current, props.box), viewport: [innerWidth, innerHeight] }));
+  const [brain] = useState(() => new QitmirBrain({ box: props.box, touch: props.touch, persona: props.persona, now: now(), home: homeOf(props.home.current, props.box), viewport: [innerWidth, innerHeight] }));
   const [dom] = useState(() => new QitmirDom());
   // R3F drops the WebGL context a moment after the canvas unmounts: only a loss while the stage is up is a failure.
   const alive = useRef(true);
@@ -370,8 +425,29 @@ export default function QitmirStage(props: Props) {
   }, [fail]);
 
   useEffect(() => {
-    if (props.command) brain.command(props.command.name, now());
+    // A trick on request may bring it out of the launcher: draw again.
+    if (props.command && brain.command(props.command.name, now())) setDocked(false);
   }, [brain, props.command]);
+  useEffect(() => brain.setPersona(props.persona), [brain, props.persona]);
+  useEffect(() => {
+    if (props.emotion) brain.setEmotion(props.emotion);
+  }, [brain, props.emotion]);
+
+  // Resting in the launcher in normal mode: nothing is drawn; about once a second the robot is asked whether it wants
+  // to go on a trip (the person idle for a while, something worth a visit on the page).
+  useEffect(() => {
+    if (!docked || props.persona !== 'calm' || !props.active) return;
+    const id = setInterval(() => {
+      const t = now();
+      const P = propsRef.current;
+      brain.setHome(homeOf(P.home.current, P.box));
+      const targets = dom.refresh(t);
+      if (targets) brain.setTargets(targets);
+      brain.setFlags({ dock: P.dock || dom.busy(t), chat: P.chat, cursorFx: P.cursorFx });
+      if (brain.wantsOut(t)) setDocked(false);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [docked, props.persona, props.active, brain, dom]);
 
   // Development only: a handle for QA and the browser tests (state, and a game on demand). Not in production builds.
   useEffect(() => {
@@ -438,7 +514,7 @@ export default function QitmirStage(props: Props) {
 
   const S = Math.round(props.box * ROOM);
   // Nothing to draw while it rests in the launcher with no reason to leave.
-  const running = props.active && !(docked && props.dock);
+  const running = props.active && !(docked && (props.dock || props.persona === 'calm'));
   return (
     <div className="qm-stage" aria-hidden ref={(el) => void (fx.current.stage = el)}>
       <div className="qm-shadow" ref={(el) => void (fx.current.shadow = el)} />

@@ -44,6 +44,14 @@ const LINES: Record<LocalAct, string[]> = {
   peace: ['Bunaqa deng endi! Qani, nima qilamiz? 😏', 'Yarashdik! Ishni davom ettiramiz.'],
 };
 
+/** How a message feels to Sunny (its mood only; the message still goes to the assistant). */
+export function sentiment(text: string): 'insult' | 'praise' | null {
+  const t = normalize(text);
+  if (/(^| )(hech narsani? bilmaysan|ahmoq|tentak|jinni|foydasiz|befoyda|yomonsan|kerak emassan|tupoy)( |$)/u.test(t)) return 'insult';
+  if (/(^| )(barakalla|zorsan|zor ekansan|qoyil|aqlli(san)?|rahmat|raxmat|yaxshi ishlading|malades|molodets|ofarin|zor ishlading)( |$)/u.test(t)) return 'praise';
+  return null;
+}
+
 const last = new Map<LocalAct, string>();
 
 /** A short message the robot answers by itself, or null (then it goes to the assistant). */

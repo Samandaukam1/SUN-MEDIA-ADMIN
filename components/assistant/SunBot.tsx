@@ -2,10 +2,11 @@
 
 import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { LocalAct } from '@/lib/assistant/intents';
 import { RobotFace } from './RobotFace';
+import { EmotionEngine, expressionOf, type Feeling, type FeelEvent } from './robot/emotion';
 import type { RobotCue } from './robot/Robot3D';
 import { store, stored } from './session';
 import type { ChatAudience, ChatFace } from './SunBotChat';
@@ -77,6 +78,24 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
   // Voice mode: each press of the mic asks the chat (loaded on demand) to listen without opening its panel.
   const [voiceAsk, setVoiceAsk] = useState(0);
   const [command, setCommand] = useState<{ name: LocalAct; id: number } | undefined>(undefined);
+  // Sunny's feelings (emotion.ts): every event that touches it goes through one engine; the robots show the result.
+  const emo = useRef<EmotionEngine | null>(null);
+  const [feeling, setFeeling] = useState<Feeling>({ name: 'friendly', k: 0 });
+  const expression = useMemo(() => expressionOf(feeling), [feeling]);
+  const syncFeeling = useCallback(() => {
+    const f = emo.current?.feeling;
+    if (!f) return;
+    // Only a real change re-renders (intensity in steps of 0.05).
+    setFeeling((old) => (old.name === f.name && Math.abs(old.k - f.k) < 0.05 ? old : { name: f.name, k: Math.round(f.k * 20) / 20 }));
+  }, []);
+  const feel = useCallback(
+    (kind: FeelEvent) => {
+      const now = performance.now() / 1000;
+      (emo.current ??= new EmotionEngine(now)).event(kind, now);
+      syncFeeling();
+    },
+    [syncFeeling],
+  );
   const [cue, setCue] = useState<RobotCue | undefined>(undefined);
   // The header robot (phones): its own ready / failed state; it falls back to the flat robot on its own.
   const [head3d, setHead3d] = useState<'loading' | 'ready' | 'failed'>('loading');
@@ -89,7 +108,35 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
   const onHeadFail = useCallback(() => setHead3d('failed'), []);
   const onReplied = useCallback(() => sendCue('replied'), [sendCue]);
   // Only after the server confirmed the change (or refused it): never from the chat's own guess.
-  const onOutcome = useCallback((ok: boolean) => sendCue(ok ? 'success' : 'fail'), [sendCue]);
+  const onOutcome = useCallback(
+    (ok: boolean) => {
+      sendCue(ok ? 'success' : 'fail');
+      feel(ok ? 'success' : 'fail');
+    },
+    [sendCue, feel],
+  );
+
+  // Feelings fade with time; a long quiet spell makes Sunny sleepy, the person's return wakes it with a start.
+  useEffect(() => {
+    let last = performance.now();
+    const mark = () => {
+      const was = performance.now() - last > 90_000;
+      last = performance.now();
+      if (was) feel('wake');
+    };
+    const opts = { passive: true } as const;
+    for (const type of ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart'] as const) window.addEventListener(type, mark, opts);
+    const id = setInterval(() => {
+      const e = (emo.current ??= new EmotionEngine(performance.now() / 1000));
+      e.tick(performance.now() / 1000);
+      if (performance.now() - last > 90_000 && e.feeling.name !== 'sleepy') feel('idle');
+      else syncFeeling();
+    }, 1000);
+    return () => {
+      clearInterval(id);
+      for (const type of ['pointermove', 'pointerdown', 'keydown', 'wheel', 'touchstart'] as const) window.removeEventListener(type, mark);
+    };
+  }, [feel, syncFeeling]);
 
   useEffect(() => {
     const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
@@ -157,13 +204,13 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
     setOpen(true);
   };
 
-  // Qitmir mode plays (the robot leaves its launcher) only with the 3D robot and without reduced motion; otherwise the
-  // mode is the sly face and the personality alone.
-  const play = qitmir && !paused && three.ok && three.ready && !three.calm && !stageFailed;
+  // The robot may leave its launcher (Qitmir play, or short trips round the page in normal mode) only with the 3D robot
+  // and without reduced motion; the pause button keeps it home. Otherwise Qitmir is the sly face and personality alone.
+  const roam = !paused && three.ok && three.ready && !three.calm && !stageFailed;
   useEffect(() => {
-    if (play) setStage(true);
+    if (roam) setStage(true);
     else if (!out) setStage(false);
-  }, [play, out]);
+  }, [roam, out]);
   const onOut = useCallback(() => setOut(true), []);
   const onDocked = useCallback(() => setOut(false), []);
   const onStageFail = useCallback(() => {
@@ -182,14 +229,19 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
       const cue = ({ dance: 'dance', salto: 'spin', angry: 'fail', sleep: 'doze', happy: 'success', wave: 'welcome', peace: 'replied', chase: 'tap', stop: null } as const)[act];
       if (cue) sendCue(cue);
       setCommand((c) => ({ name: act, id: (c?.id ?? 0) + 1 }));
+      const kind = ({ dance: 'dance', salto: 'salto', angry: 'angry', sleep: 'sleep', happy: 'happy', chase: 'chase', wave: 'wave', peace: 'reconcile', stop: null } as const)[act];
+      if (kind) feel(kind);
     },
-    [sendCue],
+    [sendCue, feel],
   );
   const toggleQitmir = () => {
     const next = !qitmir;
     setQitmir(next);
     store('sunbot:qitmir', next ? '1' : '0');
-    if (next) setWanted(true);
+    if (next) {
+      setWanted(true);
+      feel('qitmir');
+    }
   };
   const togglePause = () => {
     setPaused((p) => {
@@ -204,9 +256,34 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
     });
   };
 
+  // A pat: strokes back and forth over the launcher robot's head (desktop).
+  const pat = useRef({ x: 0, dir: 0, times: [] as number[], at: 0 });
+  const stroke = (clientX: number, clientY: number) => {
+    const el = launcher.current;
+    const r = el?.getBoundingClientRect();
+    const P = pat.current;
+    const dx = clientX - P.x;
+    P.x = clientX;
+    if (!r || clientY > r.top + r.height * 0.45 || Math.abs(dx) < 3) return;
+    const dir = Math.sign(dx);
+    if (dir === P.dir) return;
+    P.dir = dir;
+    const now = performance.now();
+    P.times = P.times.filter((t) => now - t < 1600);
+    P.times.push(now);
+    if (P.times.length >= 3 && now - P.at > 2500) {
+      P.at = now;
+      P.times = [];
+      feel('pat');
+      sendCue('replied');
+    }
+  };
+
   // Eyes follow the pointer over the launcher (desktop): two CSS variables, written at most once a frame.
   const onPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (e.pointerType !== 'mouse' || look.current) return;
+    if (e.pointerType !== 'mouse') return;
+    stroke(e.clientX, e.clientY);
+    if (look.current) return;
     const { clientX, clientY } = e;
     look.current = requestAnimationFrame(() => {
       look.current = 0;
@@ -231,7 +308,10 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
           box={three.compact ? 84 : 116}
           touch={three.touch}
           lite={lite}
-          dock={!play || open || BUSY.has(face.mood)}
+          dock={!roam || open || BUSY.has(face.mood)}
+          persona={qitmir ? 'qitmir' : 'calm'}
+          emotion={expression}
+          onFeel={feel}
           on={qitmir}
           chat={face.mood}
           cursorFx={cursorFx}
@@ -248,6 +328,8 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
           key={audience}
           audience={audience}
           qitmir={qitmir}
+          feeling={feeling.name}
+          onFeel={feel}
           open={open}
           closing={closing}
           onClose={close}
@@ -273,6 +355,7 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
                     compact
                     roam={false}
                     qitmir={qitmir}
+                    emotion={expression}
                     active={open && three.visible}
                     onReady={onHeadReady}
                     onFail={onHeadFail}
@@ -331,6 +414,7 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
                   compact={three.compact}
                   roam={!open}
                   qitmir={qitmir}
+                  emotion={expression}
                   // On a phone the open chat covers the launcher: nothing to draw then; nor while the robot is out playing.
                   active={three.visible && !(open && three.compact) && !out}
                   onReady={on3dReady}
@@ -366,8 +450,8 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
             </svg>
             <span className="sb-qm-label">Qitmir rejim</span>
           </button>
-          {qitmir && three.ok && !three.calm ? (
-            <button type="button" className="sb-qm-tool" aria-pressed={paused} onClick={togglePause} aria-label={paused ? 'O‘yinni davom ettirish' : 'O‘yinni pauza qilish'} title={paused ? 'O‘yinni davom ettirish' : 'Pauza: robot joyida qoladi'}>
+          {three.ok && !three.calm ? (
+            <button type="button" className="sb-qm-tool" aria-pressed={paused} onClick={togglePause} aria-label={paused ? 'Sunny harakatini davom ettirish' : 'Sunny harakatini to‘xtatish'} title={paused ? 'Davom ettirish' : 'Pauza: Sunny joyida qoladi'}>
               {paused ? (
                 <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden>
                   <path d="M8 5.5v13l10.5-6.5z" />

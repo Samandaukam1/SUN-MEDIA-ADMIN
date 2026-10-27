@@ -15,6 +15,8 @@
  *   + energy (10) — a burst when an answer is ready after thinking.
  */
 
+import type { Expression } from './emotion';
+
 export type MotionMood = 'idle' | 'listening' | 'thinking' | 'working' | 'speaking' | 'happy' | 'error' | 'offline';
 export type MotionCue = 'welcome' | 'farewell' | 'replied' | 'tap' | 'success' | 'fail' | 'dance' | 'spin' | 'doze';
 /** Cues that report something to the person: they play in every state (the others wait for a free robot). */
@@ -47,6 +49,9 @@ export type Pose = {
   energy: number;
   /** Warning colour on the eyes (a failed action, an error), 0–1. */
   alarm: number;
+  /** Feeling on the face (emotion layer): narrowed, slanted eyes and a lopsided smile, 0–1 each. */
+  squint: number;
+  smirk: number;
 };
 
 const CUE_SECONDS: Record<MotionCue, number> = { welcome: 1.9, farewell: 1.1, replied: 0.9, tap: 0.6, success: 2.2, fail: 1.7, dance: 2.4, spin: 1.3, doze: 4 };
@@ -91,6 +96,8 @@ export function restPose(): Pose {
     glow: 0.25,
     energy: 0,
     alarm: 0,
+    squint: 0,
+    smirk: 0,
   };
 }
 
@@ -109,6 +116,10 @@ export class MotionDirector {
   private readonly compact: boolean;
   private readonly float: number;
   private roam = true;
+  /** The feeling shown (eased toward `feelTo`, so a change of mood is a transition, not a jump). */
+  private feel: Expression | null = null;
+  private feelTo: Expression | null = null;
+  private lastT: number | null = null;
 
   /**
    * `calm` (reduced motion): no turns or flights, a gentle float only; the chat states still show. `float` scales the
@@ -154,6 +165,24 @@ export class MotionDirector {
     if (near) this.stopIdle(now);
   }
 
+  /** The emotion layer (see emotion.ts): how the robot carries itself while nothing else is asked of it. */
+  setEmotion(e: Expression) {
+    this.feelTo = e;
+    this.feel ??= { ...e, head: [...e.head], body: [...e.body], armL: [...e.armL], armR: [...e.armR], look: [...e.look] };
+  }
+
+  private easeFeeling(now: number) {
+    const dt = this.lastT === null ? 0 : Math.min(0.1, Math.max(0, now - this.lastT));
+    this.lastT = now;
+    const k = 1 - Math.exp(-2.5 * dt);
+    const f = this.feel;
+    const t = this.feelTo;
+    if (!f || !t) return;
+    for (const key of ['eye', 'squint', 'smile', 'smirk', 'glow', 'energy', 'float', 'speed', 'hover', 'turn', 'neon'] as const) f[key] += (t[key] - f[key]) * k;
+    for (const key of ['head', 'body', 'armL', 'armR'] as const) f[key] = [0, 1, 2].map((i) => f[key][i] + (t[key][i] - f[key][i]) * k) as [number, number, number];
+    f.look = [f.look[0] + (t.look[0] - f.look[0]) * k, f.look[1] + (t.look[1] - f.look[1]) * k];
+  }
+
   /** Off while the chat panel is open beside it: no flight (an ongoing one comes home), turns and glances stay. */
   setRoam(on: boolean, now: number) {
     this.roam = on;
@@ -192,9 +221,14 @@ export class MotionDirector {
     const p = restPose();
     const t = now;
     const m = this.mood;
+    this.easeFeeling(now);
+    // No feeling set (tests, or before the first one): no emotion layer.
+    const f = this.feel ?? { eye: 1, squint: 0, smile: 1, smirk: 0, glow: 0, energy: 0, head: [0, 0, 0], body: [0, 0, 0], armL: [0, 0, 0], armR: [0, 0, 0], look: [0, 0], float: 1, speed: 1, hover: 0, turn: 1, neon: 1 };
 
-    // 01 — anti-gravity float: rise and fall with a little drift, tilt and turn; the head trails the body.
-    const amp = this.float * (m === 'listening' ? 0.45 : m === 'thinking' || m === 'working' ? 0.6 : m === 'offline' ? 0.35 : 1);
+    // 01 — anti-gravity float: rise and fall with a little drift, tilt and turn; the head trails the body. Mood physics:
+    // a happy robot floats livelier and a little higher, a sad or sleepy one low and slow.
+    const amp = this.float * f.float * (m === 'listening' ? 0.45 : m === 'thinking' || m === 'working' ? 0.6 : m === 'offline' ? 0.35 : 1);
+    p.pos[1] += f.hover;
     p.pos[1] += amp * (0.055 * Math.sin(0.95 * t) + 0.02 * Math.sin(2.3 * t + 1.3));
     p.pos[0] += amp * 0.025 * Math.sin(0.41 * t + 0.7);
     p.body = [amp * 0.035 * Math.sin(0.8 * t + 0.4), amp * 0.09 * Math.sin(0.33 * t), amp * 0.045 * Math.sin(0.57 * t + 1.1)];
@@ -329,6 +363,23 @@ export class MotionDirector {
       p.smile = 0;
       p.flat = 1;
       p.glow = 0;
+    }
+
+    // The feeling, while the chat asks nothing else of the robot (listening, thinking, speaking keep their own face).
+    if (m === 'idle' || m === 'happy') {
+      for (let i = 0; i < 3; i++) {
+        p.head[i] += f.head[i];
+        p.body[i] += f.body[i];
+        p.armL[i] += f.armL[i];
+        p.armR[i] += f.armR[i];
+      }
+      p.eyeOpen *= f.eye;
+      p.smile *= f.smile;
+      p.glow = Math.max(0, p.glow + f.glow);
+      p.energy = Math.max(p.energy, f.energy);
+      p.look = [p.look[0] + f.look[0], p.look[1] + f.look[1]];
+      p.squint = f.squint;
+      p.smirk = f.smirk;
     }
 
     // 09 and the other cues, each faded in and out.

@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { QITMIR_LIGHT, QITMIR_RED, QITMIR_REST, qitmirTurns, smirked, squinted } from '../qitmir/face';
 import type { SoundSubscribe } from '../voice';
 import { buildRobot, FACE_URL, FRAME_OFFSET_Y, FRAME_WORLD, HEIGHT, IMAGE_URL, sculptPicture } from './model';
+import type { Expression } from './emotion';
 import type { Sculpted } from './sculpt';
 import { MotionDirector, type MotionCue, type MotionMood } from './motion';
 
@@ -50,6 +51,8 @@ type Props = {
   active: boolean;
   /** Qitmir mode: red eyes and a sly look, eased in and out (the robot itself is unchanged). */
   qitmir?: boolean;
+  /** The current feeling (emotion.ts), shown while the chat asks nothing else of the robot. */
+  emotion?: Expression;
   onReady: () => void;
   onFail: () => void;
 };
@@ -76,7 +79,7 @@ function slerpTo(obj: THREE.Object3D, [x, y, z]: [number, number, number], t: nu
   obj.quaternion.slerp(quat, t);
 }
 
-function Robot({ image, face, parts, mood, sound, cue, box, room, calm, compact, roam, qitmir = false, shadows, onBuilt }: Omit<Props, 'active' | 'onReady' | 'onFail'> & { image: HTMLImageElement; face: HTMLImageElement; parts: Sculpted[]; shadows: boolean; onBuilt: () => void }) {
+function Robot({ image, face, parts, mood, sound, cue, box, room, calm, compact, roam, qitmir = false, emotion, shadows, onBuilt }: Omit<Props, 'active' | 'onReady' | 'onFail'> & { image: HTMLImageElement; face: HTMLImageElement; parts: Sculpted[]; shadows: boolean; onBuilt: () => void }) {
   const rig = useMemo(() => buildRobot(image, face, parts), [image, face, parts]);
   const { viewport, clock, gl, scene } = useThree();
   const envSet = useRef(false);
@@ -94,6 +97,9 @@ function Robot({ image, face, parts, mood, sound, cue, box, room, calm, compact,
   }, [rig, onBuilt]);
   useEffect(() => director.setRoam(roam, clock.elapsedTime), [director, roam, clock]);
   useEffect(() => director.setMood(mood, clock.elapsedTime), [director, mood, clock]);
+  useEffect(() => {
+    if (emotion) director.setEmotion(emotion);
+  }, [director, emotion]);
   useEffect(() => {
     if (cue) director.cue(cue.name, clock.elapsedTime);
   }, [director, cue, clock]);
@@ -168,9 +174,9 @@ function Robot({ image, face, parts, mood, sound, cue, box, room, calm, compact,
     // audio with the 2D robot's proportions (30 px wide, 5–27 px tall on the picture).
     red.current = THREE.MathUtils.lerp(red.current, qitmir ? 1 : 0, damp(4, dt));
     const q = red.current < 0.002 ? 0 : red.current;
-    const squint = QITMIR_REST.squint * q;
-    const smirk = QITMIR_REST.smirk * q;
-    if (q || rig.lids[0].rotation.z) qitmirTurns(rig, squint, smirk);
+    const squint = Math.max(QITMIR_REST.squint * q, pose.squint);
+    const smirk = Math.max(QITMIR_REST.smirk * q, pose.smirk);
+    if (squint || smirk || rig.lids[0].rotation.z) qitmirTurns(rig, squint, smirk);
     rig.lids.forEach((lid, i) => (lid.scale.y = THREE.MathUtils.lerp(lid.scale.y, squinted(pose.eyeOpen, squint, smirk, i), damp(pose.eyeOpen < 0.5 ? 40 : 14, dt))));
     rig.eyes.position.x = THREE.MathUtils.lerp(rig.eyes.position.x, rig.eyeRest.x + pose.look[0] * 0.035, damp(12, dt));
     rig.eyes.position.y = THREE.MathUtils.lerp(rig.eyes.position.y, rig.eyeRest.y + pose.look[1] * 0.025, damp(12, dt));

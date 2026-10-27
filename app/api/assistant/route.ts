@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { AiFailedError, AiNotConfiguredError } from '@/lib/ai';
 import { assistantReply } from '@/lib/assistant/engine';
+import { FEELINGS } from '@/lib/assistant/qitmir';
 import { assistantContext, corsHeaders, rateLimited } from '@/lib/assistant/request';
 
 export const runtime = 'nodejs';
@@ -17,6 +18,8 @@ const body = z.object({
   stream: z.boolean().optional(),
   /** Qitmir mode (the widget's switch): Sunny's manner only. */
   mode: z.enum(['qitmir']).optional(),
+  /** Sunny's simulated mood in the widget: the tone only. */
+  feeling: z.enum(FEELINGS).optional(),
 });
 const MAX_TEXT = 2000;
 
@@ -56,7 +59,7 @@ export async function POST(request: NextRequest) {
 
   if (!parsed.data.stream) {
     try {
-      const result = await assistantReply(history, ctx, name, { signal: request.signal, mode: parsed.data.mode });
+      const result = await assistantReply(history, ctx, name, { signal: request.signal, mode: parsed.data.mode, feeling: parsed.data.feeling });
       return NextResponse.json({ ...result, audience: ctx.audience }, { headers });
     } catch (error) {
       const { status, error: message } = failure(error);
@@ -81,6 +84,7 @@ export async function POST(request: NextRequest) {
           onStep: (step) => send({ t: 'step', ...step }),
           signal: request.signal,
           mode: parsed.data.mode,
+          feeling: parsed.data.feeling,
         });
         send({ t: 'done', ...result, audience: ctx.audience });
       } catch (error) {

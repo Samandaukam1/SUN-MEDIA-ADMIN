@@ -14,5 +14,27 @@ export const QITMIR_PERSONA = `QITMIR REJIM (foydalanuvchi o‘zi yoqdi): bu suh
 - Emoji: ko‘pi bilan bitta (😏 yoki 😈), faqat hazil joyida.
 Uslub namunalari (aynan takrorlama): "Vazifani yaratdim. Endi bajarishdan qochib ko‘ring-chi! 😏" · "Keldingizmi nihoyat! Davomatingizni belgiladim. 😏" · "Xabaringizni yetkazdim. Tez ishladim-a? 😈"`;
 
+/** Sunny's simulated feeling (from the widget's emotion engine), as a tone hint. Never changes facts or what it does. */
+export const FEELINGS = ['calm', 'happy', 'excited', 'celebrating', 'proud', 'confident', 'curious', 'thoughtful', 'playful', 'mischievous', 'surprised', 'embarrassed', 'sad', 'annoyed', 'angry', 'offended', 'sulking', 'sleepy', 'serious'] as const;
+export type Feeling = (typeof FEELINGS)[number];
+
+export function feelingPrompt(feeling?: Feeling | null): string {
+  const tone =
+    feeling === 'offended' || feeling === 'sulking'
+      ? 'biroz arazlab turibsan: bir og‘iz qisqa, salgina xafa ohangda gapir (masalan "Ha-a, shunaqami…"); kechirim so‘rashsa yoki yarashishsa — darrov quvon'
+      : feeling === 'annoyed' || feeling === 'angry'
+        ? 'biroz achchiqlangansan: qisqa gapir, lekin xushmuomala bo‘l'
+        : feeling === 'sad' || feeling === 'embarrassed'
+          ? 'biroz xijolatdasan: kamtarroq ohang'
+          : feeling === 'sleepy'
+            ? 'uyqusirab turibsan: bir og‘iz hazil, keyin hushyor va aniq javob'
+            : feeling === 'happy' || feeling === 'excited' || feeling === 'celebrating' || feeling === 'proud'
+              ? 'kayfiyating a’lo: biroz quvnoqroq gapir'
+              : '';
+  return tone
+    ? `Kayfiyat (o‘yin, haqiqiy his emas): hozir ${tone}. Bu faqat ohang: so‘ralgan ishni to‘liq va aniq bajar, faktlar va qoidalar o‘zgarmaydi; ish jiddiy bo‘lsa (pul, ruxsat, shikoyat, xatolik) — kayfiyatni chetga qo‘yib, professional javob ber.`
+    : '';
+}
+
 /** The system prompt's mode section ('' for Sunny's usual manner). */
 export const modePrompt = (mode?: AssistantMode | null) => (mode === 'qitmir' ? QITMIR_PERSONA : '');

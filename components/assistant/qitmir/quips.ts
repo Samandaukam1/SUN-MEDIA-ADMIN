@@ -17,6 +17,11 @@ const SAY: Record<SayKey, string[]> = {
   text: ['Qiziq harf ekan…', 'Bu harfni tekshirib ko‘ray 🧐'],
   tap: ['Hi-hi, qitiq bo‘ldi!', 'Yana bir marta! 😏'],
   bored: ['Zerikdim… boshqa joyni ko‘raman.', 'Ushlab turish zerikarli ekan 😏'],
+  hit: ['Hoy, tinchlikmi? Men sizga nima qildim?!', 'Bo‘ldi-da, og‘riydi-ku! 😤', 'Yana ursangiz, qochib ketaman!'],
+  five: ['Beshlik! ✋', 'Zo‘r! Mana bu jamoa!'],
+  nofive: ['Mayli, keyinroq…', 'Qo‘lim osilib qoldi-ku…'],
+  pat: ['Hi-hi, yoqimli…', 'Yana silang-chi 😊'],
+  push: ['Voy! Muvozanatim…', 'Ehtiyot bo‘ling-da!'],
 };
 
 /** After the system confirmed a change (tool name as in the chat's action chips). */

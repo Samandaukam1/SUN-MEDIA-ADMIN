@@ -1,6 +1,7 @@
 import 'server-only';
 
-import { AiNotConfiguredError } from '@/lib/ai';
+import { AiFailedError, AiNotConfiguredError } from '@/lib/ai';
+import { BUDGET_SPENT, withinBudget } from './budget';
 import { agencyKnowledge, budgetHints } from './knowledge';
 import { pagePrompt, type PageContext } from './context';
 import { memoryContext, styleContext } from './memory';
@@ -188,6 +189,8 @@ export async function assistantReply(
   }
   const providers = configuredProviders();
   if (!providers.length) throw new AiNotConfiguredError();
+  // Only questions that need the AI count against the person's daily share (exact commands above are free).
+  if (!(await withinBudget(ctx))) throw new AiFailedError(ctx.audience === 'public' ? BUDGET_SPENT.public : BUDGET_SPENT.member);
   const system = await systemPrompt(ctx, name, history[history.length - 1]?.text ?? '', mode, feeling, page);
   let failure: unknown;
   for (const provider of providers) {

@@ -7933,6 +7933,10 @@ export type Database = {
         }
         Returns: string
       }
+      assistant_spend: {
+        Args: { p_member: boolean; p_who: string }
+        Returns: boolean
+      }
       authorize_password_reset: { Args: { p_user_id: string }; Returns: string }
       cancel_sun_coin_purchase: { Args: { p_request: string }; Returns: Json }
       change_staff_role: {

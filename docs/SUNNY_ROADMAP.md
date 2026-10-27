@@ -13,12 +13,12 @@ Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ t
 | 1. Core foundation | ✅ | branch `feat/sunny-phase1`; 1–5-bosqich kodi production'da (`59c1fcb`, 2026-10-27, ikkala Vercel loyihasi) |
 | 2. Living character | 🟡 | emotsiya, mood physics, avtonom hayot, thruster, jismoniy reaksiyalar ✅; bitta renderer va 2D↔3D solishtirish yo‘q |
 | 3. Voice assistant | ✅ | wake-word, summon, barge-in, spatial audio; ovoz rejimida robot turgan joyida gapiradi |
-| 4. AI intelligence (Gemini) | 🟡 | provayder registri, tokensiz buyruqlar, deterministik backend buyruqlari ✅; byudjet va xulosa — DB kerak |
+| 4. AI intelligence (Gemini) | ✅ | provayder registri, tokensiz buyruqlar, deterministik backend buyruqlari, kunlik AI byudjeti; suhbat xulosasi ataylab yo‘q (pastda) |
 | 5. Memory & personality | 🟡 | xotira, uslub, sozlamalar, rolga mos ohang ✅ — production'da (migratsiya qo‘llangan); xotira sahifasi va avtomatik takliflar yo‘q |
 | 6. Action agent | 🟡 | mission mode, smart delegation, predictive, universal search, partner concierge ✅ (lokal bazada sinalgan, deploy qilinmagan); hamkor tasdiqlashi — ilovada |
 | 7. Advanced experiences | ✅ | gologramma kartalar, bayram, rituallar, proaktiv reaksiya, brifing, 3 rejim, emotsiya→ovoz; ⛔ ovoz biometriyasi (§40, sababi pastda) |
 | 8. Cross-platform app | ✅ | PWA + Web Push production'da (migratsiya, push-dispatch v4, VAPID); audit + §42 DB testi 35/35; haqiqiy qurilmada sinalmagan |
-| 9. Integration & release | ⬜ | |
+| 9. Integration & release | ✅ | to‘liq test to‘plami, unumdorlik o‘lchovi, production build, deploy (pastda) |
 
 ## 1-bosqich — bajarildi (2026-10-27)
 
@@ -252,13 +252,58 @@ To‘liq DB to‘plami: 1394 test, faqat oldindan mavjud ikki o‘yin testi yiqi
 o‘yin analitikasi; Sunny'ga aloqasi yo‘q, o‘yin mantig‘iga tegilmadi).
 ⛔ Sinalmagan: haqiqiy iPhone/Android/Windows/macOS'da push yetib kelishi (qurilma yo‘q; production'da so‘nggi 3 kunda push trafik bo‘lmagan).
 
+## 9-bosqich — integratsiya va reliz (2026-10-27, 7-sessiya)
+
+- **Kunlik AI byudjeti** — [20261028100000_assistant_budget.sql](../supabase/migrations/20261028100000_assistant_budget.sql),
+  [budget.ts](../lib/assistant/budget.ts): AI kerak bo‘lgan har bir savol — shu odam uchun bugun +1 (akkaunt yoki
+  mehmonning bir tomonlama kaliti; IP yoki ism saqlanmaydi). Limit `app_settings`da (egasi o‘zgartiradi): xodim/hamkor
+  300, mehmon 40. Limit tugasa — halol xabar va nima ishlayverishi; aniq buyruqlar (vazifalarim, keldim, brifing)
+  hisoblanmaydi. Hisoblagich ishlamasa (migratsiyasiz) — savol o‘tadi. `private` sxemada, faqat server kaliti.
+  DB testi [043_assistant_budget.test.sql](../supabase/tests/database/043_assistant_budget.test.sql) 11/11, integratsiya #27.
+- **Suhbat xulosasi** — ataylab qilinmadi: xulosa har safar qo‘shimcha AI so‘rovi (bepul kvotani yeydi); kontekst —
+  oxirgi 24 xabar, uzoq muddatli narsalar — xotirada (5-bosqich).
+- **Unumdorlik (§45)** — o‘lchov (lokal, Chrome, 1440×900@2x, panel): oddiy rejim 60 FPS, Qitmir (robot kursorni
+  quvlayapti) 60 FPS, uzun vazifalar 0 ms/3 s, 2 canvas, JS heap 174 MB (dev build). Faol bo‘lmagan canvas chizmaydi
+  (`frameloop: never`), sekin qurilmada DPR pasayadi, zaif qurilma — lite, reduced motion — harakatsiz.
+  🟡 Bitta doimiy renderer — qilinmadi: 3 canvas (launcher, sahna, telefonda sarlavha), bir vaqtda bittasi chizadi;
+  birlashtirish ishlab turgan robotni qayta yozishni talab qiladi — foydasi (GPU kontekst soni) xavfdan kichik.
+- **Production build** — `next build` ✅ (89/89 sahifa, umumiy JS 103 kB).
+
+## Yakuniy holat — master prompt bo‘yicha (2026-10-27)
+
+| Bo‘lim | Holat | Izoh |
+|---|---|---|
+| §1–8 Personaj, 3D, Qitmir, fizika, DOM, emotsiyalar | ✅ | Qitmir V5 + 2-bosqich; brauzer testlari |
+| §9–14 Ovoz: wake-word, summon, barge-in, spatial, joyida gapirish | ✅ | ⛔ Safari/iOS'da wake-word yo‘q (platforma) |
+| §15–19 Gemini, provayderlar, xotira, uslub, rolga mos ohang | ✅ | OpenAI — kalit yo‘q (override) |
+| §20–28 Agent amallari, tasdiq, injection himoyasi, Vision | ✅ | integratsiya testlari |
+| §29 Mission mode | ✅ | tizim hisoboti; haqiqiy Gemini rejalashtirishi sinalmagan |
+| §30 Smart delegation | ✅ | faqat faktlar |
+| §31 Predictive | ✅ | 9 qoida, "taxmin" |
+| §32 Universal search | ✅ | RLS ichida, manbasi bilan |
+| §33 Partner concierge | ✅ | o‘qish; tasdiqlash — ilovada |
+| §34 Gologramma kartalar | ✅ | ovoz rejimida |
+| §35 Bayram | ✅ | faqat haqiqiy o‘tishda |
+| §36 Rituallar | ✅ | kuniga bir marta |
+| §37 Maxfiy buyruqlar | ✅ | lokal, AI'siz |
+| §38, §43 Proaktiv | ✅ | ovoz standart o‘chiq |
+| §39 Brifing | ✅ | AI'siz |
+| §40 Ovoz biometriyasi | ⛔ | texnik asos va bepul servis yo‘q (7-bosqich) |
+| §41 PWA | ✅ | audit; haqiqiy qurilmada sinalmagan |
+| §42 Web Push | ✅ | DB testi 35/35; haqiqiy qurilmada sinalmagan |
+| §44 Rejimlar | ✅ | oddiy / professional / qitmir |
+| §45 Unumdorlik | 🟡 | 60 FPS; bitta renderer yo‘q |
+| §46 Xavfsizlik | ✅ | RLS, ruxsatlar, tasdiq, idempotentlik, rate-limit, byudjet, audit log |
+| §47 Modullar | ✅ | robot/, qitmir/, wake.ts, voice.ts, lib/assistant/* |
+| §49 Chiqarib tashlanganlar | — | qilinmadi (egasi rad etgan) |
+
 ## Chiqarib tashlangan (egasi rad etgan, §49)
 Quality Guardian, Meeting Copilot, Time Machine, Executive Intelligence.
 
-## Production deploy tartibi (5-bosqichdan boshlab)
-1. Kodni ikki loyihaga deploy (yuqoridagi usul) — migratsiyasiz ham xavfsiz.
-2. `supabase db push` (linked production loyiha) — `20261027100000_assistant_memory.sql`. Egasining ruxsati bilan.
-3. Tekshiruv: xodim "eslab qol: …" → "xotiram".
+## Production deploy tartibi
+1. `npx supabase migration list --linked` → faqat kutilgan migratsiyalar; `db push --dry-run`, so‘ng `db push`.
+2. Kodni ikki loyihaga deploy (yuqoridagi usul) — kod migratsiyasiz ham xavfsiz ishlaydi.
+3. Tekshiruv: `/api/push/config` → enabled; public chat javob beradi; xodim "bugun qanday ishlarim bor?".
 
 ## Muhit o‘zgaruvchilari
 

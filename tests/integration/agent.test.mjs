@@ -636,3 +636,28 @@ test('26. celebration only after the system confirmed a real accomplishment; pro
     gemini.restore();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Phase 9: the daily AI budget
+// ---------------------------------------------------------------------------
+test('27. daily AI budget: questions for the AI count per person; over the limit an honest message; exact commands stay free', { skip }, async () => {
+  const limit = one(`select value from app_settings where key = 'assistant.daily_limit_member'`);
+  sql(`update app_settings set value = '2' where key = 'assistant.daily_limit_member'; delete from private.assistant_usage where who = 'u:' || (select id from auth.users where email = 'operator@sunmedia.local')`);
+  const gemini = fakeGemini([() => [{ text: 'Javob.' }]]);
+  try {
+    const ask = () => assistantReply([{ role: 'user', text: 'Bugun ish qanday ketyapti, umuman?' }], { ...asTool(operator) }, 'Anisjon');
+    await ask();
+    await ask();
+    await assert.rejects(ask(), (e) => /Bugungi AI limiti tugadi/.test(e.message));
+    assert.equal(gemini.sent.length, 2, 'the third question never reached the AI');
+    const tasks = await assistantReply([{ role: 'user', text: 'vazifalarim' }], { ...asTool(operator) }, 'Anisjon');
+    assert.match(tasks.reply, /vazifa/, 'exact commands are answered by the system, outside the budget');
+    // Someone else's count is their own.
+    await assistantReply([{ role: 'user', text: 'Bugun ish qanday ketyapti, umuman?' }], { ...asTool(editor) }, 'Jasur');
+    assert.equal(gemini.sent.length, 3);
+    assert.equal(one(`select requests from private.assistant_usage u join auth.users a on u.who = 'u:' || a.id where a.email = 'operator@sunmedia.local'`), '3');
+  } finally {
+    gemini.restore();
+    sql(`update app_settings set value = '${limit}' where key = 'assistant.daily_limit_member'; delete from private.assistant_usage`);
+  }
+});

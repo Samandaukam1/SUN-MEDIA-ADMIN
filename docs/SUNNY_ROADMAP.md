@@ -6,7 +6,7 @@ Bu fayl har sessiyada yangilanadi: yangi sessiya shu yerdan davom etadi. Holat f
 
 Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ tashqi to‘siq
 
-## Joriy holat (2026-10-27, 7-sessiya)
+## Joriy holat (2026-10-28, 8-sessiya — yakunlash V2, pastda «Yakunlash»)
 
 | Bosqich | Holat | Izoh |
 |---|---|---|
@@ -149,7 +149,7 @@ migratsiyasiz toza bazada ham yiqiladi: oldindan mavjud, Sunny'ga aloqasi yo‘q
    so‘ng `db push` — `20261025100000_perf_helper_calls`, `20261026100000_web_push`, `20261027100000_assistant_memory`.
    Tekshiruv: migratsiya tarixi mos, yangi jadvallarda RLS + policy'lar, push sweep muvaffaqiyatli, public chat javob
    beradi. Xodim hisobida "eslab qol" → "xotiram" hali production'da sinalmagan (xodim sessiyasi yo‘q).
-   Web Push'ni yoqish uchun VAPID kalitlari qoldi (docs/PRODUCTION_SETUP.md, 7-bo‘lim, 3-qadam).
+   VAPID kalitlari keyin qo‘shildi (Supabase secrets va ikkala Vercel loyihasi): `/api/push/config` → enabled.
 2. ⬜ Xotirani ko‘rish/o‘chirish uchun alohida sahifa (hozir chatda: "xotiram", "… ni unut").
 3. ⬜ Hamkorlar o‘zi "eslab qol" deya olishi (mijoz auditoriyasiga amallar berilmaydi — alohida, cheklangan amal kerak).
 4. ⬜ Avtomatik xotira takliflari (ishonch darajasi bilan, foydalanuvchi tasdig‘ida), suhbat xulosasi.
@@ -272,6 +272,39 @@ o‘yin analitikasi; Sunny'ga aloqasi yo‘q, o‘yin mantig‘iga tegilmadi).
   ko‘rildi, so‘ng qo‘llandi): limitlar 300/40, funksiya faqat server kalitiga; kod `950b845` ikkala Vercel loyihasida
   (production, Ready). Tekshiruv: ikkala sayt 200, `/api/push/config` enabled, public chat Gemini orqali javob berdi,
   byudjet hisoblagichi o‘sha so‘rovni sanadi (1 mehmon, 1 so‘rov).
+
+## Yakunlash V2 (2026-10-28, 8-sessiya) — «Completion & Repair» master prompt
+
+Qayta yozilmadi: mavjud tizim tuzatildi va yetishmagani qo‘shildi. Migratsiya: `20261029100000_assistant_cost`.
+
+| Bo‘lim | Holat | Nima qilindi / nima qoldi |
+|---|---|---|
+| A. Ovoz zanjiri | PARTIAL | Topilgan nuqsonlar tuzatildi: wake-word jimlikdan ("no-speech") keyin 5 s gacha kar bo‘lib qolardi; "Sunny, ertaga SAFI…" uzun buyrug‘i 1,5 s da "Eshitaman!" bilan uzilardi; bitta so‘zli buyruq ("Sunny, keldim") yo‘qolardi; Sunny o‘z ovozining dumini eshitib yana uyg‘onardi; TTS xatosida javob jim qolardi (endi tizim ovozi yoki izoh); tizim ovozi tiqilib qolsa Sunny "gapirayotgan" holatda qotib qolardi (watchdog); ovoz rejimida AI xatosi aytilmasdi; "Bajaraveraymi?" dan keyin panel yopiq holda javob tinglanmasdi; oldingi tashrifda yoqilgan wake-word uchun birinchi teginish audio’ni ochadi. Brauzer (Chrome, mikrofon va TTS simulyatsiya) 12/12. **Haqiqiy mikrofon va dinamik bilan sinalmagan.** |
+| A. Emotsional prosodiya | COMPLETE | Azure SSML (bright/soft/steady/qitmir) va brauzer ovozi; production’da o‘lchandi (pastda). |
+| B. Agent (Gemini) | PARTIAL | Model tuzgan guruh/hamkor chat xabari aniq matn va aniq chat bilan tasdiq kartasida (token xona id’sini saqlaydi); foydalanuvchi o‘zi aytgan matn darhol ketadi. Tasdiqdan oldin `preview` (aniq yozuv). Missiya prompti: qadamlar orasida natijani uzatish. Integratsiya (lokal baza, Gemini simulyatsiya) 31/31. **Haqiqiy Gemini bilan xodim oqimlari sinalmagan** — lokal kalit yo‘q (egasi qo‘shmaslikni tanladi). |
+| B. Sunny Vision | COMPLETE | Sahifa manzilidan yozuv (vazifa, mijoz, kontent, s’yomka, xodim, `?xona=` chat) → server foydalanuvchi sessiyasi bilan nomi va 2–3 faktini oladi; ko‘ra olmasa — "qaysi biri?" deb so‘raydi. DOM o‘qilmaydi, skrinshot yo‘q. Integratsiya #31. |
+| C. Xotira oynasi | COMPLETE | Sunny panelidagi 🧠: o‘z eslatmalari, kompaniya qoidalari, hamkor eslatmalari, har biri "nega ishlatiladi"; tuzatish, tasdiq bilan unutish (RLS). Brauzer 7/7. |
+| C. Hamkor xotirasi | COMPLETE | remember/forget/xotiram hamkorlarga ham (faqat shaxsiy); boshqa hamkor ko‘rmaydi va o‘zgartira olmaydi; kompaniya qoidasi yopiq. Integratsiya #29, pgTAP 044. |
+| C. Avtomatik takliflar | COMPLETE | Doimiy odat/afzallik gapi → "eslab qolaymi?" kartasi, faqat "ha" bilan saqlanadi; savol, hazil, bir martalik reja, parol/raqam, iqtibos — taklif qilinmaydi; takror yo‘q; o‘sha mavzudagi yangi gap — almashtirish taklifi. Qo‘shimcha AI so‘rovi yo‘q. |
+| C. Suhbat davomiyligi | COMPLETE | Oxirgi oynadan tashqaridagi o‘z savollari (12 tagacha, qisqartirilgan) promptga ma’lumot sifatida — AI chaqirilmaydi. |
+| C. Shaxsiyat | COMPLETE | Egasining 60 tagacha namunasidan savolga mos 5 tasi (so‘zlar bo‘yicha); xodim ohangi uchun egasi bergan misol. |
+| D. 2D↔3D | COMPLETE | Chrome’da bir xil qutida, harakatsiz holatda o‘lchandi: siluet IoU 0,954; 1 CSS px siljish bilan 0,987 (shakl, poza, logo, ranglar mos). 1 px farq 0,7 s o‘tishda ko‘rinmaydi — geometriya o‘zgartirilmadi. |
+| D. Renderer | COMPLETE (o‘zgarishsiz) | 5 marta ochib-yopish va sahifa almashuvi: 3D saqlanadi, 2 canvas, xato yo‘q. Bitta renderer’ga ko‘chirish asoslanmadi. |
+| D. Gapirish animatsiyasi | PARTIAL | Mavjud (MotionDirector pozalari, audio og‘iz, joyida gapirish); bu sessiyada yangi nuqson topilmadi, real qurilmada ko‘rilmagan. |
+| E. Karta tugmalari | COMPLETE | O‘z yangi vazifasi — «Boshlash», tavsiya qilingan xodim — «Biriktirish»: imzolangan taklif, faqat bosilganda tasdiq endpointi orqali. Integratsiya #34. |
+| E. Hamkor tasdig‘i | BLOCKED (biznes qoidasi) | 2026-09-29 ish modeli: "Approval is retired, not a feature toggle" — baza `client.approve`ni har doim rad etadi. Sunny chetlab o‘tmaydi: "tasdiqlayman" ga halol javob va loyiha chatiga havola. Yoqish — egasining ish modeli qarori. |
+| E. Qidiruv | COMPLETE | Kirill savol lotincha ham qidiradi; takror natija bitta. pg_trgm — hajm talab qilmaguncha yo‘q. |
+| F. Xarajat | COMPLETE | `private.assistant_calls`: har AI chaqiruvi — model, kirish/chiqish/kesh/o‘ylash tokenlari (provayder bergan), narx faqat egasining ro‘yxatidan (yo‘q bo‘lsa — narxsiz); oylik chegara; Sozlamalar → Sunny AI (faqat Tizim egasi). |
+| F. Ishonchlilik | COMPLETE | Xatolar ajratildi: kunlik kvota, daqiqalik limit, kalit/sozlama, band (5xx), tarmoq, uzilish; mehmonga ichki buyruqlar tilga olinmaydi. Qayta urinish chegarali (mavjud). |
+| G. Push | BLOCKED (qurilma yo‘q) | Production: VAPID bor, `/api/push/config` enabled, lekin `push_tokens` = 0 — hech kim hali bildirishnomani yoqmagan, yetkazish 0. Tekshiruv tartibi pastda. |
+
+Tekshiruv (yakuniy): unit 164/164; integratsiya 31/31 (noldan qayta qurilgan baza); pgTAP 1422 (faqat oldindan mavjud 029 #8, 031 #62); brauzer: ovoz 12/12, yangi UI 14/14, 7-bosqich 11/11, Qitmir/summon 4/4; `next build` 90/90.
+
+### Push — qurilmada tekshirish tartibi (kutilmoqda)
+1. iPhone: Safari’da sunmediagroup.uz → Ulashish → «Bosh ekranga» → ilovani bosh ekrandan ochib kirish → Profil → 🔔 → «Bildirishnomalarni yoqish». Android/kompyuter: Chrome’da kirish → o‘sha tugma.
+2. Ikkinchi akkauntdan umumiy chatga yozish → birinchi qurilmaga push keladi (yuboruvchiga kelmaydi); bosilganda o‘sha chat ochiladi.
+3. Shaxsiy chat, vazifa biriktirish va muddatni ko‘chirish bilan takrorlash.
+4. Tekshirish: `select platform, last_success_at, last_error from push_tokens` — `last_success_at` to‘ldi.
 
 ## Yakuniy holat — master prompt bo‘yicha (2026-10-27)
 

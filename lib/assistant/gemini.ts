@@ -20,7 +20,10 @@ type Part = {
   inlineData?: { mimeType?: string; data?: string };
 };
 type Content = { role: 'user' | 'model'; parts: Part[] };
-type Chunk = { candidates?: { content?: Content; finishReason?: string }[]; error?: { code?: number; message?: string } };
+type UsageMeta = { promptTokenCount?: number; candidatesTokenCount?: number; cachedContentTokenCount?: number; thoughtsTokenCount?: number };
+type Chunk = { candidates?: { content?: Content; finishReason?: string }[]; error?: { code?: number; message?: string }; usageMetadata?: UsageMeta };
+/** What one model call used, as Gemini reported it (cost accounting). */
+export type ModelUsage = { model: string; input: number; output: number; cached: number; thoughts: number };
 
 /**
  * Models that just refused (free quota used up, or missing) are skipped until they are expected back, so a reply does not
@@ -113,6 +116,7 @@ function deadline(outer: AbortSignal | undefined, firstMs: number, totalMs: numb
 }
 
 const NO_REPLY = 'Kechirasiz, javobni tayyorlay olmadim. Savolni boshqacha yozib ko‘ring.';
+const STILL_WORKS = 'vazifalarim, keldim, brifing, s’yomkalar';
 
 /**
  * One reply from Gemini with function calling, streamed: `onText` gets each piece of text as soon as it is written.
@@ -123,7 +127,7 @@ export async function geminiChat(
   history: { role: 'user' | 'assistant'; text: string }[],
   tools: ToolDef[],
   run: (name: string, input: Record<string, unknown>) => Promise<string>,
-  { onText, signal, maxTokens = 900 }: { onText?: (delta: string) => void; signal?: AbortSignal; maxTokens?: number } = {},
+  { onText, signal, maxTokens = 900, onUsage }: { onText?: (delta: string) => void; signal?: AbortSignal; maxTokens?: number; onUsage?: (u: ModelUsage) => void } = {},
 ): Promise<string> {
   // The configured model first, then the free models fastest first: flash-lite answers in about a second and has the
   // largest free quota; the bigger flash models (20 free requests a day, often "high demand") back it up.
@@ -132,6 +136,8 @@ export async function geminiChat(
   // "High demand" (503) is temporary: when every model has refused, those are asked once more after a short pause.
   const busy: string[] = [];
   let retried = false;
+  // A daily quota is not a per-minute one: the person is told which (and when it comes back).
+  let dayQuota = false;
   const onceMore = async () => {
     if (retried || !busy.length || signal?.aborted) return false;
     retried = true;
@@ -183,7 +189,7 @@ export async function geminiChat(
       // A model that hangs is skipped for a while, so the next questions do not wait on it again.
       resting.set(model, Date.now() + 5 * 60_000);
       if (nextModel() || (await onceMore())) continue;
-      throw new AiFailedError('Ulanishda xato. Birozdan so‘ng qayta urinib ko‘ring. (GNET)');
+      throw new AiFailedError('AI xizmatiga ulanib bo‘lmadi (tarmoq sekin yoki javob kechikdi). Qayta urinib ko‘ring. (GNET)');
     }
     if (!res.ok || !res.body) {
       timer.done();
@@ -191,21 +197,26 @@ export async function geminiChat(
       console.error('[assistant] Gemini', model, res.status, detail.slice(0, 400));
       if (refusedThinking(model, res.status, detail)) continue;
       if (res.status === 404 || res.status === 429 || res.status >= 500) rest(model, res.status, detail);
+      if (res.status === 429 && /PerDay/i.test(detail)) dayQuota = true;
       if (res.status >= 500) busy.push(model);
       // Model missing, over its own quota or overloaded: try the next free model (then the overloaded ones once more).
       if ((res.status === 404 || res.status === 429 || res.status >= 500) && (nextModel() || (await onceMore()))) continue;
-      if (res.status === 429) throw new AiFailedError('Bugungi bepul limit tugadi. Birozdan so‘ng yozing. (G429)');
-      if (res.status === 400 && /API key/i.test(detail)) throw new AiFailedError('AI kaliti noto‘g‘ri. (G400)');
-      if (res.status === 403) throw new AiFailedError('AI kaliti faol emas yoki bu hududda ruxsat yo‘q. (G403)');
-      throw new AiFailedError(`Hozir band ekanman, bir daqiqadan so‘ng yozing. (G${res.status})`);
+      if (res.status === 429 && dayQuota) throw new AiFailedError(`Bugungi bepul AI limiti (Gemini) tugadi — ertaga tiklanadi. Aniq buyruqlar (${STILL_WORKS}) ishlayveradi. (G429)`);
+      if (res.status === 429) throw new AiFailedError('AI (Gemini) daqiqalik limitga yetdi — bir daqiqadan so‘ng qayta yozing. (G429)');
+      if (res.status === 400 && /API key/i.test(detail)) throw new AiFailedError('AI kaliti noto‘g‘ri — administrator sozlashi kerak. (G400)');
+      if (res.status === 401 || res.status === 403) throw new AiFailedError(`AI kaliti faol emas yoki bu hududda ruxsat yo‘q — administrator tekshirishi kerak. (G${res.status})`);
+      if (res.status >= 500) throw new AiFailedError(`AI xizmati (Gemini) hozir band — bir daqiqadan so‘ng qayta urinib ko‘ring. Aniq buyruqlar (${STILL_WORKS}) ishlayveradi. (G${res.status})`);
+      throw new AiFailedError(`So‘rovni AI qabul qilmadi — savolni qisqaroq yozib ko‘ring. (G${res.status})`);
     }
 
     const parts: Part[] = [];
     let wrote = false;
+    let usage: UsageMeta | null = null;
     try {
       for await (const chunk of events(res.body)) {
         timer.started();
         if (chunk.error) throw new Error(chunk.error.message ?? 'stream error');
+        if (chunk.usageMetadata) usage = chunk.usageMetadata;
         for (const p of chunk.candidates?.[0]?.content?.parts ?? []) {
           parts.push(p);
           if (p.text && !p.thought) {
@@ -220,9 +231,11 @@ export async function geminiChat(
       // Half an answer is still an answer; with nothing written yet, the next model starts over.
       if (wrote) return reply.trim();
       if (nextModel()) continue;
-      throw new AiFailedError('Ulanishda xato. Birozdan so‘ng qayta urinib ko‘ring. (GNET)');
+      throw new AiFailedError('AI javobi uzilib qoldi. Qayta urinib ko‘ring. (GNET)');
     } finally {
       timer.done();
+      // Every call that produced something is accounted for, as Gemini counted it.
+      if (usage) onUsage?.({ model, input: usage.promptTokenCount ?? 0, output: usage.candidatesTokenCount ?? 0, cached: usage.cachedContentTokenCount ?? 0, thoughts: usage.thoughtsTokenCount ?? 0 });
     }
 
     const calls = parts.filter((p) => p.functionCall);

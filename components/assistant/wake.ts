@@ -64,7 +64,20 @@ export function bargeIn(text: string, spoken: string): { rest: string } | null {
   return { rest };
 }
 
-const words = (s: string) => (s ? s.split(' ').length : 0);
+/** Words that only call Sunny ("Sunny, hey!"): no command in them. */
+const FILLER = new Set(['hey', 'ey', 'hoy', 'ha', 'qani', 'salom', 'eshityapsanmi', 'eshityapsizmi', 'sunny', 'sunni', 'sanni']);
+/** What was said after the name, if it is a command: one real word is enough ("Sunny, keldim"). */
+export function commandAfter(rest: string): string {
+  const w = rest.split(' ').filter(Boolean);
+  if (!w.length) return '';
+  if (w.length === 1 && (FILLER.has(w[0]) || w[0].length < 4)) return '';
+  return rest;
+}
+/** Recognition "errors" that only mean silence or a restart: listen again at once, no back-off. */
+const QUIET_ERRORS = new Set(['no-speech', 'aborted']);
+/** How long the recognizer may keep hearing more words after the name before Sunny answers "Eshitaman!". */
+const SETTLE_MS = 1300;
+const MAX_CALL_MS = 9000;
 
 export type WakeHandlers = {
   /** The name was heard: first as soon as it is (`final` false, for the summon), then with the command (or ''). */
@@ -86,6 +99,10 @@ export class WakeListener {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private pending: ReturnType<typeof setTimeout> | null = null;
   private calling = false;
+  private callStarted = 0;
+  /** Sunny's last words stay an echo for a moment after it stops (the speakers' tail reaches the mic late). */
+  private echo = '';
+  private echoUntil = 0;
   state: WakeState = 'off';
   private readonly make: () => WakeRecognition;
   private readonly lang: string;
@@ -121,6 +138,10 @@ export class WakeListener {
   }
   /** What Sunny is saying now ('' when silent): heard through the speakers it is an echo, not a command. */
   speaking(text: string) {
+    if (!text && this.spoken) {
+      this.echo = this.spoken;
+      this.echoUntil = Date.now() + 1500;
+    }
     this.spoken = text;
   }
 
@@ -172,13 +193,22 @@ export class WakeListener {
         }
         const w = wakeIn(text);
         if (!w.found) continue;
+        if (this.echo && Date.now() < this.echoUntil && isEcho(text, this.echo)) continue;
         if (!this.calling) {
           // Called: the robot reacts at once; the command (if any) follows in the final result.
           this.calling = true;
+          this.callStarted = Date.now();
           this.handlers.onWake('', false);
-          this.pending = setTimeout(() => this.called(''), 1500);
         }
-        if (r.isFinal) this.called(words(w.rest) >= 2 ? w.rest : '');
+        if (r.isFinal) {
+          this.called(commandAfter(w.rest));
+          continue;
+        }
+        // Still talking ("Sunny, ertaga SAFI…"): wait for the whole command rather than interrupting with "Eshitaman!".
+        if (this.pending) clearTimeout(this.pending);
+        const left = Math.max(0, MAX_CALL_MS - (Date.now() - this.callStarted));
+        const restNow = commandAfter(w.rest);
+        this.pending = setTimeout(() => this.called(restNow), Math.min(SETTLE_MS, left));
       }
     };
     rec.onerror = (e) => {
@@ -186,7 +216,7 @@ export class WakeListener {
         this.on = false;
         this.stop();
         this.set('denied');
-      } else this.delay = Math.min(5000, this.delay * 2);
+      } else if (!QUIET_ERRORS.has(e.error)) this.delay = Math.min(5000, this.delay * 2);
     };
     rec.onend = () => {
       this.rec = null;

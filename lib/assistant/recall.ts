@@ -46,6 +46,17 @@ export function searchTerms(query: string): string[] {
   return out.slice(0, 5);
 }
 
+/** Uzbek Cyrillic → Latin, so "сафи видео" also finds what was written "SAFI video" (and the other way round). */
+const CYR: Record<string, string> = { а: 'a', б: 'b', в: 'v', г: 'g', ғ: "g'", д: 'd', е: 'e', ё: 'yo', ж: 'j', з: 'z', и: 'i', й: 'y', к: 'k', қ: 'q', л: 'l', м: 'm', н: 'n', о: 'o', ў: "o'", п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'x', ҳ: 'h', ц: 's', ч: 'ch', ш: 'sh', ъ: "'", ь: '', ы: 'i', э: 'e', ю: 'yu', я: 'ya' };
+export const latin = (text: string) => [...text.toLowerCase()].map((c) => CYR[c] ?? c).join('');
+
+/** The search stems of a question in both scripts (a Cyrillic question also searches the Latin spelling). */
+export function queryTerms(query: string): string[] {
+  const base = searchTerms(query);
+  if (!/[Ѐ-ӿ]/.test(query)) return base;
+  return [...new Set([...base, ...searchTerms(latin(query))])].slice(0, 8);
+}
+
 const pattern = (term: string) => new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/_/g, '.?'), 'iu');
 
 /** How many of the terms a text contains. */

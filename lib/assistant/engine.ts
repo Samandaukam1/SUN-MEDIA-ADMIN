@@ -1,12 +1,14 @@
 import 'server-only';
 
 import { AiFailedError, AiNotConfiguredError } from '@/lib/ai';
-import { BUDGET_SPENT, withinBudget } from './budget';
+import { BUDGET_SPENT, budgetGate, recordUsage } from './budget';
+import type { ModelUsage } from './gemini';
+import { memoryCandidate, suggestionLine } from './suggest';
 import { agencyKnowledge, budgetHints } from './knowledge';
-import { pagePrompt, type PageContext } from './context';
+import { earlierPrompt, pagePrompt, type PageContext } from './context';
 import { memoryContext, styleContext } from './memory';
 import { isWrite } from './agent';
-import { cardsFor, type HoloDeck } from './cards';
+import { cardsFor, type ActFor, type HoloDeck } from './cards';
 import { missionLedger, stepOf, type MissionStep } from './mission';
 import { memoriesReply, socialPrompt } from './persona';
 import { configuredProviders, type ChatTurn } from './providers';
@@ -15,7 +17,8 @@ import { actionReply, approvalsReply, briefingReply, partnerReply, risksReply, r
 import { feelingPrompt, modePrompt, type AssistantMode, type Feeling } from './qitmir';
 import { agencyDateKey } from '@/lib/time';
 import { textLanguage } from './speech';
-import { runTool, toolLabel, type AssistantAction, type AssistantContext } from './tools';
+import { seeFocus } from './vision';
+import { proposal, runTool, toolLabel, type AssistantAction, type AssistantContext } from './tools';
 
 /** A tool starting or finishing, for the widget ("Vazifa yaratilmoqda…", then ✓ or ✕ once the system answered). */
 export type StepEvent = { phase: 'start'; name: string; label: string } | { phase: 'end'; name: string; ok: boolean; write: boolean };
@@ -72,7 +75,7 @@ Amallar (sen AGENTSAN: foydalanuvchi buyursa, ishni tizimda O‘ZING bajarasan):
 Missiya (bir so‘rovda ko‘p qadamli ish, masalan "ertangi SAFI s’yomkasini tashkil qil"):
 1. Avval faktlarni yig‘, hech narsani o‘zgartirmasdan: client_work (mijozning ochiq ishlari va yaqin s’yomkalari), suggest_assignee (kim mos va bo‘sh), kerak bo‘lsa upcoming_shootings.
 2. So‘ng 2–5 qadamli qisqa reja ayt (nima yaratiladi, kim, qachon, kimga xabar boradi) va "Bajaraveraymi?" deb so‘ra. Vaqt yoki odamni o‘zing tanlagan bo‘lsang, tasdiqsiz bajarma.
-3. "Ha" deyilgach, qadamlarni tartib bilan bajar (create_shooting, create_task, rejada bo‘lsa send_message). Biror qadam bajarilmasa, unga bog‘liq keyingi qadamlarni bajarma va sababini ayt.
+3. "Ha" deyilgach, qadamlarni tartib bilan bajar (create_shooting, create_task, rejada bo‘lsa send_message). Oldingi qadam natijasidagi aniq ma’lumotni (vaqt, joy, kim biriktirildi) keyingisiga o‘tkaz — masalan jamoaga xabarda s’yomka vaqti va mas’ul. Guruh yoki hamkor chatiga xabar har doim alohida tasdiq kartasi bilan ketadi (aniq matn ko‘rinadi) — "yuborildi" dema, "tasdiqlasangiz yuboraman" de. Biror qadam bajarilmasa, unga bog‘liq keyingi qadamlarni bajarma va sababini ayt.
 4. Oxirida qisqa xulosa ber; har qadamning haqiqiy holatini tizim o‘zi ro‘yxat qiladi.
 
 Javob tuzilishi (ichki savollarda):
@@ -85,7 +88,7 @@ Matn yozishda (post g‘oyasi, caption, ssenariy) ham yordam berasan.
 Tizim bo‘limlari (manzillar): Bosh sahifa /panel (bugungi holat); Chat /chat, mijozlar chati /chat/mijozlar; Kontent /work/content; Kalendar /work/calendar; S’yomkalar /work/shootings; S’yomka jihozlari /work/jihozlar; Vazifalar /work/tasks; Fayllar /work/files; Mijozlar /clients; Narxlar va to‘lovlar /clients/narxlar; Loyihalar /clients/projects; Tariflar /plans; Shartnomalar /clients/contracts; Mijoz tahlili /tahlil; Xodimlar /team; Davomat /team/attendance; Ish samaradorligi /team/performance; Rollar /roles; E’lonlar /workspace; CRM lidlar /crm, CRM hisobotlari /crm/reports; Sayt boshqaruvi /site, sayt arizalari /site/applications; Hisobotlar /reports, oylik natijalar /reports/monthly, xodimlar KPI /reports/team, agentlik statistikasi /reports/agency; Sozlamalar /settings. Xodim kabineti (ilova o‘rnida) /xodim. Har bir bo‘lim faqat ruxsati bor xodimga ochiq.`;
 
 const CLIENT = `Bu SUN MEDIA hamkori (mijoz, kabinetga kirgan). Sen uning shaxsiy concierge yordamchisisan: loyihasi, kontentlari qaysi bosqichda va qachon tayyor bo‘lishi, nimalar uning tasdig‘ini kutayotgani haqida asboblar orqali haqiqiy ma’lumot olib (partner_status, my_approvals, content_status, upcoming_shootings, recall), sodda tilda ayt. Hech narsani taxmin qilma — asbob bermagan sana yoki holatni aytma.
-Faqat UNING kompaniyasi ma’lumoti haqida gapir; boshqa mijozlar va ichki xodim ma’lumotlarini (kim qancha ishlaydi va h.k.) muhokama qilma. Kontentni tasdiqlashning o‘zi — videoni ko‘rib, Sun Media ilovasidagi «Tasdiqlash» bo‘limida (sen tasdiqlamaysan). Yangi xizmat yoki o‘zgartirish istasa — menejeriga kabinetdagi chat orqali yozishni tavsiya qil.`;
+Faqat UNING kompaniyasi ma’lumoti haqida gapir; boshqa mijozlar va ichki xodim ma’lumotlarini (kim qancha ishlaydi va h.k.) muhokama qilma. SUN MEDIA ish modelida mijoz tasdiqlash bosqichi o‘chirilgan: kontentni jamoaning ichki tekshiruvi tayyorlaydi, sen ham, hamkor ham tasdiqlay olmaydi — "tasdiqlayman" desa shuni ochiq ayt. Fikr yoki o‘zgartirish istagini loyiha chatida (/kabinet/chat) menejerga yozishni tavsiya qil. Yangi xizmat yoki o‘zgartirish istasa — menejeriga kabinetdagi chat orqali yozishni tavsiya qil.`;
 
 /** "bugun dushanba 2026-10-26, ertaga seshanba 2026-10-27, …": the model resolves "juma kuni" from this, not from memory. */
 function nextDays(): string {
@@ -101,11 +104,11 @@ function nextDays(): string {
 
 const REPLY_IN = { 'uz-UZ': 'o‘zbek tilida', 'ru-RU': 'rus tilida', 'en-US': 'ingliz tilida' } as const;
 
-async function systemPrompt(ctx: AssistantContext, name: string | null, lastQuestion: string, mode?: AssistantMode, feeling?: Feeling, page?: PageContext): Promise<string> {
+async function systemPrompt(ctx: AssistantContext, name: string | null, lastQuestion: string, mode?: AssistantMode, feeling?: Feeling, page?: PageContext, earlier?: string[]): Promise<string> {
   const reply = textLanguage(lastQuestion);
   const now = new Date().toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent', dateStyle: 'full', timeStyle: 'short' });
   const role = ctx.audience === 'public' ? SALES : ctx.audience === 'staff' ? STAFF : CLIENT;
-  const [hints, memory, style] = await Promise.all([ctx.audience === 'public' ? budgetHints() : Promise.resolve([]), memoryContext(ctx), styleContext()]);
+  const [hints, memory, style, seen] = await Promise.all([ctx.audience === 'public' ? budgetHints() : Promise.resolve([]), memoryContext(ctx), styleContext(lastQuestion), seeFocus(ctx, page?.focus)]);
   return [
     PERSONA,
     role,
@@ -121,7 +124,8 @@ async function systemPrompt(ctx: AssistantContext, name: string | null, lastQues
     modePrompt(mode),
     // Professional mode is serious: no mood in the tone.
     feelingPrompt(mode === 'professional' ? null : feeling),
-    pagePrompt(page),
+    pagePrompt(page, seen),
+    earlierPrompt(earlier),
     // Last, so it is fresh when the model starts writing: the knowledge above is Uzbek, the reply follows the visitor.
     `Eslatma: bu javobni ${REPLY_IN[reply.lang]}${reply.cyrillic && reply.lang === 'uz-UZ' ? ', kirill yozuvida' : ''} yoz (boshqa tilda matn so‘ralsa, o‘sha matnning o‘zi so‘ralgan tilda).`,
   ]
@@ -145,7 +149,8 @@ export async function assistantReply(
     mode,
     feeling,
     page,
-  }: { onText?: (delta: string) => void; onStep?: (e: StepEvent) => void; signal?: AbortSignal; mode?: AssistantMode; feeling?: Feeling; page?: PageContext } = {},
+    earlier,
+  }: { onText?: (delta: string) => void; onStep?: (e: StepEvent) => void; signal?: AbortSignal; mode?: AssistantMode; feeling?: Feeling; page?: PageContext; earlier?: string[] } = {},
 ): Promise<{ reply: string; actions: AssistantAction[] }> {
   // Every change attempted in this turn, as the system reported it (mission mode: the person sees each one's real state).
   const mission: MissionStep[] = [];
@@ -153,17 +158,33 @@ export async function assistantReply(
   let deck: HoloDeck | null = null;
   const taskHref = (id: string) =>
     ctx.audience !== 'staff' ? '' : ctx.owner || ctx.permissions.some((p) => p === 'tasks.manage' || p === 'tasks.read_all') ? `/work/tasks/${id}` : `/xodim/vazifa/${id}`;
+  // A card's button (§14): a simple, safe next step signed as a proposal — it runs only when the person presses it, through
+  // the same registry and permissions (start my own task; assign the suggested colleague to the task in question).
+  const actFor = (tool: string, input: Record<string, unknown>): ActFor => (kind, row) => {
+    const sign = (name: string, args: Record<string, unknown>, label: string, text: string) => {
+      const card = proposal(ctx, name, args, text);
+      return card ? { label, token: card.token, text } : null;
+    };
+    const id = typeof row.id === 'string' ? row.id : null;
+    if (kind === 'task' && id && row.holat === 'todo' && (tool === 'briefing' || input.scope === 'mine')) return sign('update_task', { task: id, status: 'in_progress' }, 'Boshlash', `«${String(row.vazifa ?? 'Vazifa')}» jarayonga o‘tkaziladi.`);
+    if (kind === 'candidate' && typeof input.task === 'string' && input.task && typeof row.ism === 'string') return sign('update_task', { task: input.task, add_assignees: [row.ism] }, 'Biriktirish', `${row.ism} vazifaga biriktiriladi.`);
+    return null;
+  };
   const step = async (tool: string, input: Record<string, unknown>) => {
     onStep?.({ phase: 'start', name: tool, label: toolLabel(tool) });
     const result = await runTool(tool, input, ctx);
     onStep?.({ phase: 'end', name: tool, ok: result.ok !== false, write: !!result.write });
     const change = isWrite(tool) ? stepOf(tool, result.content) : null;
     if (change) mission.push(change);
-    if (!isWrite(tool)) deck = cardsFor(tool, result.content, taskHref) ?? deck;
+    if (!isWrite(tool)) deck = cardsFor(tool, result.content, taskHref, ctx.audience === 'public' ? undefined : actFor(tool, input)) ?? deck;
     return result;
   };
   // An exact command (attendance, my tasks, shootings, a page) is done by the system's own tool, without the AI.
   const route = routeCommand(history[history.length - 1]?.text ?? '', ctx.audience);
+  if (route && 'say' in route) {
+    onText?.(route.say);
+    return { reply: route.say, actions: route.link ? [{ type: 'link', ...route.link }] : [] };
+  }
   if (route && 'link' in route) {
     const reply = `Mana, ${route.link.label} sahifasi.`;
     onText?.(reply);
@@ -190,27 +211,48 @@ export async function assistantReply(
   const providers = configuredProviders();
   if (!providers.length) throw new AiNotConfiguredError();
   // Only questions that need the AI count against the person's daily share (exact commands above are free).
-  if (!(await withinBudget(ctx))) throw new AiFailedError(ctx.audience === 'public' ? BUDGET_SPENT.public : BUDGET_SPENT.member);
-  const system = await systemPrompt(ctx, name, history[history.length - 1]?.text ?? '', mode, feeling, page);
+  const gate = await budgetGate(ctx);
+  if (gate === 'daily') throw new AiFailedError(ctx.audience === 'public' ? BUDGET_SPENT.public : BUDGET_SPENT.member);
+  if (gate === 'money') throw new AiFailedError(ctx.audience === 'public' ? BUDGET_SPENT.moneyPublic : BUDGET_SPENT.money);
+  const lastText = history[history.length - 1]?.text ?? '';
+  // What the person literally said: a message the model composed itself is shown to them before it goes to a group.
+  ctx.said = lastText;
+  const [system, saved] = await Promise.all([systemPrompt(ctx, name, lastText, mode, feeling, page, earlier), savedNotes(ctx)]);
   let failure: unknown;
   for (const provider of providers) {
     // One that fails before writing anything hands over to the next; one that already wrote part of a reply does not
     // (the visitor would see half an answer twice).
     let wrote = false;
+    const usage: ModelUsage[] = [];
     try {
-      const answered = await provider.reply({ system, history, ctx, step, signal, onText: (d) => ((wrote = true), onText?.(d)) });
+      const answered = await provider.reply({ system, history, ctx, step, signal, onText: (d) => ((wrote = true), onText?.(d)), onUsage: (u) => usage.push(u) });
       const out = deck ? { ...answered, actions: [...answered.actions, deck] } : answered;
       // Two or more changes: the system's own account follows the model's words, so a partial failure is never hidden.
       const ledger = missionLedger(mission);
-      if (!ledger) return out;
-      const tail = `${out.reply.trim() ? '\n\n' : ''}${ledger}`;
+      // A lasting habit said in passing: Sunny offers to remember it — saved only on the person's "ha" (a card).
+      const offer = !mission.length && !out.actions.some((a) => a.type === 'confirm') && saved ? memoryCandidate(lastText, saved) : null;
+      const card = offer ? proposal(ctx, 'remember', { text: offer.text, ...(offer.replaces ? { replaces: offer.replaces.id } : {}) }, offer.replaces ? `Eslatma yangilanadi: «${offer.text}».` : `Eslab qolinadi: «${offer.text}».`) : null;
+      const extra = [ledger, card && offer ? suggestionLine(offer) : ''].filter(Boolean).join('\n\n');
+      await recordUsage(ctx, provider.id, usage);
+      if (!extra) return out;
+      const tail = `${out.reply.trim() ? '\n\n' : ''}${extra}`;
       onText?.(tail);
-      return { ...out, reply: out.reply + tail };
+      return { ...out, reply: out.reply + tail, actions: card ? [...out.actions, card] : out.actions };
     } catch (error) {
+      await recordUsage(ctx, provider.id, usage);
       failure = error;
       if (wrote || signal?.aborted) throw error;
       console.error(`[assistant] ${provider.id} failed, trying the next provider:`, error instanceof Error ? error.message : error);
     }
   }
+  // A site visitor has no exact commands: the note about them is for signed-in people only.
+  if (ctx.audience === 'public' && failure instanceof AiFailedError) throw new AiFailedError(failure.message.replace(/ Aniq buyruqlar \([^)]*\) ishlayveradi\./u, ''));
   throw failure;
+}
+
+/** The person's own notes (to offer only what is new, or a correction of one of them). Null: no memory here. */
+async function savedNotes(ctx: AssistantContext): Promise<{ id: string; body: string }[] | null> {
+  if (ctx.audience === 'public' || !ctx.db || !ctx.userId) return null;
+  const { data, error } = await ctx.db.from('assistant_memories').select('id, body').eq('scope', 'personal').eq('user_id', ctx.userId).order('updated_at', { ascending: false }).limit(60);
+  return error ? null : (data ?? []);
 }

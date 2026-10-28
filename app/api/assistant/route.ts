@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { AiFailedError, AiNotConfiguredError } from '@/lib/ai';
 import { assistantReply } from '@/lib/assistant/engine';
-import { PAGE_PATH } from '@/lib/assistant/context';
+import { FOCUS_KINDS, PAGE_PATH } from '@/lib/assistant/context';
 import { FEELINGS, MODES } from '@/lib/assistant/qitmir';
 import { assistantContext, corsHeaders, rateLimited } from '@/lib/assistant/request';
 
@@ -21,8 +21,10 @@ const body = z.object({
   mode: z.enum(MODES).optional(),
   /** Sunny's simulated mood in the widget: the tone only. */
   feeling: z.enum(FEELINGS).optional(),
-  /** Sunny Vision: the page the person is on (address and title only). */
-  page: z.object({ path: z.string().max(200).regex(PAGE_PATH), title: z.string().max(200).optional() }).optional(),
+  /** Sunny Vision: the page the person is on (address, title and the id of the record it shows, if any). */
+  page: z.object({ path: z.string().max(200).regex(PAGE_PATH), title: z.string().max(200).optional(), focus: z.object({ kind: z.enum(FOCUS_KINDS), id: z.uuid() }).optional() }).optional(),
+  /** The person's earlier questions that no longer fit the recent window (a long conversation keeps its thread). */
+  earlier: z.array(z.string().max(400)).max(20).optional(),
 });
 const MAX_TEXT = 2000;
 
@@ -52,6 +54,8 @@ export async function POST(request: NextRequest) {
     .filter((m) => m.text)
     .slice(-20);
   while (history.length && history[0].role !== 'user') history.shift();
+  const dropped = parsed.data.messages.slice(0, -20).filter((m) => m.role === 'user').map((m) => m.text.trim());
+  const earlier = [...(parsed.data.earlier ?? []), ...dropped].filter(Boolean).slice(-12);
   if (!history.length || history[history.length - 1].role !== 'user') return NextResponse.json({ error: 'Xabar noto‘g‘ri.' }, { status: 400, headers });
 
   const { ctx, name, ipKey } = await assistantContext(request);
@@ -62,7 +66,7 @@ export async function POST(request: NextRequest) {
 
   if (!parsed.data.stream) {
     try {
-      const result = await assistantReply(history, ctx, name, { signal: request.signal, mode: parsed.data.mode, feeling: parsed.data.feeling, page: parsed.data.page });
+      const result = await assistantReply(history, ctx, name, { signal: request.signal, mode: parsed.data.mode, feeling: parsed.data.feeling, page: parsed.data.page, earlier });
       return NextResponse.json({ ...result, audience: ctx.audience }, { headers });
     } catch (error) {
       const { status, error: message } = failure(error);
@@ -89,6 +93,7 @@ export async function POST(request: NextRequest) {
           mode: parsed.data.mode,
           feeling: parsed.data.feeling,
           page: parsed.data.page,
+          earlier,
         });
         send({ t: 'done', ...result, audience: ctx.audience });
       } catch (error) {

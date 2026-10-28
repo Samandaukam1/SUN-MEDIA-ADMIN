@@ -12,7 +12,7 @@ import type { Database } from '@/types/database';
 import { fits, rankCandidates, TASK_WORD, type Candidate, type Skill } from './delegation';
 import { milestone } from './mission';
 import { assessRisks, type RiskContent, type RiskShooting, type RiskTask } from './predict';
-import { matches, searchTerms, snippet } from './recall';
+import { matches, queryTerms, snippet } from './recall';
 
 /**
  * Sunny's actions in the SUN MEDIA system: what a signed-in person can do in the panel, done for them from a sentence.
@@ -34,7 +34,22 @@ export type AgentContext = {
   owner: boolean;
   /** Staff (the default) or a partner (client). Each action names who may be offered it. */
   audience?: 'public' | 'staff' | 'client';
+  /** The person's own latest message in this conversation (set by the engine): what they literally asked for. */
+  said?: string;
 };
+
+/** Is `text` the person's own words from their message (not something the model composed)? Unknown → treated as theirs. */
+export function saidByPerson(text: string, said: string | undefined): boolean {
+  if (said === undefined) return true;
+  const flat = (v: string) => v.toLowerCase().replace(/[‘’'`ʻʼ]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const t = flat(text);
+  const s = flat(said);
+  if (!t) return true;
+  if (s.includes(t)) return true;
+  const words = t.split(' ');
+  const own = new Set(s.split(' '));
+  return words.filter((w) => own.has(w)).length / words.length >= 0.9;
+}
 
 export type Outcome = {
   ok: boolean;
@@ -66,6 +81,11 @@ type Def<I> = {
   write: boolean;
   /** True (a reason) when this particular input waits for the person's confirmation. */
   confirm?: (input: I, ctx: AgentContext) => string | null;
+  /**
+   * Before a confirmation card: resolves exactly what will change (the room, the content version…) so the card names it
+   * and the confirmed run acts on that very record, not on whatever matches later. An `error` is asked instead of a card.
+   */
+  preview?: (input: I, ctx: AgentContext) => Promise<{ text: string; input: I; link?: { href: string; label: string } } | { error: string }>;
   run: (input: I, ctx: AgentContext) => Promise<Outcome>;
 };
 // One list of differently typed actions: the input type is checked inside each definition.
@@ -604,11 +624,26 @@ export const ACTIONS: AnyDef[] = [
       },
       required: ['text'],
     },
-    input: z.object({ chat: z.string().optional(), person: z.string().optional(), text: z.string().trim().min(1).max(4000), reply_to: z.uuid().optional() }),
+    input: z.object({ chat: z.string().optional(), person: z.string().optional(), text: z.string().trim().min(1).max(4000), reply_to: z.uuid().optional(), room_id: z.uuid().optional() }),
     write: true,
+    // A message to a group or a partner's project chat is read by many under the person's name. Text the person dictated
+    // ("ishchilar chatiga … deb yoz") goes at once; text the model composed (a mission's "jamoaga xabar ber") is shown to
+    // them first — exact words, exact chat — and sent only on their confirmation. A direct message to one colleague goes.
+    confirm: (i, ctx) => ((i.chat || i.room_id) && !saidByPerson(i.text, ctx.said) ? 'composed' : null),
+    preview: async (i, ctx) => {
+      if (!i.chat) return { text: describe('send_message', i), input: i };
+      const c = await findChat(ctx, i.chat);
+      if ('ask' in c) return { error: c.ask };
+      const kind = c.one.kind === 'project' ? 'hamkor loyiha chatiga' : c.one.kind === 'internal' ? 'jamoa chatiga' : 'chatiga';
+      return { text: `“${c.one.name}” ${kind} xabar yuboriladi: “${i.text.slice(0, 300)}”.`, input: { ...i, room_id: c.one.id, chat: c.one.name } };
+    },
     run: async (i, ctx) => {
       let room: { id: string; name: string };
-      if (i.person) {
+      if (i.room_id) {
+        const c = (await myChats(ctx)).find((x) => x.id === i.room_id);
+        if (!c) return { ok: false, message: 'Bu chat topilmadi yoki unga kira olmaysiz.' };
+        room = c;
+      } else if (i.person) {
         const p = await findPerson(ctx, i.person);
         if ('ask' in p) return { ok: false, message: p.ask };
         if (p.one.id === ctx.userId) return { ok: false, message: 'O‘zingizga xabar yuborib bo‘lmaydi. Qaysi chatga yozay?' };
@@ -666,12 +701,21 @@ export const ACTIONS: AnyDef[] = [
   // ----- memory and personality (phase 5): the database decides who reads and writes which note -----
   define({
     name: 'remember',
+    for: ['staff', 'client'],
     description:
-      'Foydalanuvchi O‘ZI aniq so‘ragan narsani eslab qoladi ("eslab qol: …", "buni unutma"): ish odati, afzallik, doimiy ko‘rsatma. Faqat u so‘raganda chaqir. Parol, karta, pasport kabi maxfiy narsani saqlama.',
-    params: { type: 'object', properties: { text: s('Eslab qolinadigan qisqa gap, foydalanuvchining o‘z mazmunida') }, required: ['text'] },
-    input: z.object({ text: z.string().trim().min(2).max(400) }),
+      'Foydalanuvchi O‘ZI aniq so‘ragan narsani eslab qoladi ("eslab qol: …", "buni unutma"): ish odati, afzallik, doimiy ko‘rsatma. Faqat u so‘raganda yoki "Eslab qolaymi?" ga "ha" deganda chaqir. Parol, karta, pasport kabi maxfiy narsani saqlama. Eski eslatmani tuzatish uchun replaces — o‘sha eslatma id.',
+    params: { type: 'object', properties: { text: s('Eslab qolinadigan qisqa gap, foydalanuvchining o‘z mazmunida'), replaces: s('Almashtiriladigan eski eslatma id, ixtiyoriy') }, required: ['text'] },
+    input: z.object({ text: z.string().trim().min(2).max(400), replaces: z.uuid().optional() }),
     write: true,
-    run: async ({ text }, ctx) => {
+    run: async ({ text, replaces }, ctx) => {
+      if (replaces) {
+        // A correction: the old note becomes the new one (only the person's own note — RLS).
+        const { data, error } = await ctx.db.from('assistant_memories').update({ body: text }).eq('id', replaces).eq('scope', 'personal').eq('user_id', ctx.userId).select('id');
+        if (error?.code === '23505') return { ok: true, message: 'Buni allaqachon eslab qolganman.' };
+        if (error?.code === '23514') return { ok: false, message: 'Maxfiy ma’lumotni (parol, karta raqami) eslab qolmayman.' };
+        if (error) return { ok: false, message: dbError(error) };
+        if (data?.length) return { ok: true, message: `Yangiladim: «${text}».` };
+      }
       const { error } = await ctx.db.from('assistant_memories').insert({ scope: 'personal', user_id: ctx.userId, body: text });
       if (error?.code === '23505') return { ok: true, message: 'Buni allaqachon eslab qolganman.' };
       if (error?.code === '23514') return { ok: false, message: 'Maxfiy ma’lumotni (parol, karta raqami) eslab qolmayman.' };
@@ -681,6 +725,7 @@ export const ACTIONS: AnyDef[] = [
   }),
   define({
     name: 'forget',
+    for: ['staff', 'client'],
     description: 'Foydalanuvchining O‘Z eslatmasini o‘chiradi ("buni unut", "… ni o‘chir"). text — eslatmadagi so‘zlar; all — hammasini.',
     params: { type: 'object', properties: { text: s('Qaysi eslatma (undagi so‘zlar)'), all: { type: 'boolean' } } },
     input: z.object({ text: z.string().trim().max(200).optional(), all: z.boolean().optional() }),
@@ -697,6 +742,7 @@ export const ACTIONS: AnyDef[] = [
   }),
   define({
     name: 'my_memories',
+    for: ['staff', 'client'],
     description: 'Sunny shu foydalanuvchi haqida nimalarni eslab qolganini (va kompaniya qoidalarini) ko‘rsatadi: "nimalarni eslab qolding?", "xotiram".',
     params: { type: 'object', properties: {} },
     input: z.object({}).passthrough(),
@@ -871,10 +917,15 @@ export const ACTIONS: AnyDef[] = [
       'Ishni kimga berish yaxshi ekanini tizim faktlari bilan tavsiya qiladi ("bu montajni kimga bersak?", "kim bo‘sh?"): ko‘nikmasi, shu turdagi yakunlangan ishlari, shu mijoz bilan ishlagani, ochiq va muddati o‘tgan vazifalari, o‘sha kungi muddat va s’yomkalari, ta’til yoki dam olish kuni. Faqat tavsiya: biriktirishni rahbar tasdiqlaydi.',
     params: {
       type: 'object',
-      properties: { task_type: { type: 'string', enum: [...TASK_TYPES] }, client: s('Mijoz nomi, ixtiyoriy'), date: s('Ish kuni YYYY-MM-DD, ixtiyoriy (standart — bugun)') },
+      properties: {
+        task_type: { type: 'string', enum: [...TASK_TYPES] },
+        client: s('Mijoz nomi, ixtiyoriy'),
+        date: s('Ish kuni YYYY-MM-DD, ixtiyoriy (standart — bugun)'),
+        task: s('Mavjud vazifa uchun bo‘lsa — uning id yoki nomi (nomzod kartasida «Biriktirish» tugmasi chiqadi), ixtiyoriy'),
+      },
       required: ['task_type'],
     },
-    input: z.object({ task_type: z.enum(TASK_TYPES), client: z.string().optional(), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }),
+    input: z.object({ task_type: z.enum(TASK_TYPES), client: z.string().optional(), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), task: z.string().max(200).optional() }),
     needs: ['tasks.manage'],
     write: false,
     run: async ({ task_type, client, date }, ctx) => {
@@ -1009,7 +1060,7 @@ export const ACTIONS: AnyDef[] = [
     input: z.object({ query: z.string().trim().min(2).max(300), client: z.string().optional(), days: z.number().min(1).max(730).optional() }),
     write: false,
     run: async ({ query, client, days = 90 }, ctx) => {
-      const terms = searchTerms(query);
+      const terms = queryTerms(query);
       if (!terms.length) return { ok: false, message: 'Nimani qidiray? Mavzuni bir-ikki so‘z bilan ayting.' };
       const staff = ctx.audience !== 'client';
       let target: { id: string; name: string } | null = null;
@@ -1061,8 +1112,14 @@ export const ACTIONS: AnyDef[] = [
       for (const n of (notes.data ?? []) as unknown as { scope: string; body: string; updated_at: string }[]) {
         add({ manba: 'eslatma', joy: n.scope === 'company' ? 'kompaniya qoidasi' : n.scope === 'partner' ? 'hamkor eslatmasi' : 'shaxsiy eslatma', sana: when(n.updated_at) }, n.body, n.updated_at);
       }
+      // The same text found twice (a forwarded message, a note copied into a task) is shown once.
+      const seen = new Set<string>();
       const best = hits
         .sort((a, b) => b.score - a.score || b.at - a.at)
+        .filter((h) => {
+          const key = `${h.manba}|${h.joy}|${h.parcha}`;
+          return !seen.has(key) && (seen.add(key), true);
+        })
         .slice(0, 8)
         .map((h) => ({ manba: h.manba, joy: h.joy, ...(h.kim ? { kim: h.kim } : {}), sana: h.sana, parcha: h.parcha, ...(h.havola ? { havola: h.havola } : {}) }));
       return {
@@ -1163,24 +1220,24 @@ export const ACTIONS: AnyDef[] = [
     name: 'my_approvals',
     for: ['client'],
     description:
-      'Hamkor tasdig‘ini kutayotgan kontentlar: nomi, versiyasi, qachon yuborilgani, tasdiqlash muddati, post vaqti. "Qaysi postlar tasdiqlashimni kutyapti?" uchun. Tasdiqlashning o‘zi — videoni ko‘rib, Sun Media ilovasidagi «Tasdiqlash» bo‘limida.',
+      'Hamkor tasdig‘ini kutayotgan kontentlar (tarixiy): nomi, versiyasi, qachon yuborilgani, tasdiqlash muddati, post vaqti, faylni ko‘rish havolasi. "Qaysi postlar tasdiqlashimni kutyapti?" uchun. Mijoz tasdiqlash bosqichi SUN MEDIA ish modelida o‘chirilgan — kontentni jamoa tekshiradi.',
     params: { type: 'object', properties: {} },
     input: z.object({}).passthrough(),
     write: false,
     run: async (_, ctx) => {
       const { data, error } = await ctx.db
         .from('content_versions')
-        .select('version_number, sent_to_client_at, content:content_items!content_versions_content_id_client_id_fkey(title, content_type, client_approval_due_at, post_at, client:clients(name))')
+        .select('id, file_id, version_number, sent_to_client_at, content:content_items!content_versions_content_id_client_id_fkey(title, content_type, client_approval_due_at, post_at, client:clients(name))')
         .eq('status', 'client_review')
         .order('sent_to_client_at', { ascending: true })
         .limit(20);
       if (error) return { ok: false, message: dbError(error) };
-      const rows = ((data ?? []) as unknown as { version_number: number; sent_to_client_at: string | null; content: { title: string; content_type: string; client_approval_due_at: string | null; post_at: string | null; client: { name: string } | null } | null }[])
+      const rows = ((data ?? []) as unknown as { id: string; file_id: string | null; version_number: number; sent_to_client_at: string | null; content: { title: string; content_type: string; client_approval_due_at: string | null; post_at: string | null; client: { name: string } | null } | null }[])
         .filter((v) => v.content)
-        .map((v) => ({ kontent: v.content!.title, turi: v.content!.content_type, versiya: v.version_number, yuborilgan: when(v.sent_to_client_at), tasdiq_muddati: when(v.content!.client_approval_due_at), post: when(v.content!.post_at), muddati_otgan: !!v.content!.client_approval_due_at && new Date(v.content!.client_approval_due_at) < new Date() }));
+        .map((v) => ({ id: v.id, kontent: v.content!.title, turi: v.content!.content_type, versiya: v.version_number, yuborilgan: when(v.sent_to_client_at), tasdiq_muddati: when(v.content!.client_approval_due_at), post: when(v.content!.post_at), muddati_otgan: !!v.content!.client_approval_due_at && new Date(v.content!.client_approval_due_at) < new Date(), ...(v.file_id ? { korish: `/kabinet/fayl/${v.file_id}` } : {}) }));
       return {
         ok: true,
-        message: rows.length ? `${rows.length} ta kontent tasdiqingizni kutmoqda. Ularni Sun Media ilovasidagi «Tasdiqlash» bo‘limida ko‘rib, tasdiqlang yoki izoh qoldiring.` : 'Hozir tasdiqingizni kutayotgan kontent yo‘q.',
+        message: rows.length ? `${rows.length} ta kontent tasdiqingizni kutmoqda. Faylni ochib ko‘ring; fikringizni loyiha chatida menejeringizga yozing.` : 'Hozir tasdiqingizni kutayotgan kontent yo‘q.',
         data: rows,
       };
     },
@@ -1259,6 +1316,8 @@ function describe(name: string, i: Record<string, unknown>): string {
       return 'Xabaringiz o‘chiriladi.';
     case 'create_shooting':
       return `S’yomka rejalashtiriladi: ${q(i.client)}, ${String(i.starts ?? '').replace('T', ' ')}.`;
+    case 'remember':
+      return `Eslab qolinadi: ${q(i.text)}.`;
     default:
       return 'Amal bajariladi.';
   }
@@ -1283,12 +1342,21 @@ export async function runAction(
   const parsed = def.input.safeParse(raw ?? {});
   if (!parsed.success) return { ok: false, message: `Ma’lumot yetarli emas: ${parsed.error.issues.map((x) => x.path.join('.') || x.message).join(', ')}.`, write: def.write };
   if (!confirmed && (def.confirm?.(parsed.data, ctx) || (tainted && def.write))) {
+    let input = parsed.data;
+    let text = describe(name, parsed.data as Record<string, unknown>);
+    let link: Outcome['link'];
+    if (def.preview) {
+      const seen = await def.preview(parsed.data, ctx).catch(() => ({ error: 'Amalni tayyorlab bo‘lmadi. Qayta urinib ko‘ring.' }));
+      if ('error' in seen) return { ok: false, message: seen.error, write: def.write };
+      ({ text, input, link } = seen);
+    }
     return {
       ok: false,
-      confirm: describe(name, parsed.data as Record<string, unknown>),
+      confirm: text,
+      ...(link ? { link } : {}),
       message: 'TASDIQ KUTILMOQDA: amal hali BAJARILMADI. Foydalanuvchiga tasdiqlash tugmasi ko‘rsatildi; u bosmaguncha bajarilmaydi. Shuni ayt va tasdiqlashini so‘ra.',
       write: def.write,
-      input: parsed.data,
+      input,
     };
   }
   const started = Date.now();

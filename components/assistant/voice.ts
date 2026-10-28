@@ -511,7 +511,20 @@ export function useVoice() {
           u.pitch = prosody[0];
           u.rate = prosody[1];
         }
+        // Some engines never report the end (or never start without a tap): Sunny must not stay "speaking" forever.
+        const over = () => {
+          clearTimeout(guard);
+          synthOn.current = false;
+          resolve();
+        };
+        const stuck = () => {
+          synth.cancel();
+          over();
+        };
+        let guard = setTimeout(stuck, 6000);
         u.onstart = () => {
+          clearTimeout(guard);
+          guard = setTimeout(stuck, 8000 + text.length * 90);
           s.played = true;
           synthOn.current = true;
           setPreparing(false);
@@ -520,10 +533,6 @@ export function useVoice() {
         };
         u.onboundary = () => {
           pulse.current = 0.85;
-        };
-        const over = () => {
-          synthOn.current = false;
-          resolve();
         };
         u.onend = over;
         u.onerror = over;
@@ -542,8 +551,9 @@ export function useVoice() {
         const job = s.jobs.shift()!;
         const clip = await job.clip;
         if (s.dead) break;
-        if (clip?.kind === 'none') {
-          // The server has no voice right now: what is queued goes to the system voice as one piece.
+        if (!clip || clip.kind === 'none') {
+          // The server has no voice right now (or its request failed): what is queued goes to the system voice as one
+          // piece — never a silent reply.
           const rest = [job.text, ...s.jobs.map((j) => j.text)].join(' ');
           s.jobs = [];
           s.noServer = true;
@@ -551,7 +561,7 @@ export function useVoice() {
           await browserVoice(s, rest);
           continue;
         }
-        if (!clip || !ac) continue;
+        if (!ac) continue;
         if (ac.state !== 'running') {
           await Promise.race([ac.resume().catch(() => undefined), new Promise((r) => setTimeout(r, 400))]);
           if ((ac.state as string) !== 'running') {
@@ -565,6 +575,11 @@ export function useVoice() {
         else {
           const buf = await ac.decodeAudioData(clip.data.slice(0)).catch(() => null);
           if (buf && !s.dead) schedule(s, buf);
+          else if (!buf && !s.dead) {
+            s.noServer = true;
+            await browserVoice(s, [job.text, ...s.jobs.map((j) => j.text)].join(' '));
+            s.jobs = [];
+          }
         }
       }
       s.running = false;
@@ -634,7 +649,7 @@ export function useVoice() {
    * with nothing although someone clearly spoke, that `recording` goes to the server instead of being lost.
    */
   const webListen = useCallback(
-    (lang: VoiceLang, onText: (text: string) => void, token: number) =>
+    (lang: VoiceLang, onText: (text: string) => void, token: number, quiet = false) =>
       new Promise<{ text: string; fallback: boolean; recording?: Blob | null }>((resolve) => {
         const Ctor = recognitionCtor()!;
         const r = new Ctor();
@@ -712,7 +727,7 @@ export function useVoice() {
           else if (token === listenToken.current && !recording && !finalText.trim()) {
             if (error === 'not-allowed') setIssue('mic-denied');
             else if (error === 'audio-capture') setIssue('mic-missing');
-            else if (error !== 'aborted') setIssue('no-speech');
+            else if (error !== 'aborted' && !quiet) setIssue('no-speech');
           }
           resolve({ text: finalText.trim(), fallback, recording });
         };
@@ -761,7 +776,7 @@ export function useVoice() {
 
   /** Records the microphone until the visitor stops talking, then asks the server what was said. */
   const recordListen = useCallback(
-    async (lang: VoiceLang, token: number): Promise<string> => {
+    async (lang: VoiceLang, token: number, quiet = false): Promise<string> => {
       const ac = audio();
       if (!ac || !navigator.mediaDevices?.getUserMedia) {
         setIssue('stt-unavailable');
@@ -835,7 +850,7 @@ export function useVoice() {
           proc.onaudioprocess = null;
           if (!send || token !== listenToken.current) return resolve(null);
           if (!heard) {
-            setIssue('no-speech');
+            if (!quiet) setIssue('no-speech');
             return resolve(null);
           }
           resolve('');
@@ -863,9 +878,12 @@ export function useVoice() {
     [audio, transcribe],
   );
 
-  /** Listens for one question. `onText` shows what is heard so far (browser recognition only). */
+  /**
+   * Listens for one question. `onText` shows what is heard so far (browser recognition only). `quiet`: a follow-up
+   * Sunny waits for after its own question — silence just ends it, without the "nothing was heard" note.
+   */
   const listen = useCallback(
-    async (lang: VoiceLang, onText: (text: string) => void): Promise<string> => {
+    async (lang: VoiceLang, onText: (text: string) => void, quiet = false): Promise<string> => {
       cancelListening();
       const token = ++listenToken.current;
       setIssue(null);
@@ -878,12 +896,12 @@ export function useVoice() {
       setActive('listening', true);
       try {
         if (web) {
-          const r = await webListen(lang, onText, token);
+          const r = await webListen(lang, onText, token, quiet);
           if (token !== listenToken.current) return '';
           if (r.recording) return await transcribe(r.recording, lang, token);
           if (!r.fallback) return r.text;
         }
-        return await recordListen(lang, token);
+        return await recordListen(lang, token, quiet);
       } finally {
         if (token === listenToken.current) {
           setListening(false);

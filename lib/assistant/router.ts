@@ -9,7 +9,15 @@ import { normalize } from './intents';
 
 export type Route =
   | { tool: 'check_in' | 'list_tasks' | 'upcoming_shootings' | 'my_memories' | 'risks' | 'my_approvals' | 'partner_status' | 'briefing'; input: Record<string, unknown> }
-  | { link: { href: string; label: string } };
+  | { link: { href: string; label: string } }
+  | { say: string; link?: { href: string; label: string } };
+
+/**
+ * SUN MEDIA's operating model (2026-09-29) retired the client approval step: the team's internal review finishes the
+ * work and the database refuses a partner's approval. Sunny says so plainly instead of pretending to approve.
+ */
+export const NO_CLIENT_APPROVAL =
+  'SUN MEDIA’da kontentni hamkor tasdiqlamaydi — uni jamoaning ichki tekshiruvi tayyorlaydi, shuning uchun men ham tasdiqlay olmayman. O‘zgartirish istasangiz yoki fikringiz bo‘lsa, loyiha chatida menejeringizga yozing.';
 
 /** Panel pages by the words people use for them (only a link: the page itself checks access). */
 const PAGES: [RegExp, string, string][] = [
@@ -42,7 +50,6 @@ export function routeCommand(text: string, audience: 'public' | 'staff' | 'clien
     if (/^(muddati otgan|kechikkan) vazifalarim$/u.test(t)) return { tool: 'list_tasks', input: { scope: 'mine', filter: 'overdue' } };
     if (/^bugungi vazifalarim( (qanday|bor|nima|qani))?$/u.test(t)) return { tool: 'list_tasks', input: { scope: 'mine', filter: 'today' } };
     if (/^((mening|meni) )?vazifalarim( (qanday|bor|nima|qani))?$|^vazifalarimni (korsat|ayt)$|^menda qanday vazifalar bor$/u.test(t)) return { tool: 'list_tasks', input: { scope: 'mine', filter: 'open' } };
-    if (/^(xotiram|nimalarni eslab qolding|nima eslab qolding|eslab qolganlaring|men haqimda nima bilasan)$/u.test(t)) return { tool: 'my_memories', input: {} };
     if (/^(qanday )?xavflar( bor(mi)?)?$|^xavf bormi$|^nima(lar)? kechikishi mumkin$|^qaysi (ishlar|vazifalar|kontentlar) kechikishi mumkin$|^(nimaga|nimalarga) etibor ber(ay|ish kerak)$/u.test(t)) {
       return { tool: 'risks', input: {} };
     }
@@ -50,8 +57,10 @@ export function routeCommand(text: string, audience: 'public' | 'staff' | 'clien
       return { tool: 'briefing', input: {} };
     }
   }
+  if (/^(xotiram|nimalarni eslab qolding|nima eslab qolding|eslab qolganlaring|men haqimda nima bilasan)$/u.test(t)) return { tool: 'my_memories', input: {} };
   // Partners: their own approvals queue and project status.
   if (audience === 'client') {
+    if (/^((video(miz|ni|mizni)?|kontent(imiz|ni|imizni)?|post(imiz|ni|imizni)?|reels(ni)?) )?tasdiqla(yman|ymiz|dim|dik)$/u.test(t)) return { say: NO_CLIENT_APPROVAL, link: { href: '/kabinet/chat', label: 'Loyiha chati' } };
     if (
       /^qaysi (post|kontent|video|reels)(lar)? (meni(ng)? )?tasdiq(lash)?(im|imiz)(ni)? kut(yapti|moqda|ayapti)$|^(nimalarni|nimani|qaysilarini) tasdiqlash(im|imiz) kerak$|^tasdiq(imni|imizni)? kutayotgan(lar| (post|kontent|video)lar)$|^tasdiqlash(im|imiz)? kerak bolgan(lar| (post|kontent|video)lar)$/u.test(t)
     ) {
@@ -72,8 +81,8 @@ const STATUS: Record<string, string> = { todo: 'boshlanmagan', in_progress: 'jar
 /** An action tool's own outcome, as the person reads it (the tool already wrote it in words). */
 export function actionReply(content: string): { text: string; ok: boolean; waiting: boolean } {
   try {
-    const r = JSON.parse(content) as { holat?: string; xabar?: string };
-    if (r.holat === 'TASDIQ KUTILMOQDA') return { text: `${r.xabar ?? 'Tasdiq kerak.'} Tasdiqlash tugmasini bosing yoki «ha» deng.`, ok: true, waiting: true };
+    const r = JSON.parse(content) as { holat?: string; xabar?: string; amal?: string };
+    if (r.holat === 'TASDIQ KUTILMOQDA') return { text: `${r.amal ?? 'Tasdiq kerak.'} Tasdiqlash tugmasini bosing yoki «ha» deng.`, ok: true, waiting: true };
     return { text: r.xabar ?? (r.holat === 'BAJARILDI' ? 'Bajarildi.' : 'Bajarilmadi.'), ok: r.holat === 'BAJARILDI' || r.holat === 'OK', waiting: false };
   } catch {
     return { text: content, ok: false, waiting: false };

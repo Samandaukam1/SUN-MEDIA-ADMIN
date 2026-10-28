@@ -29,6 +29,8 @@ export type AssistantContext = {
   owner: boolean;
   /** Set once other people's text (chat messages) was read in this turn: later changes then wait for the person. */
   tainted?: boolean;
+  /** The person's own latest message (set by the engine for the AI path): what they literally dictated. */
+  said?: string;
 };
 
 /** Something the widget does after the reply (show a button, mark the lead as sent). */
@@ -456,6 +458,16 @@ export async function runTool(name: string, input: Record<string, unknown>, ctx:
   return { content: 'Noma’lum amal.' };
 }
 
+/**
+ * A change the system itself offers (a memory suggestion, a holographic card's button), as the same signed card the
+ * model's actions get: nothing happens until the person confirms, and then it runs through the same registry.
+ */
+export function proposal(ctx: AssistantContext, name: string, input: Record<string, unknown>, text: string): Extract<AssistantAction, { type: 'confirm' }> | null {
+  const secret = gateSecret();
+  if (!secret || !ctx.userId || !isAction(name) || !offeredActions(ctx).some((a) => a.name === name)) return null;
+  return { type: 'confirm', token: confirmToken(secret, ctx.userId, name, input), text };
+}
+
 const UNTRUSTED = new Set(['issues', 'crm', 'search', 'overview']);
 
 /**
@@ -476,6 +488,8 @@ async function agentAction(name: string, input: Record<string, unknown>, ctx: As
     const secret = gateSecret();
     if (!secret) return { content: JSON.stringify({ holat: 'BAJARILMADI', xabar: 'Tasdiqlash tizimi sozlanmagan: bu amalni panelda o‘zingiz bajaring.' }), ok: false, write };
     actions.push({ type: 'confirm', token: confirmToken(secret, ctx.userId, name, out.input), text: out.confirm });
+    // What the card is about, to look at before saying yes (the content version's file).
+    if (out.link) actions.push({ type: 'link', ...out.link });
     return { content: JSON.stringify({ holat: 'TASDIQ KUTILMOQDA', xabar: out.message, amal: out.confirm }), actions, ok: true, write: false };
   }
   if (out.link) actions.push({ type: 'link', ...out.link });

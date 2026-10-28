@@ -1,4 +1,4 @@
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 
@@ -25,13 +25,15 @@ export async function POST(request: NextRequest) {
   if (!parsed.success || !secret) return NextResponse.json({ ok: false, message: 'Tasdiq noto‘g‘ri.' }, { status: 400, headers });
 
   const { ctx } = await assistantContext(request);
-  if (ctx.audience !== 'staff' || !ctx.db || !ctx.userId) return NextResponse.json({ ok: false, message: 'Avval tizimga kiring.' }, { status: 401, headers });
+  // Staff and partners (a partner confirms their own approval or note); public visitors have no actions.
+  if (ctx.audience === 'public' || !ctx.db || !ctx.userId) return NextResponse.json({ ok: false, message: 'Avval tizimga kiring.' }, { status: 401, headers });
   if (rateLimited(`act:${ctx.userId}`, 40, 10 * 60_000)) return NextResponse.json({ ok: false, message: 'Juda ko‘p amal: bir necha daqiqadan so‘ng davom eting.' }, { status: 429, headers });
 
   const pending = openToken(secret, parsed.data.token, ctx.userId);
   if ('error' in pending) return NextResponse.json({ ok: false, message: pending.error }, { status: 409, headers });
 
-  const out = await runAction(pending.name, pending.input, { db: ctx.db, userId: ctx.userId, permissions: ctx.permissions, owner: ctx.owner }, { confirmed: true });
+  const out = await runAction(pending.name, pending.input, { db: ctx.db, userId: ctx.userId, permissions: ctx.permissions, owner: ctx.owner, audience: ctx.audience }, { confirmed: true });
   if (out.ok) for (const path of out.revalidate ?? []) revalidatePath(path);
+  if (out.ok) for (const tag of out.revalidateTags ?? []) revalidateTag(tag);
   return NextResponse.json({ ok: out.ok, name: pending.name, message: out.message, link: out.link ?? null, celebrate: out.ok && !!out.celebrate }, { headers });
 }

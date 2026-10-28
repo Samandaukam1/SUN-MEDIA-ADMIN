@@ -7933,9 +7933,37 @@ export type Database = {
         }
         Returns: string
       }
+      assistant_money_ok: { Args: never; Returns: boolean }
+      assistant_record: {
+        Args: {
+          p_audience: string
+          p_cached?: number
+          p_input: number
+          p_model: string
+          p_output: number
+          p_provider: string
+          p_thoughts?: number
+          p_who: string
+        }
+        Returns: number
+      }
       assistant_spend: {
         Args: { p_member: boolean; p_who: string }
         Returns: boolean
+      }
+      assistant_usage_report: {
+        Args: { p_days?: number }
+        Returns: {
+          cached_tokens: number
+          cost_usd: number
+          day: string
+          input_tokens: number
+          model: string
+          output_tokens: number
+          requests: number
+          thought_tokens: number
+          unpriced: number
+        }[]
       }
       authorize_password_reset: { Args: { p_user_id: string }; Returns: string }
       cancel_sun_coin_purchase: { Args: { p_request: string }; Returns: Json }

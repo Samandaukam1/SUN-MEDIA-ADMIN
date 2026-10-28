@@ -316,3 +316,23 @@ button.sb-chip { background: none; cursor: pointer; font: inherit; font-size: 13
     border-radius: 26px;
   }
 }
+
+/* Sunny's memory, inside its panel */
+.sb-mem { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 14px; display: grid; align-content: start; gap: 12px; scrollbar-width: thin; }
+.sb-mem-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sb-mem-title { margin: 0; font-size: 15px; font-weight: 700; }
+.sb-mem-back { border: none; background: none; color: var(--sb-lime); font: inherit; font-size: 13px; cursor: pointer; padding: 6px 0; }
+.sb-mem-hint { margin: 0; font-size: 13px; line-height: 1.45; color: var(--sb-muted); }
+.sb-mem-error { margin: 0; font-size: 13px; color: #ffb4b4; }
+.sb-mem-group h3 { margin: 4px 0 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--sb-muted); }
+.sb-mem-group ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.sb-mem-item { padding: 10px 12px; border-radius: 14px; background: rgb(255 255 255 / 0.06); display: grid; gap: 6px; }
+.sb-mem-body { margin: 0; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+.sb-mem-tag { margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 11px; background: rgb(255 255 255 / 0.1); color: var(--sb-muted); }
+.sb-mem-why { margin: 0; font-size: 12px; line-height: 1.4; color: var(--sb-muted); }
+.sb-mem-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.sb-mem-actions .sb-confirm-yes, .sb-mem-actions .sb-confirm-no { min-height: 34px; padding: 0 12px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.sb-mem-link { border: none; background: none; padding: 4px 0; color: var(--sb-lime); font: inherit; font-size: 13px; cursor: pointer; }
+.sb-mem-link:focus-visible, .sb-mem-back:focus-visible { outline: 2px solid var(--sb-lime); outline-offset: 2px; border-radius: 6px; }
+.sb-mem-item textarea { width: 100%; box-sizing: border-box; resize: vertical; padding: 8px 10px; border-radius: 10px; border: 1px solid rgb(255 255 255 / 0.18); background: rgb(0 0 0 / 0.25); color: var(--sb-text); font: inherit; font-size: 14px; }
+.sb-mem-item textarea:focus { outline: 2px solid var(--sb-lime); outline-offset: 1px; }

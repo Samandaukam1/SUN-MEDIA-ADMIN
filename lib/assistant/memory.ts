@@ -4,7 +4,7 @@ import { unstable_cache } from 'next/cache';
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { AssistantContext } from './tools';
-import { memoryPrompt, stylePrompt, type Dials, type MemoryNote } from './persona';
+import { memoryPrompt, relevantExamples, stylePrompt, type Dials, type MemoryNote, type StyleExample } from './persona';
 
 /**
  * What goes into the system prompt from Sunny's memory (phase 5). A person's notes are read with their own session:
@@ -19,23 +19,29 @@ export async function memoryContext(ctx: AssistantContext): Promise<string> {
 }
 
 /**
- * The owner's dials and style examples, for every conversation. Read with the server key (they hold no personal data;
- * only the system owner can write them), cached for a few minutes and refreshed as soon as the owner changes them.
+ * The owner's dials and style examples. Read with the server key (they hold no personal data; only the system owner can
+ * write them), cached for a few minutes and refreshed as soon as the owner changes them.
  */
-export const styleContext = unstable_cache(
-  async (): Promise<string> => {
+const styleData = unstable_cache(
+  async (): Promise<{ dials: Dials | null; examples: StyleExample[] }> => {
     try {
       const db = createAdminClient();
       const [dials, examples] = await Promise.all([
         db.from('assistant_personality').select('humor, mischief, formality, brevity, expressiveness, directness').eq('id', 1).maybeSingle(),
-        db.from('assistant_style_examples').select('situation, answer').order('created_at', { ascending: false }).limit(5),
+        db.from('assistant_style_examples').select('situation, answer').order('created_at', { ascending: false }).limit(60),
       ]);
-      return stylePrompt((dials.data as Dials | null) ?? null, examples.data ?? []);
+      return { dials: (dials.data as Dials | null) ?? null, examples: examples.data ?? [] };
     } catch {
       // Not migrated yet, or no server key: Sunny's usual manner.
-      return '';
+      return { dials: null, examples: [] };
     }
   },
-  ['assistant-style-v1'],
+  ['assistant-style-v2'],
   { revalidate: 300, tags: ['assistant-style'] },
 );
+
+/** The style for this question: the dials, and the five examples that fit it best. */
+export async function styleContext(question = ''): Promise<string> {
+  const { dials, examples } = await styleData();
+  return stylePrompt(dials, relevantExamples(examples, question));
+}

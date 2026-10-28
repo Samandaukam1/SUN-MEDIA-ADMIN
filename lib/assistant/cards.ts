@@ -4,7 +4,11 @@
  * result the reply comes from (nothing new is read for them). Pure functions.
  */
 
-export type HoloCard = { title: string; sub?: string | null; time?: string | null; status?: string | null; warn?: boolean; href?: string | null };
+/** One button on a card: a signed proposal (`token`) that runs through the confirmation endpoint when pressed. */
+export type HoloAct = { label: string; token: string; text: string };
+export type HoloCard = { title: string; sub?: string | null; time?: string | null; status?: string | null; warn?: boolean; href?: string | null; act?: HoloAct | null };
+/** Builds a card's button for a row (the engine signs it); null — no button. */
+export type ActFor = (kind: 'task' | 'candidate', row: Record<string, unknown>) => HoloAct | null;
 export type HoloDeck = { type: 'cards'; title: string; items: HoloCard[]; more: number };
 
 const TASK: Record<string, string> = { todo: 'Navbatda', in_progress: 'Jarayonda', in_review: 'Tekshiruvda', revision: 'Qayta ishlash', done: 'Bajarildi', cancelled: 'Bekor' };
@@ -30,23 +34,30 @@ function rows(content: string): unknown {
 
 const deck = (title: string, items: HoloCard[]): HoloDeck | null => (items.length ? { type: 'cards', title, items: items.slice(0, MAX), more: Math.max(0, items.length - MAX) } : null);
 
-const taskCard = (t: Row, href: (id: string) => string): HoloCard => ({
+/** A card's button, only where the engine signed one. */
+const button = (act: ActFor | undefined, kind: 'task' | 'candidate', row: Row) => {
+  const a = act?.(kind, row);
+  return a ? { act: a } : {};
+};
+
+const taskCard = (t: Row, href: (id: string) => string, act?: ActFor): HoloCard => ({
   title: s(t.vazifa) ?? 'Vazifa',
   sub: s(t.mijoz),
   time: s(t.muddat),
   status: TASK[String(t.holat)] ?? s(t.holat),
   warn: t.muddati_otgan === true,
   href: s(t.id) ? href(String(t.id)) : null,
+  ...button(act, 'task', t),
 });
 
 /** The cards for a tool's result, or null when it has nothing worth showing. `taskHref` follows the person's area. */
-export function cardsFor(tool: string, content: string, taskHref: (id: string) => string): HoloDeck | null {
+export function cardsFor(tool: string, content: string, taskHref: (id: string) => string, act?: ActFor): HoloDeck | null {
   const data = rows(content);
   if (!data) return null;
   const list = (v: unknown) => (Array.isArray(v) ? (v as Row[]) : []);
   switch (tool) {
     case 'list_tasks':
-      return deck('Vazifalar', list(data).map((t) => taskCard(t, taskHref)));
+      return deck('Vazifalar', list(data).map((t) => taskCard(t, taskHref, act)));
     case 'upcoming_shootings':
       return deck(
         'S’yomkalar',
@@ -60,13 +71,13 @@ export function cardsFor(tool: string, content: string, taskHref: (id: string) =
     case 'my_approvals':
       return deck(
         'Tasdiqingizni kutmoqda',
-        list(data).map((v) => ({ title: s(v.kontent) ?? 'Kontent', sub: join(s(v.turi), v.versiya ? `${v.versiya}-versiya` : null), time: s(v.tasdiq_muddati), warn: v.muddati_otgan === true, status: v.muddati_otgan === true ? 'Muddati o‘tgan' : 'Kutmoqda' })),
+        list(data).map((v) => ({ title: s(v.kontent) ?? 'Kontent', sub: join(s(v.turi), v.versiya ? `${v.versiya}-versiya` : null), time: s(v.tasdiq_muddati), warn: v.muddati_otgan === true, status: v.muddati_otgan === true ? 'Muddati o‘tgan' : 'Kutmoqda', ...(s(v.korish) ? { href: s(v.korish) } : {}) })),
       );
     case 'briefing': {
       const b = data as { vazifalar?: unknown; syomkalar?: unknown; kontent?: unknown };
       return deck('Bugungi kun', [
         ...list(b.syomkalar).map((x) => ({ title: s(x.syomka) ?? 'S’yomka', sub: join(s(x.mijoz), s(x.joy)), time: s(x.vaqt), status: 'S’yomka', href: s(x.havola) })),
-        ...list(b.vazifalar).map((t) => taskCard(t, taskHref)),
+        ...list(b.vazifalar).map((t) => taskCard(t, taskHref, act)),
         ...list(b.kontent).map((k) => ({ title: s(k.kontent) ?? 'Kontent', sub: s(k.mijoz), time: s(k.post) ?? s(k.muddat), status: s(k.bosqich), href: s(k.havola) })),
       ]);
     }
@@ -80,7 +91,7 @@ export function cardsFor(tool: string, content: string, taskHref: (id: string) =
     case 'suggest_assignee':
       return deck(
         'Nomzodlar',
-        list((data as { nomzodlar?: unknown }).nomzodlar).map((c) => ({ title: s(c.ism) ?? 'Xodim', sub: clip(join(...list(c.sabablar).slice(0, 2).map((x) => s(x))), 120), status: c.tavsiya === true ? 'Tavsiya' : s(c.band), warn: !!c.band })),
+        list((data as { nomzodlar?: unknown }).nomzodlar).map((c) => ({ title: s(c.ism) ?? 'Xodim', sub: clip(join(...list(c.sabablar).slice(0, 2).map((x) => s(x))), 120), status: c.tavsiya === true ? 'Tavsiya' : s(c.band), warn: !!c.band, ...button(act, 'candidate', c) })),
       );
     case 'recall':
       return deck(

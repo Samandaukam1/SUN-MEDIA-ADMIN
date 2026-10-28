@@ -66,6 +66,7 @@ function cleanup() {
     delete from messages where body like 'TEST·%';
     delete from shootings where title like 'TEST·%';
     delete from attendance where note = 'TEST·';
+    delete from assistant_memories where body like 'TEST·%' or body like 'Men montajni doim%';
     delete from employee_skills where user_id = (select id from auth.users where email = 'editor@sunmedia.local')
       and skill_id = (select id from skills where workflow_role = 'editor');
     update content_items set status = 'shooting' where title = '5 ta eng qimmat tovuq taomi';
@@ -282,7 +283,7 @@ test('16. reads follow each role: a manager sees the client\'s work; an operator
 });
 
 /** Gemini, simulated: answers each round from `rounds` (parts), as server-sent events, and records what it was sent. */
-function fakeGemini(rounds) {
+function fakeGemini(rounds, usageMetadata) {
   const real = globalThis.fetch;
   const sent = [];
   globalThis.fetch = async (url, init) => {
@@ -290,7 +291,7 @@ function fakeGemini(rounds) {
     const body = JSON.parse(init.body);
     sent.push(body);
     const parts = rounds[Math.min(sent.length - 1, rounds.length - 1)](body);
-    const sse = `data: ${JSON.stringify({ candidates: [{ content: { role: 'model', parts } }] })}\n\n`;
+    const sse = `data: ${JSON.stringify({ candidates: [{ content: { role: 'model', parts } }], ...(usageMetadata ? { usageMetadata } : {}) })}\n\n`;
     return new Response(new ReadableStream({ start: (c) => (c.enqueue(new TextEncoder().encode(sse)), c.close()) }), { headers: { 'content-type': 'text/event-stream' } });
   };
   return { sent, restore: () => (globalThis.fetch = real) };
@@ -309,7 +310,7 @@ test('17. one message, several commands: each runs in the system in turn, with l
   const steps = [];
   try {
     const ctx = { ...asTool(operator) };
-    const { reply, actions } = await assistantReply([{ role: 'user', text: 'Keldimni belgila, jamoaga "Keldim, montajni boshladim" deb yoz va vazifa yarat' }], ctx, 'Anisjon Abdullayev', { onStep: (e) => steps.push(e) });
+    const { reply, actions } = await assistantReply([{ role: 'user', text: 'Keldimni belgila, jamoaga "TEST· Keldim, montajni boshladim" deb yoz va vazifa yarat' }], ctx, 'Anisjon Abdullayev', { onStep: (e) => steps.push(e) });
     assert.match(reply, /bajarildi/);
 
     const [first, second] = gemini.sent;
@@ -552,7 +553,7 @@ test('24. partner concierge: each partner sees its own project only; staff tools
   const wedrink = await signIn('wedrink@client.local');
   const offered = toolsFor(asPartner(safi)).map((t) => t.name);
   for (const name of ['partner_status', 'my_approvals', 'recall', 'content_status']) assert.ok(offered.includes(name), name);
-  for (const name of ['create_task', 'create_shooting', 'send_message', 'suggest_assignee', 'risks', 'team', 'remember']) assert.ok(!offered.includes(name), name);
+  for (const name of ['create_task', 'create_shooting', 'send_message', 'suggest_assignee', 'risks', 'team', 'company_rule', 'client_note']) assert.ok(!offered.includes(name), name);
 
   const mine = JSON.parse((await runTool('partner_status', {}, asPartner(safi))).content);
   assert.equal(mine.malumot.hamkor, 'SAFI', JSON.stringify(mine));
@@ -659,5 +660,168 @@ test('27. daily AI budget: questions for the AI count per person; over the limit
   } finally {
     gemini.restore();
     sql(`update app_settings set value = '${limit}' where key = 'assistant.daily_limit_member'; delete from private.assistant_usage`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Completion: composed team messages, partner memory and approval, Vision, memory offers, cost, card buttons
+// ---------------------------------------------------------------------------
+test('28. a team message the person dictated goes at once; one the model composed waits, showing the exact chat and words', { skip }, async () => {
+  const dictated = fakeGemini([() => [{ functionCall: { name: 'send_message', args: { chat: 'ishchilar chati', text: 'TEST· Bugun syomka bor' } } }], () => [{ text: 'Yubordim.' }]]);
+  try {
+    await assistantReply([{ role: 'user', text: 'Sunny, ishchilar chatiga "TEST· Bugun syomka bor" deb yoz' }], { ...asTool(admin) }, 'Admin');
+    assert.equal(one(`select count(*) from messages where body = 'TEST· Bugun syomka bor'`), '1', 'the person’s own words: sent and verified');
+  } finally {
+    dictated.restore();
+  }
+  const composed = fakeGemini([() => [{ functionCall: { name: 'send_message', args: { chat: 'jamoa', text: 'TEST· Ertaga 10:00 da SAFI syomkasi, operator Anisjon' } } }], () => [{ text: 'Tasdiqlasangiz yuboraman.' }]]);
+  try {
+    const { actions } = await assistantReply([{ role: 'user', text: 'ha, bajaraver' }], { ...asTool(admin) }, 'Admin');
+    const card = actions.find((a) => a.type === 'confirm');
+    assert.ok(card, JSON.stringify(actions));
+    assert.match(card.text, /jamoa chatiga xabar yuboriladi: “TEST· Ertaga 10:00 da SAFI syomkasi, operator Anisjon”/);
+    assert.equal(one(`select count(*) from messages where body like 'TEST· Ertaga 10:00%'`), '0', 'nothing sent before the person confirms');
+    const pending = openToken('agent-test-secret', card.token, admin.userId);
+    assert.match(pending.input.room_id, /^[0-9a-f-]{36}$/, 'the token names the exact room');
+    const sent = await runAction(pending.name, pending.input, admin, { confirmed: true });
+    assert.equal(sent.ok, true, sent.message);
+    assert.equal(one(`select r.kind from messages m join chat_rooms r on r.id = m.room_id where m.body like 'TEST· Ertaga 10:00%'`), 'internal');
+  } finally {
+    composed.restore();
+  }
+});
+
+test('29. partners keep their own notes: remember, list, correct and forget — another partner neither sees nor changes them', { skip }, async () => {
+  const safi = await signIn('safi@client.local');
+  const wedrink = await signIn('wedrink@client.local');
+  const offered = toolsFor(asPartner(safi)).map((t) => t.name);
+  for (const name of ['remember', 'forget', 'my_memories']) assert.ok(offered.includes(name), name);
+  const as = (p) => ({ ...p, audience: 'client' });
+  const saved = await runAction('remember', { text: 'TEST· Postlarni faqat o‘zbek tilida tayyorlang' }, as(safi));
+  assert.equal(saved.ok, true, saved.message);
+  assert.equal(one(`select scope from assistant_memories where body = 'TEST· Postlarni faqat o‘zbek tilida tayyorlang'`), 'personal');
+  const gemini = fakeGemini([() => [{ text: 'AI should not be asked' }]]);
+  try {
+    assert.match((await assistantReply([{ role: 'user', text: 'xotiram' }], asPartner(safi), 'SAFI')).reply, /o‘zbek tilida/);
+    assert.doesNotMatch((await assistantReply([{ role: 'user', text: 'xotiram' }], asPartner(wedrink), 'WeDrink')).reply, /o‘zbek tilida/);
+    assert.equal(gemini.sent.length, 0, '"xotiram" needs no AI');
+  } finally {
+    gemini.restore();
+  }
+  const id = one(`select id from assistant_memories where body like 'TEST· Postlarni%'`);
+  assert.equal((await runAction('remember', { text: 'TEST· Postlarni o‘zbek va rus tilida tayyorlang', replaces: id }, as(safi))).ok, true);
+  assert.equal(one(`select count(*) || '|' || max(body) from assistant_memories where body like 'TEST· Postlarni%'`), '1|TEST· Postlarni o‘zbek va rus tilida tayyorlang', 'corrected, not duplicated');
+  await runAction('remember', { text: 'TEST· buzildi', replaces: id }, as(wedrink));
+  assert.equal(one(`select body from assistant_memories where id = '${id}'`), 'TEST· Postlarni o‘zbek va rus tilida tayyorlang', 'another partner cannot change it');
+  assert.equal((await runAction('forget', { text: 'Postlarni' }, as(wedrink))).ok, false, 'nor forget it');
+  assert.equal((await runAction('forget', { text: 'Postlarni' }, as(safi))).ok, true);
+  assert.equal(one(`select count(*) from assistant_memories where id = '${id}'`), '0');
+});
+
+test('30. partner approval is retired in SUN MEDIA’s operating model: Sunny says so honestly, approves nothing, asks no AI', { skip }, async () => {
+  const safi = await signIn('safi@client.local');
+  const gemini = fakeGemini([() => [{ text: 'AI should not be asked' }]]);
+  try {
+    const ask = await assistantReply([{ role: 'user', text: 'Videomizni tasdiqlayman' }], asPartner(safi), 'SAFI');
+    assert.equal(gemini.sent.length, 0);
+    assert.match(ask.reply, /hamkor tasdiqlamaydi/);
+    assert.ok(!ask.actions.some((a) => a.type === 'confirm'), 'no approval card');
+    assert.ok(ask.actions.some((a) => a.type === 'link' && a.href === '/kabinet/chat'));
+  } finally {
+    gemini.restore();
+  }
+  // The database itself refuses a partner's approval permission, whatever the setting.
+  assert.equal(one(`select private.client_stage_enabled()`), 'f');
+});
+
+test('31. Sunny Vision: the task on screen is named for the model, read with the person’s own session; one they cannot open names nothing', { skip }, async () => {
+  const made = await runAction('create_task', { title: 'TEST· ekrandagi vazifa', task_type: 'editing', client: 'WeDrink' }, admin);
+  assert.equal(made.ok, true, made.message);
+  const id = made.data.id;
+  const gemini = fakeGemini([() => [{ text: 'Qaysi vaqtga?' }]]);
+  try {
+    await assistantReply([{ role: 'user', text: 'Shu vazifani ertaga ko‘chir' }], { ...asTool(admin) }, 'Admin', { page: { path: `/work/tasks/${id}`, title: 'Vazifa', focus: { kind: 'task', id } } });
+    assert.match(gemini.sent[0].systemInstruction.parts[0].text, new RegExp(`Ekranda ochiq vazifa: «TEST· ekrandagi vazifa» \\(WeDrink, holat todo\\), id: ${id}`));
+    await assistantReply([{ role: 'user', text: 'Shu vazifani ertaga ko‘chir' }], { ...asTool(operator) }, 'Anisjon', { page: { path: `/work/tasks/${id}`, focus: { kind: 'task', id } } });
+    const other = gemini.sent[1].systemInstruction.parts[0].text;
+    assert.doesNotMatch(other, /ekrandagi vazifa/);
+    assert.match(other, /Sahifadagi yozuv aniqlanmadi/);
+  } finally {
+    gemini.restore();
+  }
+});
+
+test('32. a lasting habit said in passing is offered for memory, saved only on "ha", offered once; a new habit on the same topic replaces it', { skip }, async () => {
+  const gemini = fakeGemini([() => [{ text: 'Tushunarli.' }]]);
+  const say = (text) => assistantReply([{ role: 'user', text }], { ...asTool(editor) }, 'Jasur');
+  const confirmCard = async (reply) => {
+    const card = reply.actions.find((a) => a.type === 'confirm');
+    assert.ok(card, JSON.stringify(reply.actions));
+    const pending = openToken('agent-test-secret', card.token, editor.userId);
+    const out = await runAction(pending.name, pending.input, editor, { confirmed: true });
+    assert.equal(out.ok, true, out.message);
+  };
+  try {
+    const first = await say('Men montajni doim kechqurun qilishni afzal ko‘raman');
+    assert.match(first.reply, /eslab qolaymi\?$/);
+    assert.equal(one(`select count(*) from assistant_memories where body like 'Men montajni doim%'`), '0', 'nothing saved without the person’s "ha"');
+    await confirmCard(first);
+    assert.ok(!(await say('Men montajni doim kechqurun qilishni afzal ko‘raman')).actions.some((a) => a.type === 'confirm'), 'remembered: not offered again');
+    assert.ok(!(await say('Men doim dam olishni afzal ko‘raman haha')).actions.some((a) => a.type === 'confirm'), 'a joke is not a habit');
+    assert.ok(!(await say('Men bugun montajni kechqurun qilaman')).actions.some((a) => a.type === 'confirm'), 'a one-off plan is not a habit');
+    const change = await say('Men montajni doim ertalab qilishni afzal ko‘raman');
+    assert.match(change.reply, /almashtiraymi\?$/);
+    await confirmCard(change);
+    assert.equal(one(`select count(*) || '|' || max(body) from assistant_memories where body like 'Men montajni doim%'`), '1|Men montajni doim ertalab qilishni afzal ko‘raman');
+  } finally {
+    gemini.restore();
+  }
+});
+
+test('33. cost: each AI call’s tokens recorded as reported; priced only by the owner’s price list; a monthly cap stops the AI honestly', { skip }, async () => {
+  sql(`delete from private.assistant_calls`);
+  const gemini = fakeGemini([() => [{ text: 'Javob.' }]], { promptTokenCount: 1200, candidatesTokenCount: 80, cachedContentTokenCount: 200, thoughtsTokenCount: 20 });
+  const ask = () => assistantReply([{ role: 'user', text: 'Bugun ish qanday ketyapti, umuman?' }], { ...asTool(operator) }, 'Anisjon');
+  try {
+    await ask();
+    assert.equal(one(`select audience || '|' || provider || '|' || model || '|' || input_tokens || '|' || output_tokens || '|' || cached_tokens || '|' || thought_tokens || '|' || coalesce(cost_usd::text, 'none') from private.assistant_calls`), 'staff|gemini|gemini-3.8-flash-lite|1200|80|200|20|none');
+    sql(`update app_settings set value = '{"gemini-3.8-flash-lite": {"input": 0.1, "output": 0.4, "cached": 0.025}}' where key = 'assistant.pricing'`);
+    await ask();
+    // (1000 × 0.1 + 200 × 0.025 + (80 + 20) × 0.4) / 1e6
+    assert.equal(one(`select cost_usd from private.assistant_calls where cost_usd is not null`), '0.000145');
+    sql(`update app_settings set value = '0.0001' where key = 'assistant.monthly_budget_usd'`);
+    const before = gemini.sent.length;
+    await assert.rejects(ask(), (e) => /oy uchun belgilangan AI xarajati/.test(e.message));
+    assert.equal(gemini.sent.length, before, 'over the cap the AI is not asked');
+    assert.match((await assistantReply([{ role: 'user', text: 'vazifalarim' }], { ...asTool(operator) }, 'Anisjon')).reply, /vazifa/, 'exact commands still work');
+  } finally {
+    gemini.restore();
+    sql(`update app_settings set value = '{}' where key = 'assistant.pricing'; update app_settings set value = '0' where key = 'assistant.monthly_budget_usd'; delete from private.assistant_calls; delete from private.assistant_usage`);
+  }
+});
+
+test('34. card buttons: my own new task offers «Boshlash», a suggested colleague «Biriktirish» — each runs only when pressed, through the same rules', { skip }, async () => {
+  const made = await runAction('create_task', { title: 'TEST· karta vazifasi', task_type: 'editing', assignees: ['Anisjon'] }, admin);
+  assert.equal(made.ok, true, made.message);
+  const gemini = fakeGemini([() => [{ functionCall: { name: 'suggest_assignee', args: { task_type: 'editing', task: made.data.id } } }], () => [{ text: 'Tavsiya tayyor.' }]]);
+  try {
+    const mine = await assistantReply([{ role: 'user', text: 'vazifalarim' }], { ...asTool(operator) }, 'Anisjon');
+    const card = mine.actions.find((a) => a.type === 'cards')?.items.find((c) => c.title === 'TEST· karta vazifasi');
+    assert.equal(card?.act?.label, 'Boshlash', JSON.stringify(card));
+    assert.equal(one(`select status from tasks where title = 'TEST· karta vazifasi'`), 'todo', 'nothing changes until pressed');
+    const pending = openToken('agent-test-secret', card.act.token, operator.userId);
+    assert.equal((await runAction(pending.name, pending.input, operator, { confirmed: true })).ok, true);
+    assert.equal(one(`select status from tasks where title = 'TEST· karta vazifasi'`), 'in_progress');
+
+    const suggested = await assistantReply([{ role: 'user', text: 'Bu montajni kimga bersak?' }], { ...asTool(admin) }, 'Admin');
+    const pick = suggested.actions.find((a) => a.type === 'cards')?.items.find((c) => c.act);
+    assert.equal(pick?.act?.label, 'Biriktirish', JSON.stringify(suggested.actions));
+    const assign = openToken('agent-test-secret', pick.act.token, admin.userId);
+    assert.equal(assign.name, 'update_task');
+    const out = await runAction(assign.name, assign.input, admin, { confirmed: true });
+    assert.equal(out.ok, true, out.message);
+    assert.equal(one(`select count(*) from task_assignments ta join profiles p on p.id = ta.user_id where ta.task_id = '${made.data.id}' and p.full_name = '${pick.title}'`), '1');
+  } finally {
+    gemini.restore();
   }
 });

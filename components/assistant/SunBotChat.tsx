@@ -5,14 +5,16 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { openApplication } from '@/components/site/ApplyButton';
+import { focusOf } from '@/lib/assistant/context';
 import { localIntent, sentiment, type LocalAct } from '@/lib/assistant/intents';
 import type { Emotion, FeelEvent } from './robot/emotion';
+import { MemorySheet } from './MemorySheet';
 import { RobotFace, type RobotMood } from './RobotFace';
 import { answers } from './answers';
 import { pick, quip } from './qitmir/quips';
 import { store, stored } from './session';
 import { ISSUE_TEXT, useVoice, type SoundSubscribe, type VoiceLang, type VoiceStyle } from './voice';
-import { WakeListener, wakeRecognizer, type WakeState } from './wake';
+import { commandAfter, WakeListener, wakeRecognizer, type WakeState } from './wake';
 import './sunbot-chat.css';
 
 type Action =
@@ -25,7 +27,8 @@ type Action =
   | { type: 'did'; name: string; ok: boolean; message: string; celebrate?: boolean }
   /** Holographic cards: the facts of a list, shown by the robot in a voice conversation. */
   | { type: 'cards'; title: string; items: HoloCard[]; more: number };
-type HoloCard = { title: string; sub?: string | null; time?: string | null; status?: string | null; warn?: boolean; href?: string | null };
+type HoloAct = { label: string; token: string; text: string };
+type HoloCard = { title: string; sub?: string | null; time?: string | null; status?: string | null; warn?: boolean; href?: string | null; act?: HoloAct | null };
 type Msg = { role: 'user' | 'assistant'; text: string; actions?: Action[]; error?: boolean; streaming?: boolean; retry?: string };
 type Done = { reply?: string; actions?: Action[] };
 type Step = { phase: 'start'; name: string; label: string } | { phase: 'end'; name: string; ok: boolean; write: boolean };
@@ -96,6 +99,9 @@ const ACK = ['Eshitaman!', 'Ha, eshitaman.', 'Qani, ayting.', 'Shu yerdaman!', '
 /** The voice's manner: playful in Qitmir mode, even in professional mode, otherwise a little of Sunny's mood. */
 const BRIGHT = new Set<Emotion>(['happy', 'excited', 'celebrating', 'proud', 'playful']);
 const SOFT = new Set<Emotion>(['sleepy', 'sad', 'embarrassed', 'sulking', 'offended']);
+/** Sunny's reply waits for an answer: a confirmation card, or a question at the end. */
+const awaitsAnswer = (m: Msg) => !!m.actions?.some((a) => a.type === 'confirm' && (a.state ?? 'pending') === 'pending') || /\?\s*$/.test(m.text.trim());
+
 function voiceStyle(qitmir: boolean, professional: boolean, feeling?: Emotion): VoiceStyle | undefined {
   if (qitmir) return 'qitmir';
   if (professional) return 'steady';
@@ -103,7 +109,20 @@ function voiceStyle(qitmir: boolean, professional: boolean, feeling?: Emotion): 
 }
 
 /** Holographic cards (voice mode): a few compact facts by the robot, each with at most one link. */
-function Holo({ deck, onOpen }: { deck: Extract<Action, { type: 'cards' }>; onOpen?: () => void }) {
+function Holo({ deck, onOpen, onAct }: { deck: Extract<Action, { type: 'cards' }>; onOpen?: () => void; onAct?: (act: HoloAct) => Promise<boolean> }) {
+  // A card's button runs once: pressed → working → done (or failed, and may be tried again).
+  const [pressed, setPressed] = useState<Record<string, 'running' | 'done'>>({});
+  const press = async (act: HoloAct) => {
+    if (!onAct || pressed[act.token]) return;
+    setPressed((p) => ({ ...p, [act.token]: 'running' }));
+    const ok = await onAct(act);
+    setPressed((p) => {
+      const next = { ...p };
+      if (ok) next[act.token] = 'done';
+      else delete next[act.token];
+      return next;
+    });
+  };
   return (
     <section className="sb-holo" aria-label={deck.title}>
       <p className="sb-holo-title">{deck.title}</p>
@@ -117,6 +136,11 @@ function Holo({ deck, onOpen }: { deck: Extract<Action, { type: 'cards' }>; onOp
             <span className="sb-holo-meta">
               {c.time ? <span className="sb-holo-time">{c.time}</span> : null}
               {c.status ? <span className="sb-holo-status">{c.status}</span> : null}
+              {c.act ? (
+                <button type="button" className={`sb-holo-act ${pressed[c.act.token] ?? ''}`} disabled={!!pressed[c.act.token]} onClick={() => void press(c.act!)} aria-label={`${c.act.label}: ${c.act.text}`} title={c.act.text}>
+                  {pressed[c.act.token] === 'done' ? '✓' : pressed[c.act.token] === 'running' ? '…' : c.act.label}
+                </button>
+              ) : null}
               {c.href ? (
                 <Link href={c.href} className="sb-holo-link" aria-label={`${c.title} — ochish`}>
                   Ochish →
@@ -325,6 +349,7 @@ export function SunBotChat({
   // Voice mode: a spoken conversation with the panel closed. Sunny listens, thinks and speaks where it is, and its words
   // show on a small card by the robot; the panel is not needed for any of it (the same conversation continues there).
   const [voiceOnly, setVoiceOnly] = useState(false);
+  const [memOpen, setMemOpen] = useState(false);
   const voiceOnlyRef = useRef(false);
   voiceOnlyRef.current = voiceOnly;
   const openRef = useRef(open);
@@ -333,7 +358,7 @@ export function SunBotChat({
   const request = useRef<{ id: number; ctl: AbortController | null }>({ id: 0, ctl: null });
   const chosenMute = useRef(false);
   const lastSent = useRef({ text: '', at: 0 });
-  const hearRef = useRef<() => void>(() => undefined);
+  const hearRef = useRef<(quiet?: boolean) => void>(() => undefined);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
@@ -506,6 +531,8 @@ export function SunBotChat({
           setMsgs((m) => [...m, { role: 'assistant', text: t, streaming: true }]);
         } else setMsgs((m) => m.map((x, i) => (i === m.length - 1 && x.streaming ? { ...x, text: t } : x)));
       };
+      const focus = focusOf(location.pathname, location.search);
+      const earlier = history.slice(0, -HISTORY).filter((m) => m.role === 'user').slice(-12).map((m) => m.text.slice(0, 160));
       const post = () =>
         fetch('/api/assistant', {
           method: 'POST',
@@ -515,8 +542,10 @@ export function SunBotChat({
             stream: true,
             ...(qitmirRef.current ? { mode: 'qitmir' } : proRef.current ? { mode: 'professional' } : {}),
             ...(feelRef.current.feeling && feelRef.current.feeling !== 'friendly' ? { feeling: feelRef.current.feeling } : {}),
-            // Sunny Vision: which page the person is looking at ("shu vazifa" = the one on screen).
-            page: { path: location.pathname.slice(0, 180), title: document.title.slice(0, 120) },
+            // Sunny Vision: which page the person is looking at ("shu vazifa" = the one on screen, by its id).
+            page: { path: location.pathname.slice(0, 180), title: document.title.slice(0, 120), ...(focus ? { focus } : {}) },
+            // A long conversation keeps its thread: the person's older questions, shortened (no extra AI call).
+            ...(earlier.length ? { earlier } : {}),
           }),
           signal: ctl.signal,
         });
@@ -599,6 +628,11 @@ export function SunBotChat({
       if (final.error) {
         speech?.cancel();
         setFailed(true);
+        // A spoken question hears why it could not be answered (AI busy, daily limit, offline) — never silence.
+        if (via === 'voice' && (voiceOnlyRef.current || (openRef.current && !mutedRef.current))) {
+          spokenText.current = final.text;
+          void voice.speak(final.text, lang, styleRef.current);
+        }
         return;
       }
       if (final.actions?.some((a) => a.type === 'lead_created')) {
@@ -620,6 +654,9 @@ export function SunBotChat({
       // Conversation mode: a spoken question gets a spoken answer, then Sunny listens again (not after a silent reply:
       // the note about the missing voice stays readable).
       if (via === 'voice' && spoke && live() && openRef.current && !mutedRef.current) hearRef.current();
+      // Voice mode (panel closed): when Sunny asked something ("Bajaraveraymi?") it listens once for the answer;
+      // silence just ends it.
+      else if (via === 'voice' && spoke && live() && voiceOnlyRef.current && !openRef.current && awaitsAnswer(final)) hearRef.current(true);
     },
     [interrupt, lang, onReplied, report, router, voice],
   );
@@ -672,10 +709,36 @@ export function SunBotChat({
     },
     [lang, report, router, voice],
   );
+  /** A holographic card's button: the signed proposal goes to the same confirmation endpoint; the result is told aloud. */
+  const pressCard = useCallback(
+    async (act: HoloAct): Promise<boolean> => {
+      voice.unlock();
+      voice.stopSpeaking();
+      let data: { ok?: boolean; name?: string; message?: string; celebrate?: boolean };
+      try {
+        const res = await fetch('/api/assistant/confirm', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: act.token }) });
+        data = await res.json().catch(() => ({ ok: false, message: 'Xatolik yuz berdi.' }));
+      } catch {
+        data = { ok: false, message: navigator.onLine ? 'Internet bilan bog‘lanib bo‘lmadi. Qayta urinib ko‘ring.' : OFFLINE };
+      }
+      const ok = !!data.ok;
+      report(ok);
+      const message = data.message || (ok ? 'Bajarildi.' : 'Bajarilmadi.');
+      setMsgs((m) => [...m, { role: 'assistant', text: message, actions: [{ type: 'did', name: data.name ?? '', ok, message }] }]);
+      if (voiceOnlyRef.current || (!mutedRef.current && openRef.current)) {
+        spokenText.current = message;
+        void voice.speak(message, lang, styleRef.current);
+      }
+      if (ok) router.refresh();
+      if (ok && data.celebrate) celebrateRef.current?.();
+      return ok;
+    },
+    [lang, report, router, voice],
+  );
   const decideRef = useRef(decide);
   decideRef.current = decide;
 
-  const hear = useCallback(async () => {
+  const hear = useCallback(async (quiet = false) => {
     voice.unlock();
     // Talking over Sunny (or over a reply still being written) interrupts it.
     if (busyRef.current || voice.speaking || voice.preparing) interrupt(false);
@@ -685,11 +748,11 @@ export function SunBotChat({
     const before = input;
     // One recognizer at a time: the wake word waits while the question is heard.
     wakeRef.current?.pause();
-    const text = await voice.listen(lang, (t) => setInput(t));
+    const text = await voice.listen(lang, (t) => setInput(t), quiet);
     if (text) void send(text, 'voice');
     else setInput(before);
   }, [input, interrupt, lang, send, voice]);
-  hearRef.current = () => void hear();
+  hearRef.current = (quiet) => void hear(quiet);
 
   // "Sunny!" — the wake word. Called: the robot is summoned at once; a command said in the same breath is sent, otherwise
   // Sunny answers ("Eshitaman!") and listens. While it speaks, "to‘xta…" or its name interrupts it (its own voice is not).
@@ -716,7 +779,8 @@ export function SunBotChat({
   onBarge.current = (rest) => {
     interrupt(false);
     toVoice();
-    if (rest.split(' ').length >= 2) void send(rest, 'voice');
+    const command = commandAfter(rest);
+    if (command) void send(command, 'voice');
     else hearRef.current();
   };
   useEffect(() => {
@@ -737,6 +801,19 @@ export function SunBotChat({
       wakeRef.current = null;
     };
   }, [wake, lang, unlock]);
+  // A page may play sound only after the person has interacted with it. With "Sunny!" on (switched on in an earlier
+  // visit, so possibly without a tap yet) the first tap or key anywhere unlocks the voice for the answer.
+  useEffect(() => {
+    if (!wake) return;
+    const first = () => unlock();
+    const opts = { capture: true, once: true, passive: true } as const;
+    window.addEventListener('pointerdown', first, opts);
+    window.addEventListener('keydown', first, opts);
+    return () => {
+      window.removeEventListener('pointerdown', first, opts);
+      window.removeEventListener('keydown', first, opts);
+    };
+  }, [wake, unlock]);
   const [visible, setVisible] = useState(true);
   useEffect(() => {
     const on = () => setVisible(document.visibilityState === 'visible');
@@ -886,7 +963,7 @@ export function SunBotChat({
               <Rich text={replyMsg.text} />
             </div>
           ) : null}
-          {replyMsg?.actions?.map((a, j) => (a.type === 'cards' ? <Holo key={`h${j}`} deck={a} onOpen={onOpen} /> : null))}
+          {replyMsg?.actions?.map((a, j) => (a.type === 'cards' ? <Holo key={`h${j}`} deck={a} onOpen={onOpen} onAct={pressCard} /> : null))}
           {replyMsg?.actions?.some((a) => a.type !== 'cards') ? (
             <div className="sb-actions">
               {replyMsg.actions.map((a, j) =>
@@ -984,6 +1061,14 @@ export function SunBotChat({
                   </svg>
                 </button>
               ) : null}
+              {audience !== 'public' ? (
+                <button type="button" className={`sb-icon ${memOpen ? 'on' : ''}`} onClick={() => setMemOpen((v) => !v)} aria-pressed={memOpen} aria-label="Sunny xotirasi" title="Sunny nimalarni eslab qolgan">
+                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 0V7a3 3 0 0 0-3-3Z" />
+                    <path d="M15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 0" />
+                  </svg>
+                </button>
+              ) : null}
               <button type="button" className="sb-icon" onClick={reset} aria-label="Yangi suhbat" title="Yangi suhbat">
                 <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
@@ -998,6 +1083,9 @@ export function SunBotChat({
             </div>
           </header>
 
+          {memOpen ? (
+            <MemorySheet onClose={() => setMemOpen(false)} />
+          ) : (
           <div className="sb-msgs" ref={scroller} aria-live="polite" aria-busy={busy}>
             {msgs.map((m, i) => (
               <div key={i} className={`sb-msg ${m.role} ${m.error ? 'error' : ''} ${m.streaming ? 'streaming' : ''}`}>
@@ -1087,6 +1175,7 @@ export function SunBotChat({
               </div>
             ) : null}
           </div>
+          )}
 
           {voice.issue ? (
             <div className="sb-issue" role="alert">

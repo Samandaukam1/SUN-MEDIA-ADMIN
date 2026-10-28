@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { memoriesReply, memoryPrompt, socialPrompt, stylePrompt } from '../lib/assistant/persona.ts';
+await import('./integration/hooks.mjs');
+const { memoriesReply, memoryPrompt, socialPrompt, stylePrompt } = await import('../lib/assistant/persona.ts');
 
 test('memory in the prompt: grouped, within a budget, and marked as data (never instructions)', () => {
   const p = memoryPrompt([

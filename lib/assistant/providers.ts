@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { AiFailedError } from '@/lib/ai';
-import { geminiChat, geminiKey } from './gemini';
+import { geminiChat, geminiKey, type ModelUsage } from './gemini';
 import { toolsFor, type AssistantAction, type AssistantContext, type runTool } from './tools';
 
 /**
@@ -21,6 +21,8 @@ export type ProviderInput = {
   step: (tool: string, input: Record<string, unknown>) => ReturnType<typeof runTool>;
   signal?: AbortSignal;
   onText?: (delta: string) => void;
+  /** Each model call's token counts, as the provider reported them (cost accounting). */
+  onUsage?: (u: ModelUsage) => void;
 };
 export type AiProvider = {
   id: 'gemini' | 'anthropic' | 'openai';
@@ -43,7 +45,7 @@ function collector() {
 const gemini: AiProvider = {
   id: 'gemini',
   ready: () => !!geminiKey(),
-  async reply({ system, history, ctx, step, signal, onText }) {
+  async reply({ system, history, ctx, step, signal, onText, onUsage }) {
     const done = collector();
     const reply = await geminiChat(
       system,
@@ -55,7 +57,7 @@ const gemini: AiProvider = {
         return result.content;
       },
       // Internal answers list people and numbers: they get more room than a sales reply.
-      { onText, signal, maxTokens: ctx.audience === 'staff' ? 1600 : 900 },
+      { onText, signal, maxTokens: ctx.audience === 'staff' ? 1600 : 900, onUsage },
     );
     return { reply, actions: done.actions };
   },
@@ -64,8 +66,8 @@ const gemini: AiProvider = {
 const anthropic: AiProvider = {
   id: 'anthropic',
   ready: () => !!process.env.ANTHROPIC_API_KEY,
-  async reply({ system, history, ctx, step, signal, onText }) {
-    const result = await claudeReply(process.env.ANTHROPIC_API_KEY!, system, history, ctx, step, signal);
+  async reply({ system, history, ctx, step, signal, onText, onUsage }) {
+    const result = await claudeReply(process.env.ANTHROPIC_API_KEY!, system, history, ctx, step, signal, onUsage);
     // Claude answers in one piece.
     onText?.(result.reply);
     return result;
@@ -93,6 +95,7 @@ async function claudeReply(
   ctx: AssistantContext,
   step: ProviderInput['step'],
   signal?: AbortSignal,
+  onUsage?: ProviderInput['onUsage'],
 ): Promise<{ reply: string; actions: AssistantAction[] }> {
   const actions: AssistantAction[] = [];
   const model = process.env.ASSISTANT_MODEL || process.env.AI_MODEL || 'claude-sonnet-5-5';
@@ -122,7 +125,9 @@ async function claudeReply(
       if (response.status === 429 || response.status >= 500) throw new AiFailedError(`Hozir band ekanman, bir daqiqadan so‘ng yozing. (C${response.status})`);
       throw new AiFailedError(`So‘rovni bajarib bo‘lmadi. (C${response.status})`);
     }
-    const data = (await response.json()) as { content: Block[]; stop_reason: string };
+    const data = (await response.json()) as { content: Block[]; stop_reason: string; usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } };
+    const u = data.usage;
+    if (u) onUsage?.({ model, input: (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0), output: u.output_tokens ?? 0, cached: u.cache_read_input_tokens ?? 0, thoughts: 0 });
     const uses = data.content.filter((b): b is Extract<Block, { type: 'tool_use' }> => b.type === 'tool_use');
     const text = data.content
       .filter((b): b is Extract<Block, { type: 'text' }> => b.type === 'text')

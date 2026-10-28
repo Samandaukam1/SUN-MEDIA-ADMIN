@@ -81,3 +81,43 @@ test('wake listener: while Sunny speaks only a real interruption counts; no mic 
   f.made.at(-1).onerror({ error: 'not-allowed' });
   assert.equal(w.state, 'denied');
 });
+
+test('wake listener: a long command in one breath is waited for, not cut off by "Eshitaman!"', async () => {
+  const f = fake();
+  const calls = [];
+  const w = new WakeListener(f.make, 'uz-UZ', { onWake: (rest, final) => calls.push([rest, final]), onBargeIn: () => {} });
+  w.enable();
+  f.say('Sunny ertaga', false);
+  await tick(900);
+  f.say('Sunny ertaga SAFI syomkasini', false);
+  await tick(900);
+  assert.deepEqual(calls, [['', false]], 'still talking: no answer yet');
+  f.say('Sunny ertaga SAFI syomkasini belgilagin', false);
+  await tick(1450);
+  assert.deepEqual(calls.at(-1), ['ertaga safi syomkasini belgilagin', true], 'the whole command, even without a final result');
+  w.disable();
+});
+
+test('wake listener: one real word is a command, a filler is not; silence is not an error; its own echo is ignored', async () => {
+  const f = fake();
+  const calls = [];
+  const w = new WakeListener(f.make, 'uz-UZ', { onWake: (rest, final) => calls.push([rest, final]), onBargeIn: () => {} });
+  w.enable();
+  f.say('Sunny, keldim', true);
+  assert.deepEqual(calls.at(-1), ['keldim', true]);
+  f.say('Sunny hey', true);
+  assert.deepEqual(calls.at(-1), ['', true]);
+  // Chrome ends a quiet session with "no-speech": listening resumes at once, without a growing pause.
+  for (let i = 0; i < 4; i++) {
+    f.made.at(-1).onerror({ error: 'no-speech' });
+    f.made.at(-1).onend();
+    await tick(350);
+  }
+  assert.equal(f.made.length, 5, 'restarted after every quiet end');
+  const before = calls.length;
+  w.speaking('Men Sunny, sizga yordam beraman');
+  w.speaking('');
+  f.say('men sunny sizga yordam', true);
+  assert.equal(calls.length, before, 'the speakers’ tail is not a call');
+  w.disable();
+});

@@ -10,7 +10,7 @@ Belgilar: ✅ ishlaydi (tekshirilgan) · 🟡 qisman · ⬜ hali yo‘q · ⛔ t
 
 | Bosqich | Holat | Izoh |
 |---|---|---|
-| 1. Core foundation | ✅ | branch `feat/sunny-phase1`; 1–9-bosqich production'da (`950b845` + migratsiya `20261028100000`, 2026-10-27, ikkala Vercel loyihasi) |
+| 1. Core foundation | ✅ | branch `feat/sunny-phase1`; 1–9-bosqich va yakunlash V2 production'da (`3fdeb69` + migratsiya `20261029100000`, 2026-10-28, ikkala Vercel loyihasi) |
 | 2. Living character | 🟡 | emotsiya, mood physics, avtonom hayot, thruster, jismoniy reaksiyalar ✅; bitta renderer va 2D↔3D solishtirish yo‘q |
 | 3. Voice assistant | ✅ | wake-word, summon, barge-in, spatial audio; ovoz rejimida robot turgan joyida gapiradi |
 | 4. AI intelligence (Gemini) | ✅ | provayder registri, tokensiz buyruqlar, deterministik backend buyruqlari, kunlik AI byudjeti; suhbat xulosasi ataylab yo‘q (pastda) |
@@ -299,6 +299,8 @@ Qayta yozilmadi: mavjud tizim tuzatildi va yetishmagani qo‘shildi. Migratsiya:
 | G. Push | BLOCKED (qurilma yo‘q) | Production: VAPID bor, `/api/push/config` enabled, lekin `push_tokens` = 0 — hech kim hali bildirishnomani yoqmagan, yetkazish 0. Tekshiruv tartibi pastda. |
 
 Tekshiruv (yakuniy): unit 164/164; integratsiya 31/31 (noldan qayta qurilgan baza); pgTAP 1422 (faqat oldindan mavjud 029 #8, 031 #62); brauzer: ovoz 12/12, yangi UI 14/14, 7-bosqich 11/11, Qitmir/summon 4/4; `next build` 90/90.
+
+**Production (2026-10-28):** migratsiya `20261029100000_assistant_cost` (dry-run alohida ko‘rildi: faqat shu fayl) qo‘llandi; kod `3fdeb69` ikkala Vercel loyihasida READY — `sun-media-admin-kubg7kioe` (sunmediagroup.uz, www) va `sunmedia-admin-q4pb75h5t` (panel). Jonli tekshiruv: ikkala sayt 200; `/api/push/config` enabled; `/api/assistant/memory` mehmonga 401; public chat haqiqiy Gemini javobi berdi va `assistant_calls` ga yozildi (`gemini-3.5-flash-lite`, 3249/98 token, narx — belgilanmagan); TTS uslublari Azure’da haqiqiy audio, davomiylik sozlamaga mos (qitmir 4,13 s < bright 4,20 < steady 4,39 < soft 4,63). Xodim hisobidagi oqimlar production’da sinalmagan (xodim sessiyasi yo‘q).
 
 ### Push — qurilmada tekshirish tartibi (kutilmoqda)
 1. iPhone: Safari’da sunmediagroup.uz → Ulashish → «Bosh ekranga» → ilovani bosh ekrandan ochib kirish → Profil → 🔔 → «Bildirishnomalarni yoqish». Android/kompyuter: Chrome’da kirish → o‘sha tugma.

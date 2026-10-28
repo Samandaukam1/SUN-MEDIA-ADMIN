@@ -29,11 +29,22 @@ export type Application = {
   budget_amount: number | null;
   budget_label: string | null;
   source_path: string;
+  /** The ad link's tracking values ({} for the site's own form). */
+  attribution?: unknown;
   status: 'new' | 'seen' | 'archived';
   created_at: string;
   handled_at: string | null;
   handler: string | null;
 };
+
+/** Where it came from (the /ariza page keeps the ad link's own values). */
+const track = (a: Application): Record<string, string> => (a.attribution && typeof a.attribution === 'object' && !Array.isArray(a.attribution) ? (a.attribution as Record<string, string>) : {});
+const utm = (a: Application) =>
+  (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'] as const)
+    .filter((k) => track(a)[k])
+    .map((k) => `${k.replace('utm_', '')}: ${track(a)[k]}`)
+    .concat(track(a).fbclid ? ['fbclid ✓'] : [])
+    .join(' · ');
 
 const STATUS = {
   new: { label: 'Yangi', tone: 'accent' },
@@ -71,11 +82,13 @@ export function ApplicationsInbox({ items }: { items: Application[] }) {
                 {a.budget_label || a.budget_amount ? (
                   <Badge tone="accent">Byudjet: {a.budget_label || `${Number(a.budget_amount).toLocaleString('ru-RU')} so‘m`}</Badge>
                 ) : null}
+                {track(a).channel ? <Badge tone="info">{track(a).channel}</Badge> : null}
               </div>
               <p className="mt-1 text-sm text-muted">
                 {formatShortDateTime(a.created_at)} · {a.source_path}
                 {a.company ? ` · Brend: ${a.company}` : ''}
               </p>
+              {utm(a) ? <p className="mt-0.5 text-xs break-all text-subtle">{utm(a)}</p> : null}
             </div>
             <div className="flex flex-wrap gap-2">
               {a.status === 'new' ? (

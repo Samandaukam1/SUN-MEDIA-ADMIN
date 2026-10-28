@@ -77,6 +77,9 @@ export function ApplicationForm({
   source,
   initialService,
   onDone,
+  attribution,
+  onSuccess,
+  failMessage,
 }: {
   labels: FormLabels;
   budgets: BudgetOption[];
@@ -84,6 +87,12 @@ export function ApplicationForm({
   /** What the visitor clicked ("Tarif: Standart"): that tariff's budget is chosen in advance. */
   initialService?: string;
   onDone?: () => void;
+  /** The ad link's tracking values (the /ariza page): sent with the application; the server keeps known keys only. */
+  attribution?: Record<string, string>;
+  /** Called once the server confirmed the application; the caller then shows its own confirmation instead of ours. */
+  onSuccess?: () => void;
+  /** Shown instead of the server's wording when the application could not be saved. */
+  failMessage?: string;
 }) {
   const uid = useId();
   const [state, action, pending] = useActionState<ApplicationState, FormData>(submitApplication, { status: 'idle' });
@@ -101,6 +110,12 @@ export function ApplicationForm({
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => setStartedAt(Date.now()), []);
+  const reported = useRef(false);
+  useEffect(() => {
+    if (state.status !== 'success' || reported.current) return;
+    reported.current = true;
+    onSuccess?.();
+  }, [state.status, onSuccess]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => setChoice(preset()), [initialService]);
 
@@ -113,7 +128,7 @@ export function ApplicationForm({
   return (
     <div className="relative">
       <AnimatePresence mode="wait" initial={false}>
-        {done ? (
+        {done && onSuccess ? null : done ? (
           <motion.div
             key="done"
             initial={{ opacity: 0, y: 16, filter: 'blur(8px)' }}
@@ -155,6 +170,7 @@ export function ApplicationForm({
             <input type="hidden" name="source" value={source} />
             <input type="hidden" name="budgetAmount" value={budgetAmount} />
             <input type="hidden" name="budgetLabel" value={budgetLabel} />
+            {attribution ? <input type="hidden" name="attribution" value={JSON.stringify(attribution)} /> : null}
             <div aria-hidden className="absolute -left-[9999px] h-px w-px overflow-hidden">
               <label>
                 Website
@@ -246,7 +262,7 @@ export function ApplicationForm({
 
             {state.status === 'error' && !Object.keys(err).length ? (
               <p role="alert" className="rounded-2xl border border-[#ff8a8a]/30 bg-[#ff8a8a]/10 px-4 py-3 text-[14px] text-[#ffb4b4]">
-                {state.message}
+                {failMessage && state.code === 'failed' ? failMessage : state.message}
               </p>
             ) : null}
 

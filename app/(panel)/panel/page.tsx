@@ -34,7 +34,7 @@ export default async function HomePage() {
     // New site applications (site managers and the leadership can read them).
     supabase
       .from('site_applications')
-      .select('id, full_name, company, phone, budget_label, budget_amount, instagram, telegram, created_at')
+      .select('id, full_name, company, phone, budget_label, budget_amount, instagram, telegram, attribution, created_at')
       .eq('status', 'new')
       .order('created_at', { ascending: false })
       .limit(5),
@@ -110,8 +110,10 @@ type NewApplication = {
   budget_amount: number | null;
   instagram: string | null;
   telegram: string | null;
+  attribution?: unknown;
   created_at: string;
 };
+const channelOf = (a: NewApplication) => (a.attribution && typeof a.attribution === 'object' ? ((a.attribution as Record<string, unknown>).channel as string | undefined) : undefined) ?? null;
 
 function Applications({ items, canOpen }: { items: NewApplication[]; canOpen: boolean }) {
   return (
@@ -128,7 +130,7 @@ function Applications({ items, canOpen }: { items: NewApplication[]; canOpen: bo
                 {a.company ? <span className="font-normal text-muted"> · {a.company}</span> : null}
               </p>
               <p className="truncate text-xs text-muted">
-                {[a.phone, a.instagram ? `IG @${a.instagram}` : null, a.telegram ? `TG @${a.telegram}` : null, a.budget_label || (a.budget_amount ? `${Number(a.budget_amount).toLocaleString('ru-RU')} so‘m` : null)]
+                {[a.phone, a.instagram ? `IG @${a.instagram}` : null, a.telegram ? `TG @${a.telegram}` : null, a.budget_label || (a.budget_amount ? `${Number(a.budget_amount).toLocaleString('ru-RU')} so‘m` : null), channelOf(a)]
                   .filter(Boolean)
                   .join(' · ')}
               </p>

@@ -8,7 +8,7 @@ import type { Database } from '@/types/database';
 const OPEN_PATHS = ['/auth/callback', '/no-access', '/api/assistant', '/api/push', '/app'];
 
 /** The public website: the landing page, its pages and the files search engines ask for. */
-const SITE_PATHS = ['/xizmatlar', '/keyslar', '/hamkorlar', '/tariflar', '/biz-haqimizda', '/aloqa'];
+const SITE_PATHS = ['/xizmatlar', '/keyslar', '/hamkorlar', '/tariflar', '/biz-haqimizda', '/aloqa', '/ariza'];
 const SITE_FILES = ['/robots.txt', '/sitemap.xml', '/manifest.webmanifest', '/opengraph-image', '/sw.js', '/offline.html'];
 
 const under = (path: string, prefix: string) => path === prefix || path.startsWith(`${prefix}/`);

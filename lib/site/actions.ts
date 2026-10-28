@@ -14,7 +14,45 @@ export type ApplicationField = 'firstName' | 'lastName' | 'brand' | 'phone' | 's
 export type ApplicationState =
   | { status: 'idle' }
   | { status: 'success' }
-  | { status: 'error'; message: string; fieldErrors?: Partial<Record<ApplicationField, string>> };
+  | { status: 'error'; message: string; fieldErrors?: Partial<Record<ApplicationField, string>>; code?: 'invalid' | 'rate' | 'failed' };
+
+const TRACKING = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid'] as const;
+
+/**
+ * Where an application came from, from the ad link's own values only (the /ariza page passes them; the site's dialog
+ * passes none). Unknown keys are dropped, values are short plain strings, and the channel is named only from what is
+ * actually there — utm_source, a Meta click id, the Instagram app's own browser — never assumed.
+ */
+function attributionOf(raw: string, page: string, userAgent: string): Record<string, string> {
+  let input: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(raw || '{}') as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) input = parsed as Record<string, unknown>;
+  } catch {
+    // not JSON: no attribution
+  }
+  const out: Record<string, string> = {};
+  for (const key of TRACKING) {
+    const value = input[key];
+    if (typeof value !== 'string') continue;
+    const clean = value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, key === 'fbclid' ? 512 : 200);
+    if (clean) out[key] = clean;
+  }
+  const inApp = /Instagram/i.test(userAgent);
+  if (!Object.keys(out).length && !inApp) return {};
+  const source = (out.utm_source ?? '').toLowerCase();
+  const paid = !!out.fbclid || /^(cpc|ppc|cpm|paid|paid[_-]?social|social[_-]?paid|ads?)$/i.test(out.utm_medium ?? '');
+  const network = /^(ig|instagram)$/.test(source) ? 'Instagram' : /^(fb|facebook|meta)$/.test(source) ? 'Facebook' : null;
+  out.channel = network
+    ? `${network}${paid ? ' reklama' : ''}`
+    : source
+      ? `UTM: ${out.utm_source!.slice(0, 60)}`
+      : out.fbclid
+        ? 'Meta (Instagram/Facebook) havolasi'
+        : 'Instagram ilovasi';
+  out.page = page;
+  return out;
+}
 
 const person = (what: string) =>
   z
@@ -59,11 +97,6 @@ const applicationSchema = z
 
 export async function submitApplication(_prev: ApplicationState, formData: FormData): Promise<ApplicationState> {
   const text = (key: string) => String(formData.get(key) ?? '');
-  // Bots fill the hidden field or post faster than a person can type; they get a quiet "success".
-  const startedAt = Number(text('startedAt'));
-  if (text('website') !== '' || (Number.isFinite(startedAt) && startedAt > 0 && Date.now() - startedAt < 2500)) {
-    return { status: 'success' };
-  }
 
   const parsed = applicationSchema.safeParse({
     firstName: text('firstName'),
@@ -83,11 +116,18 @@ export async function submitApplication(_prev: ApplicationState, formData: FormD
       const key = (raw === 'instagram' || raw === 'telegram' ? 'social' : raw === 'budgetAmount' ? 'budget' : raw) as ApplicationField;
       fieldErrors[key] ??= issue.message;
     }
-    return { status: 'error', message: 'Maydonlarni tekshiring.', fieldErrors };
+    return { status: 'error', message: 'Maydonlarni tekshiring.', fieldErrors, code: 'invalid' };
+  }
+  // Bots fill the hidden field or post a complete form faster than a person can type; they get a quiet "success". Checked
+  // after validation, so a person who taps "Yuborish" on an empty form at once sees what is missing, never a false "qabul
+  // qilindi".
+  const startedAt = Number(text('startedAt'));
+  if (text('website') !== '' || (Number.isFinite(startedAt) && startedAt > 0 && Date.now() - startedAt < 2500)) {
+    return { status: 'success' };
   }
 
   const who = await visitor();
-  if (!who) return { status: 'error', message: 'Ariza qabul qilish vaqtincha ishlamayapti. Iltimos, qo‘ng‘iroq qiling.' };
+  if (!who) return { status: 'error', message: 'Ariza qabul qilish vaqtincha ishlamayapti. Iltimos, qo‘ng‘iroq qiling.', code: 'failed' };
   const v = parsed.data;
   const { error } = await createAdminClient().rpc('site_apply', {
     p_first_name: v.firstName,
@@ -101,12 +141,13 @@ export async function submitApplication(_prev: ApplicationState, formData: FormD
     p_source_path: v.source,
     p_fingerprint: who.key,
     p_user_agent: who.userAgent,
+    p_attribution: attributionOf(text('attribution'), v.source, who.userAgent),
   });
   if (error) {
     if (error.message === 'SITE_RATE_LIMITED') {
-      return { status: 'error', message: 'Siz yaqinda ariza yubordingiz. Birozdan so‘ng qayta urinib ko‘ring.' };
+      return { status: 'error', message: 'Siz yaqinda ariza yubordingiz. Birozdan so‘ng qayta urinib ko‘ring.', code: 'rate' };
     }
-    return { status: 'error', message: 'Arizani yuborib bo‘lmadi. Qayta urinib ko‘ring yoki qo‘ng‘iroq qiling.' };
+    return { status: 'error', message: 'Arizani yuborib bo‘lmadi. Qayta urinib ko‘ring yoki qo‘ng‘iroq qiling.', code: 'failed' };
   }
   return { status: 'success' };
 }

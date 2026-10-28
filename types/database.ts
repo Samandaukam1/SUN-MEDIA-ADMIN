@@ -5849,6 +5849,7 @@ export type Database = {
       }
       site_applications: {
         Row: {
+          attribution: Json
           budget_amount: number | null
           budget_label: string | null
           company: string
@@ -5871,6 +5872,7 @@ export type Database = {
           user_agent: string
         }
         Insert: {
+          attribution?: Json
           budget_amount?: number | null
           budget_label?: string | null
           company?: string
@@ -5893,6 +5895,7 @@ export type Database = {
           user_agent?: string
         }
         Update: {
+          attribution?: Json
           budget_amount?: number | null
           budget_label?: string | null
           company?: string
@@ -9033,6 +9036,7 @@ export type Database = {
           p_instagram: string
           p_last_name: string
           p_phone: string
+          p_attribution?: Json
           p_source_path: string
           p_telegram: string
           p_user_agent: string

@@ -356,6 +356,37 @@ Quality Guardian, Meeting Copilot, Time Machine, Executive Intelligence.
 | `AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION` | production'da bor | o‘zbekcha ovoz (uz-UZ-SardorNeural) |
 | `ASSISTANT_QITMIR_RATE`, `ASSISTANT_QITMIR_PITCH` | ixtiyoriy | Qitmir ovoz prosodiyasi |
 
+## Jamoa ish oqimi (2026-10-31, 9-sessiya)
+
+### Chat: ovozli va dumaloq video xabarlar — production'da (`678431a`, migratsiya `20261031100000`)
+- Sunny `/chat`, `/xodim/chat`, `/kabinet/chat` da ko‘rinmaydi (sozlamalari saqlanadi). Ovozli xabar (bosish — qo‘lsiz,
+  bosib turish — qo‘yib yuborsa yuboriladi, chapga — bekor, tepaga — qulf), dumaloq video (60 s, old kamera).
+- Mavjud `files` / `message_attachments` / yopiq `chat-attachments`; `messages.kind`, `files.waveform`,
+  `send_media_message` (RLS chaqiruvchi nomidan, qayta urinishda dublikat yo‘q). DB testi: `046_chat_voice_video`.
+- Qoldi: haqiqiy iPhone/Android'da yozish va ijro; SUNMEDIA USER ilovasi bu xabarlarni oddiy fayl sifatida ko‘rsatadi.
+
+### Vazifani qabul qilish, jonli holat, countdown, davomat birinchi — production'da (`f874399`, migratsiya `20261031110000`, 2026-10-31, ikkala Vercel loyihasi READY)
+- `task_assignments.ack_required` / `acknowledged_at`: har bir **yangi** biriktirish (oddiy vazifa ham) xodimning o‘zi
+  “VAZIFANI QABUL QILDIM” bilan qabul qiladi. Migratsiyadan oldingi biriktirishlar talab qilinmaydi (soxta vaqt
+  yozilmaydi); o‘zini biriktirgan — darhol qabul. `acknowledge_task` (faqat o‘zi, server vaqti, idempotent; status
+  o‘zgarmaydi), `get_my_pending_acks`, realtime (`staff` + `user:<id>`, faqat id) va audit.
+- `TaskGate` (`/xodim/*` layout va panel layout): avval bugungi KELDIM (faqat davomat qoidalari bo‘yicha kerak bo‘lsa:
+  faol xodim, ish kuni, 09:45 dan ish oxirigacha, yozuv yo‘q; “Keyinroq” — shu sessiya), keyin vazifalar birma-bir.
+  Ilova modal `<dialog>` ortida (sahifa va qoralamalar saqlanadi); ochiq: KELDIM, vazifaning batafsil sahifasi
+  (pastki “qabul qildim” paneli), chiqish. Yangi biriktirish jonli keladi; olib tashlangan / bekor / tugagan vazifa
+  o‘zi tushadi. O‘qishda xato bo‘lsa — hech kimni qulflamaydi.
+- Rahbar: `/work/tasks/[id]` — “Aziz — Qabul qildi · 14:32”, “Hali qabul qilmagan”, “3 xodimdan 2 nafari qabul qildi”, jonli.
+- Bildirishnoma: “Sizga yangi vazifa biriktirildi!” — “<nom> — vazifani ko‘rib chiqing va qabul qiling.” har bir
+  biriktirilganga (in-app + push). Kontent ish oqimi vazifalari o‘zining bitta umumiy xabarini yuboradi (o‘zgartirilmadi).
+- Xodim bosh sahifasi: “Mening vazifalarim” — qabul qilinmaganlar → muddati o‘tganlar → yaqin muddat; jonli countdown
+  (bitta umumiy taymer, yashirin tabda to‘xtaydi), “MUDDAT O‘TDI”; davomat belgilangach karta o‘rniga bir qator.
+- Realtime: bir topic — bitta umumiy kanal (`lib/realtime/topic.ts`); `LiveRefresh` va `NotificationBell` bir xil
+  `user:<id>` kanaliga ikki marta obuna bo‘lib to‘qnashardi — tuzatildi.
+- Tekshiruv: alohida lokal Supabase'da (boshqa portlar) barcha migratsiyalar toza qo‘llandi; `045` + `046` + `008` — 64/64;
+  to‘liq DB to‘plami 1467/1469 (2 ta o‘yin testi — `029`, `031` — bu migratsiyalarsiz ham yiqiladi, oldindan bor).
+  Production'da anonim chaqiruvlar rad etiladi. Production bazasida haqiqiy hisoblar bilan sinov — ruxsat berilmadi, kutilmoqda.
+- Qoldi: haqiqiy qurilmada push va jonli oqim (2 hisob bilan); SUNMEDIA USER ilovasida qabul qilish ekrani yo‘q.
+
 ## Deploy (muhim)
 Vercel'da ikki loyiha bor: **`sun-media-admin`** → sunmediagroup.uz, **`sunmedia-admin`** → sunmedia-admin.vercel.app.
 `npm run deploy` faqat ikkinchisini yangilaydi. sunmediagroup.uz uchun HEAD'ni `sun-media-admin`

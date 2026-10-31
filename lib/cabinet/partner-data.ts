@@ -203,12 +203,16 @@ export type ChatMessage = {
   id: string;
   sender_id: string | null;
   body: string;
+  /** 'voice' / 'round_video': one recording instead of text. */
+  kind: 'text' | 'voice' | 'round_video';
   is_system: boolean;
   created_at: string;
   deleted_at: string | null;
   sender_label: string | null;
   sender: { full_name: string; avatar_url: string | null } | null;
-  attachments: { file: { id: string; name: string; kind: string; mime_type: string | null; size_bytes: number | null } | null }[];
+  attachments: {
+    file: { id: string; name: string; kind: string; mime_type: string | null; size_bytes: number | null; duration_ms: number | null; waveform: number[] | null } | null;
+  }[];
 };
 
 export async function loadChatRoom(clientId: string): Promise<{ id: string; name: string } | null> {
@@ -233,9 +237,9 @@ export async function loadMessages(roomId: string, before: string | null): Promi
   let query = supabase
     .from('messages')
     .select(
-      `id, sender_id, body, is_system, created_at, deleted_at, sender_label,
+      `id, sender_id, body, kind, is_system, created_at, deleted_at, sender_label,
        sender:profiles!messages_sender_id_fkey(full_name, avatar_url),
-       attachments:message_attachments(file:files(id, name, kind, mime_type, size_bytes))`,
+       attachments:message_attachments(file:files(id, name, kind, mime_type, size_bytes, duration_ms, waveform))`,
     )
     .eq('room_id', roomId);
   if (before) query = query.lt('created_at', before);

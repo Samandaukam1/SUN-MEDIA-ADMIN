@@ -3,8 +3,11 @@ import { NextResponse } from 'next/server';
 import { requireStaff } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 
-/** One stored file: RLS decides whether this person may see it, then a short-lived download link. */
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+/**
+ * One stored file: RLS decides whether this person may see it, then a short-lived download link. `?media=1` (voice and
+ * round video messages): shown inline and valid long enough for a player's range requests while it plays.
+ */
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await requireStaff();
   const { id } = await params;
   const supabase = await createClient();
@@ -12,7 +15,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (error || !file) return new NextResponse('Fayl topilmadi', { status: 404 });
   if (file.external_url) return NextResponse.redirect(file.external_url);
   if (!file.bucket || !file.storage_path) return new NextResponse('Fayl topilmadi', { status: 404 });
-  const { data, error: signError } = await supabase.storage.from(file.bucket).createSignedUrl(file.storage_path, 120, { download: file.name });
+  const media = new URL(request.url).searchParams.get('media') === '1';
+  const { data, error: signError } = await supabase.storage
+    .from(file.bucket)
+    .createSignedUrl(file.storage_path, media ? 900 : 120, media ? undefined : { download: file.name });
   if (signError || !data) return new NextResponse('Faylni ochib bo‘lmadi', { status: 403 });
-  return NextResponse.redirect(data.signedUrl);
+  return NextResponse.redirect(data.signedUrl, media ? { headers: { 'Cache-Control': 'private, no-store' } } : undefined);
 }

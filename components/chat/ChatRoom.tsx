@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 
+import { MediaComposer } from '@/components/chat/media/MediaComposer';
+import { RoundVideo, VoiceBubble } from '@/components/chat/media/MediaPlayers';
+import { messagePreview } from '@/components/chat/media/media';
 import { Icon } from '@/components/ui/Icon';
 import { deleteRoomMessage, editRoomMessage, markRoomRead, sendRoomMessage } from '@/lib/actions/chat';
 import type { PanelMessage, RoomMember } from '@/lib/chat';
@@ -123,6 +126,21 @@ export function ChatRoom({
     };
   }, [roomId, live, router, me]);
 
+  // Phones: when the keyboard opens over the page, the composer and the newest message stay in view.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      if (document.activeElement !== textarea.current) return;
+      const el = list.current;
+      const atBottom = !!el && el.scrollHeight - el.scrollTop - el.clientHeight < 160;
+      textarea.current?.scrollIntoView({ block: 'nearest' });
+      if (el && atBottom) el.scrollTop = el.scrollHeight;
+    };
+    vv.addEventListener('resize', onResize);
+    return () => vv.removeEventListener('resize', onResize);
+  }, []);
+
   async function uploadAll(): Promise<string[] | null> {
     const supabase = getBrowserClient();
     const ids: string[] = [];
@@ -233,6 +251,10 @@ export function ChatRoom({
           lastDay = day;
           const mine = m.sender_id === me;
           const attached = m.attachments.map((a) => a.file).filter((f): f is NonNullable<typeof f> => !!f);
+          // Voice / round video: one recording instead of text; a round video sits on the page, not in a bubble.
+          const media = !m.deleted_at && m.kind !== 'text' ? (attached[0] ?? null) : null;
+          const round = !!media && m.kind === 'round_video';
+          const filled = mine && !round;
           const recipients = members.filter((o) => o.id !== m.sender_id);
           const receipt = (mine || seeAllReceipts) && !m.deleted_at ? receiptOf(m, recipients) : null;
           const readers = m.reads.filter((r) => r.user_id !== m.sender_id).sort((a, b) => a.read_at.localeCompare(b.read_at));
@@ -245,16 +267,29 @@ export function ChatRoom({
                 <p className="mx-auto max-w-md text-center text-[12.5px] text-muted">{m.body}</p>
               ) : (
                 <div className={`group flex items-end gap-1 ${mine ? 'flex-row-reverse' : 'flex-row'}`}>
-                  <div className={`relative max-w-[85%] rounded-2xl px-3.5 py-2.5 sm:max-w-[70%] ${mine ? 'rounded-br-md bg-brand text-on-brand' : 'rounded-bl-md border border-line bg-surface'}`}>
+                  <div
+                    className={`relative max-w-[85%] sm:max-w-[70%] ${round ? '' : `rounded-2xl px-3.5 py-2.5 ${mine ? 'rounded-br-md bg-brand text-on-brand' : 'rounded-bl-md border border-line bg-surface'}`}`}
+                  >
                     {!mine ? <p className="mb-0.5 text-[12px] font-semibold text-muted">{m.sender_label || m.sender?.full_name || '—'}</p> : null}
                     {m.reply && !m.deleted_at ? (
-                      <div className={`mb-1.5 rounded-lg border-l-2 px-2.5 py-1 text-[12.5px] ${mine ? 'border-current bg-black/10' : 'border-accent bg-surface-2'}`}>
+                      <div className={`mb-1.5 rounded-lg border-l-2 px-2.5 py-1 text-[12.5px] ${filled ? 'border-current bg-black/10' : 'border-accent bg-surface-2'}`}>
                         <p className="font-semibold opacity-80">{m.reply.sender?.full_name ?? '—'}</p>
-                        <p className="line-clamp-2 opacity-75">{m.reply.deleted_at ? 'Xabar o‘chirilgan' : m.reply.body || 'Fayl'}</p>
+                        <p className="line-clamp-2 opacity-75">{messagePreview(m.reply)}</p>
                       </div>
                     ) : null}
                     {m.deleted_at ? (
                       <p className="text-[14px] italic opacity-60">Xabar o‘chirilgan</p>
+                    ) : media && !round ? (
+                      <VoiceBubble
+                        src={`/api/files/${media.id}?media=1`}
+                        downloadHref={`/api/files/${media.id}`}
+                        durationMs={media.duration_ms}
+                        waveform={media.waveform}
+                        seed={media.id}
+                        knob={mine ? 'bg-on-brand text-brand' : 'bg-brand text-on-brand'}
+                      />
+                    ) : media ? (
+                      <RoundVideo src={`/api/files/${media.id}?media=1`} downloadHref={`/api/files/${media.id}`} durationMs={media.duration_ms} />
                     ) : (
                       <>
                         {m.body ? <p className="text-[14.5px] leading-snug break-words whitespace-pre-wrap">{m.body}</p> : null}
@@ -278,7 +313,9 @@ export function ChatRoom({
                         ) : null}
                       </>
                     )}
-                    <p className={`mt-1 flex items-center justify-end gap-1 text-[10.5px] ${mine ? 'opacity-70' : 'text-subtle'}`}>
+                    <p
+                      className={`mt-1 flex items-center justify-end gap-1 text-[10.5px] ${round ? 'ml-auto w-fit rounded-full bg-surface-2 px-2 py-0.5 text-muted' : mine ? 'opacity-70' : 'text-subtle'}`}
+                    >
                       {m.edited_at && !m.deleted_at ? <span>tahrirlangan ·</span> : null}
                       {timeFmt.format(new Date(m.created_at))}
                       {receipt ? (
@@ -322,9 +359,11 @@ export function ChatRoom({
                       </button>
                       {mine ? (
                         <>
-                          <button type="button" onClick={() => startEdit(m)} aria-label="Tahrirlash" title="Tahrirlash" className="grid size-7 place-items-center rounded-lg text-subtle hover:bg-surface-2 hover:text-ink">
-                            <Icon name="edit" size={14} />
-                          </button>
+                          {m.kind === 'text' ? (
+                            <button type="button" onClick={() => startEdit(m)} aria-label="Tahrirlash" title="Tahrirlash" className="grid size-7 place-items-center rounded-lg text-subtle hover:bg-surface-2 hover:text-ink">
+                              <Icon name="edit" size={14} />
+                            </button>
+                          ) : null}
                           <button type="button" onClick={() => remove(m)} aria-label="O‘chirish" title="O‘chirish" className="grid size-7 place-items-center rounded-lg text-subtle hover:bg-danger-soft hover:text-danger">
                             <Icon name="x" size={14} />
                           </button>
@@ -342,13 +381,13 @@ export function ChatRoom({
       {readOnly ? (
         <p className="border-t border-line px-5 py-3 text-center text-[13px] text-muted">{readOnlyReason ?? 'Bu chatni faqat kuzatasiz.'}</p>
       ) : (
-        <div className="border-t border-line p-3">
+        <div className="border-t border-line p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {replyTo || editing ? (
             <div className="mb-2 flex items-center gap-2 rounded-xl border-l-2 border-accent bg-surface-2 px-3 py-2 text-[12.5px]">
               <Icon name={editing ? 'edit' : 'rotateCcw'} size={14} className="shrink-0 text-accent" />
               <span className="min-w-0 flex-1">
                 <span className="block font-semibold">{editing ? 'Tahrirlash' : `Javob: ${replyTo?.sender_id === me ? 'o‘zingizga' : (replyTo?.sender?.full_name ?? '—')}`}</span>
-                <span className="block truncate text-muted">{(editing ?? replyTo)?.body || 'Fayl'}</span>
+                <span className="block truncate text-muted">{messagePreview((editing ?? replyTo)!)}</span>
               </span>
               <button type="button" onClick={cancelCompose} aria-label="Bekor qilish" className="grid size-6 place-items-center rounded-full hover:bg-line">
                 <Icon name="x" size={13} />
@@ -369,39 +408,55 @@ export function ChatRoom({
           ) : null}
           {error || status ? <p className={`mb-2 text-[12.5px] ${error ? 'text-danger' : 'text-muted'}`}>{error ?? status}</p> : null}
           <div className="flex items-end gap-2">
-            <input ref={fileInput} type="file" multiple className="sr-only" id={`chat-files-${roomId}`} onChange={(e) => setFiles([...files, ...Array.from(e.target.files ?? [])].slice(0, 10))} />
-            {!editing ? (
-              <label htmlFor={`chat-files-${roomId}`} aria-label="Fayl biriktirish" className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-xl border border-line bg-surface text-muted hover:text-ink">
-                <Icon name="paperclip" size={18} />
-              </label>
-            ) : null}
-            <textarea
-              ref={textarea}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  send();
-                }
-                if (e.key === 'Escape' && (editing || replyTo)) cancelCompose();
+            <MediaComposer
+              roomId={roomId}
+              replyTo={replyTo?.id ?? null}
+              idle={!editing && !text.trim() && !files.length && !pending}
+              onSent={() => {
+                setReplyTo(null);
+                router.refresh();
               }}
-              rows={1}
-              maxLength={4000}
-              placeholder={editing ? 'Xabarni tahrirlang…' : 'Xabar yozing…'}
-              title="Enter — yuborish, Shift+Enter — yangi qator"
-              aria-label="Xabar"
-              className="max-h-40 min-h-10 flex-1 resize-none rounded-xl border border-line bg-surface px-3.5 py-2 text-[14.5px] outline-none [field-sizing:content] placeholder:text-subtle focus:border-accent"
-            />
-            <button
-              type="button"
-              onClick={send}
-              disabled={pending || (!text.trim() && !files.length)}
-              aria-label={editing ? 'Saqlash' : 'Yuborish'}
-              className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand text-on-brand disabled:opacity-40"
+              onError={setError}
+              button="rounded-xl border border-line bg-surface text-muted hover:text-ink"
+              primary="rounded-xl bg-brand text-on-brand"
+              knob="bg-brand text-on-brand"
+              send={
+                <button
+                  type="button"
+                  onClick={send}
+                  disabled={pending || (!text.trim() && !files.length)}
+                  aria-label={editing ? 'Saqlash' : 'Yuborish'}
+                  className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand text-on-brand disabled:opacity-40"
+                >
+                  {pending ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Icon name={editing ? 'check' : 'send'} size={17} />}
+                </button>
+              }
             >
-              {pending ? <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Icon name={editing ? 'check' : 'send'} size={17} />}
-            </button>
+              <input ref={fileInput} type="file" multiple className="sr-only" id={`chat-files-${roomId}`} onChange={(e) => setFiles([...files, ...Array.from(e.target.files ?? [])].slice(0, 10))} />
+              {!editing ? (
+                <label htmlFor={`chat-files-${roomId}`} aria-label="Fayl biriktirish" className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-xl border border-line bg-surface text-muted hover:text-ink">
+                  <Icon name="paperclip" size={18} />
+                </label>
+              ) : null}
+              <textarea
+                ref={textarea}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    send();
+                  }
+                  if (e.key === 'Escape' && (editing || replyTo)) cancelCompose();
+                }}
+                rows={1}
+                maxLength={4000}
+                placeholder={editing ? 'Xabarni tahrirlang…' : 'Xabar yozing…'}
+                title="Enter — yuborish, Shift+Enter — yangi qator"
+                aria-label="Xabar"
+                className="max-h-40 min-h-10 flex-1 resize-none rounded-xl border border-line bg-surface px-3.5 py-2 text-[14.5px] outline-none [field-sizing:content] placeholder:text-subtle focus:border-accent"
+              />
+            </MediaComposer>
           </div>
         </div>
       )}

@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, useTransition } from 'react';
 
+import { MediaComposer } from '@/components/chat/media/MediaComposer';
+import { RoundVideo, VoiceBubble } from '@/components/chat/media/MediaPlayers';
 import { SiteIcon } from '@/components/site/SiteIcon';
 import { markPartnerChatRead, sendPartnerMessage } from '@/lib/cabinet/partner-actions';
 import type { ChatMessage } from '@/lib/cabinet/partner-data';
@@ -170,6 +172,8 @@ export function ChatPanel({
           lastDay = day;
           const mine = m.sender_id === me;
           const files = m.attachments.map((a) => a.file).filter((f): f is NonNullable<typeof f> => !!f);
+          const media = !m.deleted_at && m.kind !== 'text' ? (files[0] ?? null) : null;
+          const round = !!media && m.kind === 'round_video';
           return (
             <div key={m.id}>
               {showDay ? (
@@ -180,13 +184,24 @@ export function ChatPanel({
               ) : (
                 <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                   <div
-                    className={`max-w-[85%] rounded-[20px] px-3.5 py-2.5 sm:max-w-[70%] ${
-                      mine ? 'rounded-br-md bg-[#d4fc18] text-[#0b0b0c]' : 'rounded-bl-md bg-white/[0.07] text-[#f4f4f5]'
+                    className={`max-w-[85%] sm:max-w-[70%] ${
+                      round ? 'text-[#f4f4f5]' : `rounded-[20px] px-3.5 py-2.5 ${mine ? 'rounded-br-md bg-[#d4fc18] text-[#0b0b0c]' : 'rounded-bl-md bg-white/[0.07] text-[#f4f4f5]'}`
                     }`}
                   >
                     {!mine ? <p className="mb-0.5 text-[12px] font-semibold text-[#d4fc18]">{m.sender_label || m.sender?.full_name || 'SUN MEDIA'}</p> : null}
                     {m.deleted_at ? (
                       <p className={`text-[14px] italic ${mine ? 'text-[#0b0b0c]/60' : 'text-[#8e8e96]'}`}>Xabar o‘chirilgan</p>
+                    ) : media && !round ? (
+                      <VoiceBubble
+                        src={`/kabinet/biriktirma/${media.id}?media=1`}
+                        downloadHref={`/kabinet/biriktirma/${media.id}?yuklab=1`}
+                        durationMs={media.duration_ms}
+                        waveform={media.waveform}
+                        seed={media.id}
+                        knob={mine ? 'bg-[#0b0b0c] text-[#d4fc18]' : 'bg-[#d4fc18] text-[#0b0b0c]'}
+                      />
+                    ) : media ? (
+                      <RoundVideo src={`/kabinet/biriktirma/${media.id}?media=1`} downloadHref={`/kabinet/biriktirma/${media.id}?yuklab=1`} durationMs={media.duration_ms} />
                     ) : (
                       <>
                         {m.body ? <p className="text-[14.5px] leading-snug whitespace-pre-wrap break-words">{m.body}</p> : null}
@@ -214,7 +229,11 @@ export function ChatPanel({
                         ) : null}
                       </>
                     )}
-                    <p className={`mt-1 text-right text-[10.5px] ${mine ? 'text-[#0b0b0c]/55' : 'text-[#6e6e76]'}`}>{timeFmt.format(new Date(m.created_at))}</p>
+                    <p
+                      className={`mt-1 text-right text-[10.5px] ${round ? 'ml-auto w-fit rounded-full bg-white/[0.07] px-2 py-0.5 text-[#a8a8ac]' : mine ? 'text-[#0b0b0c]/55' : 'text-[#6e6e76]'}`}
+                    >
+                      {timeFmt.format(new Date(m.created_at))}
+                    </p>
                   </div>
                 </div>
               )}
@@ -226,7 +245,7 @@ export function ChatPanel({
       {readOnly ? (
         <p className="border-t border-white/[0.06] px-5 py-3 text-center text-[13px] text-[#8e8e96]">Ko‘rish rejimi: xabar yuborilmaydi.</p>
       ) : (
-        <div className="border-t border-white/[0.06] p-3 sm:p-4">
+        <div className="cabinet-tokens border-t border-white/[0.06] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4">
           {files.length ? (
             <div className="mb-2 flex flex-wrap gap-1.5">
               {files.map((f, i) => (
@@ -241,45 +260,60 @@ export function ChatPanel({
           ) : null}
           {error || status ? <p className={`mb-2 text-[12.5px] ${error ? 'text-[#ff8a8a]' : 'text-[#a8a8ac]'}`}>{error ?? status}</p> : null}
           <div className="flex items-end gap-2">
-            <input
-              ref={fileInput}
-              type="file"
-              multiple
-              className="sr-only"
-              id="chat-files"
-              onChange={(e) => setFiles([...files, ...Array.from(e.target.files ?? [])].slice(0, 10))}
-            />
-            <label
-              htmlFor="chat-files"
-              aria-label="Fayl biriktirish"
-              className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-full bg-white/[0.06] text-[#d9d9de] hover:bg-white/[0.1] hover:text-white"
+            <MediaComposer
+              roomId={roomId}
+              replyTo={null}
+              idle={!text.trim() && !files.length && !pending}
+              onSent={() => router.refresh()}
+              onError={setError}
+              button="rounded-full bg-white/[0.06] text-[#d9d9de] hover:bg-white/[0.1] hover:text-white"
+              primary="rounded-full bg-[#d4fc18] text-[#0b0b0c]"
+              knob="bg-[#d4fc18] text-[#0b0b0c]"
+              size="size-11"
+              bar="min-h-11 rounded-[22px]"
+              send={
+                <button
+                  type="button"
+                  onClick={send}
+                  disabled={pending || (!text.trim() && !files.length)}
+                  aria-label="Yuborish"
+                  className="grid size-11 shrink-0 place-items-center rounded-full bg-[#d4fc18] text-[#0b0b0c] transition-opacity disabled:opacity-40"
+                >
+                  {pending ? <span className="size-4 animate-spin rounded-full border-2 border-[#0b0b0c] border-t-transparent" /> : <SiteIcon name="send" size={18} />}
+                </button>
+              }
             >
-              <SiteIcon name="plus" size={20} />
-            </label>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              rows={1}
-              maxLength={4000}
-              placeholder="Xabar yozing…"
-              aria-label="Xabar"
-              className="max-h-40 min-h-11 flex-1 resize-none rounded-[22px] border border-white/10 bg-white/[0.04] px-4 py-2.5 text-[14.5px] text-white outline-none [field-sizing:content] placeholder:text-[#5c5c64] focus:border-[#d4fc18]"
-            />
-            <button
-              type="button"
-              onClick={send}
-              disabled={pending || (!text.trim() && !files.length)}
-              aria-label="Yuborish"
-              className="grid size-11 shrink-0 place-items-center rounded-full bg-[#d4fc18] text-[#0b0b0c] transition-opacity disabled:opacity-40"
-            >
-              {pending ? <span className="size-4 animate-spin rounded-full border-2 border-[#0b0b0c] border-t-transparent" /> : <SiteIcon name="send" size={18} />}
-            </button>
+              <input
+                ref={fileInput}
+                type="file"
+                multiple
+                className="sr-only"
+                id="chat-files"
+                onChange={(e) => setFiles([...files, ...Array.from(e.target.files ?? [])].slice(0, 10))}
+              />
+              <label
+                htmlFor="chat-files"
+                aria-label="Fayl biriktirish"
+                className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-full bg-white/[0.06] text-[#d9d9de] hover:bg-white/[0.1] hover:text-white"
+              >
+                <SiteIcon name="plus" size={20} />
+              </label>
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+                rows={1}
+                maxLength={4000}
+                placeholder="Xabar yozing…"
+                aria-label="Xabar"
+                className="max-h-40 min-h-11 flex-1 resize-none rounded-[22px] border border-white/10 bg-white/[0.04] px-4 py-2.5 text-[14.5px] text-white outline-none [field-sizing:content] placeholder:text-[#5c5c64] focus:border-[#d4fc18]"
+              />
+            </MediaComposer>
           </div>
         </div>
       )}

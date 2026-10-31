@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { CHAT_ROUTE } from '@/components/chat/media/format';
 import type { LocalAct } from '@/lib/assistant/intents';
 import { wakeRecognizer, type WakeState } from './wake';
 import { RobotFace } from './RobotFace';
@@ -52,6 +53,7 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
   // Signed-in pages: a client's cabinet (/kabinet) or the team's system (the panel, the staff cabinet /xodim).
   const path = usePathname() ?? '';
   const audience: ChatAudience = given === 'public' ? 'public' : path.startsWith('/kabinet') ? 'client' : 'staff';
+  const inChat = CHAT_ROUTE.test(path);
   const [open, setOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [wanted, setWanted] = useState(false);
@@ -205,6 +207,13 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
     setTeaser(false);
     store('sunbot:teased', '1');
   }, [open]);
+  // Entering the chat closes Sunny's own panel and nudge, so nothing pops back over the page on the way out.
+  useEffect(() => {
+    if (!inChat) return;
+    setOpen(false);
+    setTeaser(false);
+    setNudge(null);
+  }, [inChat]);
 
   // 09 on every opening of the chat, a short farewell on closing.
   const opened = useRef(false);
@@ -476,6 +485,10 @@ export function SunBot({ audience: given = 'public' }: { audience?: 'public' | '
     launcher.current?.style.setProperty('--px', '0');
     launcher.current?.style.setProperty('--py', '0');
   };
+
+  // The team's messenger: nothing of Sunny over the composer (no launcher, canvas, Qitmir or touch layer). Its settings
+  // stay in this component, so it comes back as it was once the person leaves the chat.
+  if (inChat) return null;
 
   return (
     <div className={`sb-root ${lite ? 'sb-lite' : ''} ${qitmir ? 'sb-qitmir' : ''}`}>

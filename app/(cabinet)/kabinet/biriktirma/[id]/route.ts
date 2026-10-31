@@ -22,7 +22,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     .maybeSingle();
   if (!file || !file.chat_room_id || !file.bucket || !file.storage_path) return new NextResponse('Fayl topilmadi', { status: 404 });
   const download = request.nextUrl.searchParams.get('yuklab') === '1';
-  const { data, error } = await supabase.storage.from(file.bucket).createSignedUrl(file.storage_path, 300, download ? { download: file.name } : undefined);
+  // ?media=1: a voice / round video message playing — long enough for the player's range requests.
+  const ttl = request.nextUrl.searchParams.get('media') === '1' ? 900 : 300;
+  const { data, error } = await supabase.storage.from(file.bucket).createSignedUrl(file.storage_path, ttl, download ? { download: file.name } : undefined);
   if (error || !data) return new NextResponse('Faylni ochib bo‘lmadi', { status: 403 });
   return NextResponse.redirect(data.signedUrl, { headers: { 'Cache-Control': 'private, no-store' } });
 }

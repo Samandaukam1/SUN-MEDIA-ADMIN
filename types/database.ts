@@ -2339,6 +2339,7 @@ export type Database = {
           uploaded_at: string | null
           uploaded_by: string | null
           visibility: Database["public"]["Enums"]["visibility_level"]
+          waveform: number[] | null
           width: number | null
         }
         Insert: {
@@ -2364,6 +2365,7 @@ export type Database = {
           uploaded_at?: string | null
           uploaded_by?: string | null
           visibility?: Database["public"]["Enums"]["visibility_level"]
+          waveform?: number[] | null
           width?: number | null
         }
         Update: {
@@ -2389,6 +2391,7 @@ export type Database = {
           uploaded_at?: string | null
           uploaded_by?: string | null
           visibility?: Database["public"]["Enums"]["visibility_level"]
+          waveform?: number[] | null
           width?: number | null
         }
         Relationships: [
@@ -3640,6 +3643,7 @@ export type Database = {
           id: string
           is_directive: boolean
           is_system: boolean
+          kind: string
           reply_to_id: string | null
           room_id: string
           sender_id: string | null
@@ -3653,6 +3657,7 @@ export type Database = {
           id?: string
           is_directive?: boolean
           is_system?: boolean
+          kind?: string
           reply_to_id?: string | null
           room_id: string
           sender_id?: string | null
@@ -3666,6 +3671,7 @@ export type Database = {
           id?: string
           is_directive?: boolean
           is_system?: boolean
+          kind?: string
           reply_to_id?: string | null
           room_id?: string
           sender_id?: string | null
@@ -8153,6 +8159,7 @@ export type Database = {
         Args: { p_client: string; p_lead_ids?: string[] }
         Returns: Json
       }
+      discard_chat_upload: { Args: { p_file_id: string }; Returns: undefined }
       discard_leads: {
         Args: { p_lead_ids: string[]; p_reason?: string }
         Returns: number
@@ -8888,6 +8895,35 @@ export type Database = {
         }
         Returns: string
       }
+      send_media_message: {
+        Args: {
+          p_file_id: string
+          p_kind: string
+          p_reply_to?: string
+          p_room_id: string
+          p_waveform?: number[]
+        }
+        Returns: {
+          body: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          id: string
+          is_directive: boolean
+          is_system: boolean
+          kind: string
+          reply_to_id: string | null
+          room_id: string
+          sender_id: string | null
+          sender_label: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       send_message: {
         Args: {
           p_body: string
@@ -8904,6 +8940,7 @@ export type Database = {
           id: string
           is_directive: boolean
           is_system: boolean
+          kind: string
           reply_to_id: string | null
           room_id: string
           sender_id: string | null

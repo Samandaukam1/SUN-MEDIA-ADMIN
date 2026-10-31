@@ -126,10 +126,14 @@ export function unreadTotal(chats: MyChat[]): number {
   return chats.filter((c) => !c.muted && !c.archived).reduce((n, c) => n + (c.unread_count ?? 0), 0);
 }
 
+export type MessageKind = 'text' | 'voice' | 'round_video';
+
 export type PanelMessage = {
   id: string;
   sender_id: string | null;
   body: string;
+  /** 'voice' / 'round_video': one audio / video attachment, no text. */
+  kind: MessageKind;
   is_system: boolean;
   created_at: string;
   edited_at: string | null;
@@ -137,9 +141,19 @@ export type PanelMessage = {
   sender_label: string | null;
   reply_to_id: string | null;
   sender: { full_name: string; avatar_url: string | null } | null;
-  reply: { id: string; body: string; deleted_at: string | null; sender: { full_name: string } | null } | null;
+  reply: { id: string; body: string; kind: MessageKind; deleted_at: string | null; sender: { full_name: string } | null } | null;
   reads: { user_id: string; read_at: string }[];
-  attachments: { file: { id: string; name: string; kind: string; mime_type: string | null; size_bytes: number | null } | null }[];
+  attachments: {
+    file: {
+      id: string;
+      name: string;
+      kind: string;
+      mime_type: string | null;
+      size_bytes: number | null;
+      duration_ms: number | null;
+      waveform: number[] | null;
+    } | null;
+  }[];
 };
 
 export const ROOM_PAGE = 50;
@@ -150,11 +164,11 @@ export async function loadRoomMessages(roomId: string, before: string | null): P
   let query = supabase
     .from('messages')
     .select(
-      `id, sender_id, body, is_system, created_at, edited_at, deleted_at, sender_label, reply_to_id,
+      `id, sender_id, body, kind, is_system, created_at, edited_at, deleted_at, sender_label, reply_to_id,
        sender:profiles!messages_sender_id_fkey(full_name, avatar_url),
-       reply:reply_to_id(id, body, deleted_at, sender:profiles!messages_sender_id_fkey(full_name)),
+       reply:reply_to_id(id, body, kind, deleted_at, sender:profiles!messages_sender_id_fkey(full_name)),
        reads:message_reads(user_id, read_at),
-       attachments:message_attachments(file:files(id, name, kind, mime_type, size_bytes))`,
+       attachments:message_attachments(file:files(id, name, kind, mime_type, size_bytes, duration_ms, waveform))`,
     )
     .eq('room_id', roomId);
   if (before) query = query.lt('created_at', before);
@@ -162,3 +176,4 @@ export async function loadRoomMessages(roomId: string, before: string | null): P
   if (error) throw error;
   return ((data ?? []) as unknown as PanelMessage[]).reverse();
 }
+

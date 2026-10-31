@@ -583,3 +583,8 @@
   .sb-halo, .sb-eyes, .sb-launcher .sb-robot { transition: none !important; }
   .sb-mood-listening .sb-halo, .sb-mood-speaking .sb-halo { transform: scale(0.95); }
 }
+
+/* A task being accepted: its acceptance bar sits at the bottom of the page, Sunny steps aside meanwhile. */
+html[data-sm-gate] .sb-root {
+  display: none;
+}

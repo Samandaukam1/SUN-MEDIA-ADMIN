@@ -11,13 +11,15 @@ import { PresenceHeartbeat } from '@/components/live/PresenceHeartbeat';
 import { TeamList } from '@/components/live/TeamList';
 import { LiveRefresh } from '@/components/panel/LiveRefresh';
 import { SiteIcon } from '@/components/site/SiteIcon';
-import { agencyToday } from '@/lib/attendance';
+import { Countdown } from '@/components/tasks/Countdown';
+import { agencyToday, lateLabel } from '@/lib/attendance';
 import { getSessionContext } from '@/lib/auth';
 import { homeFor, isPanelUser } from '@/lib/cabinet/routing';
 import { groupOf, type TaskGroup } from '@/lib/cabinet/tasks';
 import { loadMyChats, unreadTotal } from '@/lib/chat';
 import { CONTENT_STATUS, PRIORITY, TASK_TYPE } from '@/lib/labels';
 import { createClient } from '@/lib/supabase/server';
+import { compareTasks } from '@/lib/tasks/deadline';
 import { loadTeam } from '@/lib/team-directory';
 import { formatShortDateTime, formatTime } from '@/lib/time';
 import { STAGE_LABEL, stageStatusLabel, type Stage } from '@/lib/workflow-shared';
@@ -60,7 +62,7 @@ export default async function EmployeeCabinetPage({ searchParams }: { searchPara
          client:clients(id, name),
          project:projects!tasks_project_id_client_id_fkey(id, name),
          content:content_items!tasks_content_id_client_id_fkey(id, title, status),
-         mine:task_assignments!inner(user_id)`,
+         mine:task_assignments!inner(user_id, ack_required, acknowledged_at)`,
       )
       .eq('mine.user_id', context.userId)
       .is('deleted_at', null)
@@ -82,7 +84,9 @@ export default async function EmployeeCabinetPage({ searchParams }: { searchPara
   if (error) throw error;
 
   const now = Date.now();
-  const tasks = data ?? [];
+  const serverNow = new Date(now).toISOString();
+  // Not yet accepted ("Vazifani qabul qildim"): first in the list, marked on the card.
+  const tasks = (data ?? []).map((t) => ({ ...t, pendingAck: t.mine.some((m) => m.ack_required && !m.acknowledged_at) && t.status !== 'done' }));
   const open = tasks.filter((t) => inFilter('faol', groupOf(t.status)));
   const due = (t: (typeof tasks)[number]) => (t.due_at ? new Date(t.due_at).getTime() : null);
   const overdue = open.filter((t) => (due(t) ?? Infinity) < now);
@@ -90,7 +94,8 @@ export default async function EmployeeCabinetPage({ searchParams }: { searchPara
   const upcoming = open.filter((t) => (due(t) ?? 0) >= now && (due(t) ?? 0) < now + 3 * DAY).slice(0, 6);
   const shown = tasks
     .filter((t) => inFilter(filter, groupOf(t.status)))
-    .sort((a, b) => (filter === 'bajarilgan' ? (b.completed_at ?? '').localeCompare(a.completed_at ?? '') : 0));
+    .sort((a, b) => (filter === 'bajarilgan' ? (b.completed_at ?? '').localeCompare(a.completed_at ?? '') : compareTasks(a, b, now)));
+  const marked = attendance.data;
   const recentChats = [...chats].filter((c) => !c.archived).sort((a, b) => (b.last_message_at ?? '').localeCompare(a.last_message_at ?? '')).slice(0, 4);
 
   const role = context.employee?.job_title || context.roles.map((r) => r.name).join(', ') || 'Xodim';
@@ -115,6 +120,19 @@ export default async function EmployeeCabinetPage({ searchParams }: { searchPara
             <p className="text-[12px] font-semibold tracking-[0.16em] text-[#d4fc18] uppercase">Bugun Sun Media’da</p>
             <h1 className="font-display mt-1.5 text-[28px] leading-tight font-medium tracking-[-0.03em] text-white sm:text-[38px]">Assalomu alaykum, {firstName}!</h1>
             <p className="mt-1.5 text-[14px] text-[#a8a8ac]">Davomatingiz, bugungi ishlaringiz va jamoa — bir joyda.</p>
+            {/* Today's attendance is in: a short line instead of the card (it is not asked again today). */}
+            {hasEmployee && marked ? (
+              <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-3 py-1.5 text-[13px] text-[#d9d9de]">
+                <span className={marked.status === 'late' ? 'text-amber-400' : 'text-emerald-400'}>✓</span>
+                {marked.status === 'vacation'
+                  ? 'Bugun ta’tildasiz'
+                  : marked.status === 'excused'
+                    ? 'Bugun ruxsatli kuningiz'
+                    : marked.status === 'absent'
+                      ? 'Bugun “kelmagan” deb belgilangan'
+                      : `Davomat: ${marked.arrived_at?.slice(0, 5) ?? 'belgilangan'}${marked.status === 'late' && (marked.late_minutes ?? 0) > 0 ? ` · ${lateLabel(marked.late_minutes)} kechikdingiz` : ''}`}
+              </p>
+            ) : null}
           </div>
           {isPanelUser(context) ? (
             <Link href="/panel" className="lg inline-flex h-10 items-center gap-2 rounded-full px-4 text-[13.5px] font-medium text-white hover:text-[#d4fc18]">
@@ -123,23 +141,13 @@ export default async function EmployeeCabinetPage({ searchParams }: { searchPara
           ) : null}
         </div>
 
-        {/* 2. Bugungi davomat */}
-        {hasEmployee ? (
+        {/* 2. Bugungi davomat — until it is marked */}
+        {hasEmployee && !marked ? (
           <CheckInCard
-            record={
-              attendance.data
-                ? {
-                    arrivedAt: attendance.data.arrived_at,
-                    status: attendance.data.status,
-                    lateMinutes: attendance.data.late_minutes ?? 0,
-                    source: attendance.data.source,
-                    correctedBy: attendance.data.corrector?.full_name ?? null,
-                  }
-                : null
-            }
+            record={null}
             from={from}
             workStart={employee.data?.work_start_time ?? null}
-            serverNow={new Date().toISOString()}
+            serverNow={serverNow}
             today={today}
             name={firstName}
           />
@@ -212,7 +220,7 @@ export default async function EmployeeCabinetPage({ searchParams }: { searchPara
 
         <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
           <div>
-            <SectionTitle>Vazifalarim</SectionTitle>
+            <SectionTitle>Mening vazifalarim</SectionTitle>
             <div className="mb-4 flex flex-wrap gap-2">
               {FILTERS.map((g) => (
                 <Chip key={g.key} href={g.key === 'faol' ? '/xodim' : `/xodim?holat=${g.key}`} active={g.key === filter}>
@@ -241,6 +249,9 @@ export default async function EmployeeCabinetPage({ searchParams }: { searchPara
                             <span className="text-[12px] text-[#8e8e96]">{stage ? STAGE_LABEL[stage] : TASK_TYPE[t.task_type]}</span>
                             {t.priority === 'high' || t.priority === 'urgent' ? <span className="text-[12px] font-semibold text-[#ff9c9c]">{PRIORITY[t.priority].label}</span> : null}
                             {late ? <span className="text-[12px] font-semibold text-[#ff9c9c]">⚠ Muddati o‘tgan</span> : null}
+                            {t.pendingAck ? (
+                              <span className="inline-flex h-6 items-center rounded-full bg-amber-400/15 px-2.5 text-[11.5px] font-semibold text-amber-300">Qabul qilinmagan</span>
+                            ) : null}
                           </div>
                           <p className="mt-2 text-[15.5px] leading-snug font-semibold break-words text-white group-hover:text-[#d4fc18]">{t.title}</p>
                           <p className="mt-1 text-[12.5px] text-[#8e8e96]">
@@ -251,9 +262,16 @@ export default async function EmployeeCabinetPage({ searchParams }: { searchPara
                           {t.status === 'done' ? (
                             <p className="text-[12px] text-emerald-300">{formatShortDateTime(t.completed_at)}</p>
                           ) : t.due_at ? (
-                            <p className={`text-[12.5px] font-medium ${late ? 'text-[#ff9c9c]' : 'text-[#d9d9de]'}`}>{formatShortDateTime(t.due_at)}</p>
+                            <>
+                              <p className={`text-[12.5px] font-medium ${late ? 'text-[#ff9c9c]' : 'text-[#d9d9de]'}`}>Muddat: {formatShortDateTime(t.due_at)}</p>
+                              {inFilter('faol', groupOf(t.status)) || t.status === 'in_review' ? (
+                                <p className="mt-0.5">
+                                  <Countdown due={t.due_at} serverNow={serverNow} />
+                                </p>
+                              ) : null}
+                            </>
                           ) : (
-                            <p className="text-[12px] text-[#6e6e76]">Muddatsiz</p>
+                            <p className="text-[12px] text-[#6e6e76]">Muddat belgilanmagan</p>
                           )}
                           <SiteIcon name="arrowRight" size={16} className="mt-3 ml-auto text-[#6e6e76] group-hover:text-[#d4fc18]" />
                         </div>

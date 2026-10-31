@@ -7342,18 +7342,24 @@ export type Database = {
       }
       task_assignments: {
         Row: {
+          ack_required: boolean
+          acknowledged_at: string | null
           assigned_by: string | null
           created_at: string
           task_id: string
           user_id: string
         }
         Insert: {
+          ack_required?: boolean
+          acknowledged_at?: string | null
           assigned_by?: string | null
           created_at?: string
           task_id: string
           user_id: string
         }
         Update: {
+          ack_required?: boolean
+          acknowledged_at?: string | null
           assigned_by?: string | null
           created_at?: string
           task_id?: string
@@ -7860,6 +7866,7 @@ export type Database = {
       }
     }
     Functions: {
+      acknowledge_task: { Args: { p_task_id: string }; Returns: string }
       add_content_equipment: {
         Args: { p_content_id: string; p_name: string }
         Returns: string
@@ -8477,6 +8484,27 @@ export type Database = {
       get_my_context: { Args: never; Returns: Json }
       get_my_entitlements: { Args: { p_client?: string }; Returns: Json }
       get_my_games: { Args: never; Returns: Json }
+      get_my_pending_acks: {
+        Args: never
+        Returns: {
+          assigned_at: string
+          assigned_by_name: string | null
+          assignees: Json
+          checklist: Json
+          client_name: string | null
+          description: string | null
+          due_at: string | null
+          files_count: number
+          instructions: string | null
+          priority: Database["public"]["Enums"]["priority_level"]
+          stage: string | null
+          starts_at: string | null
+          status: Database["public"]["Enums"]["task_status"]
+          task_id: string
+          task_type: Database["public"]["Enums"]["task_type"]
+          title: string
+        }[]
+      }
       get_partner_cabinet: {
         Args: { p_client: string; p_from: string; p_to: string }
         Returns: Json

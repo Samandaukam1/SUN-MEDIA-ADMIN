@@ -4,9 +4,11 @@ import { SunBot } from '@/components/assistant/SunBot';
 import type { CreateItem } from '@/components/panel/CreateMenu';
 import { PanelShell } from '@/components/panel/PanelShell';
 import { InstallBanner } from '@/components/pwa/InstallGuide';
+import { TaskGate } from '@/components/tasks/TaskGate';
 import { can, canUsePanel, requireStaff } from '@/lib/auth';
 import { loadMyChats, unreadTotal } from '@/lib/chat';
 import { navigationFor } from '@/lib/navigation';
+import { loadGate } from '@/lib/tasks/gate';
 
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
   const context = await requireStaff();
@@ -14,8 +16,9 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   if (context.temporary_password) redirect('/parol');
   // Web panel = management (system owner, admins, Rahbar); other staff have their own cabinet.
   if (!canUsePanel(context)) redirect('/xodim');
-  // Unread chat messages on the sidebar's Chat entry.
-  const unread = unreadTotal(await loadMyChats().catch(() => []));
+  // Unread chat messages on the sidebar's Chat entry; today's KELDIM and new tasks to accept (TaskGate).
+  const [chats, gate] = await Promise.all([loadMyChats().catch(() => []), loadGate(context.userId, (context.profile?.full_name ?? '').split(' ')[0] || undefined)]);
+  const unread = unreadTotal(chats);
   const sections = navigationFor(context).map((s) => (s.key === 'chat' ? { ...s, badge: unread } : s));
   const create: CreateItem[] = [
     // "+ Vazifa yaratish" is the main action: content, script, equipment, shooting, montaj and post in one task.
@@ -40,6 +43,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
       {children}
       <SunBot audience="member" />
       <InstallBanner />
+      <TaskGate userId={context.userId} gate={gate} area="panel" serverNow={new Date().toISOString()} />
     </PanelShell>
   );
 }

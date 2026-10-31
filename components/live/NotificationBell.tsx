@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AppBadge } from '@/components/pwa/AppBadge';
+import { listenTopic } from '@/lib/realtime/topic';
 import { getBrowserClient } from '@/lib/supabase/client';
 
 type Item = { id: string; type: string; title: string; body: string | null; created_at: string; read_at: string | null; data: Record<string, unknown> | null };
@@ -60,26 +61,15 @@ export function NotificationBell({ userId, area, tone = 'panel' }: { userId: str
 
   useEffect(() => {
     void load();
-    const supabase = getBrowserClient();
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    let cancelled = false;
-    supabase.auth.getSession().then(({ data }) => {
-      if (cancelled || !data.session) return;
-      supabase.realtime.setAuth(data.session.access_token);
-      channel = supabase
-        .channel(`user:${userId}`, { config: { private: true } })
-        .on('broadcast', { event: 'change' }, ({ payload }) => {
-          if ((payload as { table?: string })?.table !== 'notifications') return;
-          void load();
-          window.dispatchEvent(new Event('sm:badge'));
-        })
-        .subscribe();
+    const off = listenTopic(`user:${userId}`, 'change', (payload) => {
+      if (payload.table !== 'notifications') return;
+      void load();
+      window.dispatchEvent(new Event('sm:badge'));
     });
     const interval = setInterval(() => void load(), 60_000);
     return () => {
-      cancelled = true;
       clearInterval(interval);
-      if (channel) supabase.removeChannel(channel);
+      off();
     };
   }, [userId, load]);
 

@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-import { getBrowserClient } from '@/lib/supabase/client';
+import { listenTopic } from '@/lib/realtime/topic';
 
 /**
  * Re-renders the current server page when a realtime change signal arrives on any of the topics
@@ -16,7 +16,6 @@ export function LiveRefresh({ topics, intervalMs = 60_000, quiet = false }: { to
   const topicsKey = topics.join('|');
 
   useEffect(() => {
-    const supabase = getBrowserClient();
     let timer: ReturnType<typeof setTimeout> | null = null;
     let missed = false;
     const refresh = (delayMs: number) => {
@@ -32,28 +31,15 @@ export function LiveRefresh({ topics, intervalMs = 60_000, quiet = false }: { to
       missed = false;
       refresh(0);
     };
-    let channels: ReturnType<typeof supabase.channel>[] = [];
-    let cancelled = false;
-
-    supabase.auth.getSession().then(({ data }) => {
-      if (cancelled || !data.session) return;
-      supabase.realtime.setAuth(data.session.access_token);
-      channels = topicsKey.split('|').map((topic) =>
-        supabase
-          .channel(topic, { config: { private: true } })
-          .on('broadcast', { event: 'change' }, () => refresh(400))
-          .subscribe((status) => setConnected(status === 'SUBSCRIBED')),
-      );
-    });
+    const offs = topicsKey.split('|').map((topic) => listenTopic(topic, 'change', () => refresh(400), setConnected));
     const interval = setInterval(() => refresh(0), intervalMs);
     document.addEventListener('visibilitychange', onVisible);
 
     return () => {
-      cancelled = true;
       if (timer) clearTimeout(timer);
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisible);
-      channels.forEach((c) => supabase.removeChannel(c));
+      offs.forEach((off) => off());
     };
   }, [topicsKey, intervalMs, router]);
 

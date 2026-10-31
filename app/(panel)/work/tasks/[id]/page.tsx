@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { PageHeader } from '@/components/panel/PageHeader';
+import { AckStatus } from '@/components/tasks/AckStatus';
 import { Badge } from '@/components/ui/Badge';
 import { Card, SectionTitle } from '@/components/ui/Card';
 import { requireStaff } from '@/lib/auth';
@@ -22,7 +23,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
     .select(
       `id, title, description, task_type, status, priority, due_at, completed_at, created_at, content_id,
        client:clients(id, name), content:content_items(id, title),
-       assignees:task_assignments(user_id, person:profiles!task_assignments_user_id_fkey(full_name)),
+       assignees:task_assignments(user_id, ack_required, acknowledged_at, person:profiles!task_assignments_user_id_fkey(full_name)),
        checklist:task_checklist_items(id, title, is_done, position)`,
     )
     .eq('id', id)
@@ -63,22 +64,33 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
             </Card>
           ) : null}
         </div>
-        <Card className="space-y-3 text-sm">
-          <Row label="Hozirgi holat" value={lookup(TASK_STATUS, t.status, TASK_STATUS.todo).label} />
-          <Row label="Mas’ul" value={t.assignees.map((a) => a.person?.full_name).filter(Boolean).join(', ') || 'Biriktirilmagan'} />
-          <Row label="Muddat" value={t.due_at ? formatShortDateTime(t.due_at) : '—'} danger={late} />
-          <Row label="Muhimlik" value={lookup(PRIORITY, t.priority, PRIORITY.normal).label} />
-          <Row label="Mijoz" value={t.client?.name ?? '—'} />
-          {t.completed_at ? <Row label="Bajarildi" value={formatShortDateTime(t.completed_at)} /> : null}
-          {t.content ? (
-            <p>
-              <span className="text-muted">Kontent: </span>
-              <Link href={`/work/content/${t.content.id}`} className="font-medium underline">
-                {t.content.title}
-              </Link>
-            </p>
-          ) : null}
-        </Card>
+        <div className="space-y-6">
+          <Card className="space-y-3 text-sm">
+            <Row label="Hozirgi holat" value={lookup(TASK_STATUS, t.status, TASK_STATUS.todo).label} />
+            <Row label="Mas’ul" value={t.assignees.map((a) => a.person?.full_name).filter(Boolean).join(', ') || 'Biriktirilmagan'} />
+            <Row label="Muddat" value={t.due_at ? formatShortDateTime(t.due_at) : '—'} danger={late} />
+            <Row label="Muhimlik" value={lookup(PRIORITY, t.priority, PRIORITY.normal).label} />
+            <Row label="Mijoz" value={t.client?.name ?? '—'} />
+            {t.completed_at ? <Row label="Bajarildi" value={formatShortDateTime(t.completed_at)} /> : null}
+            {t.content ? (
+              <p>
+                <span className="text-muted">Kontent: </span>
+                <Link href={`/work/content/${t.content.id}`} className="font-medium underline">
+                  {t.content.title}
+                </Link>
+              </p>
+            ) : null}
+          </Card>
+          <Card>
+            <SectionTitle>Qabul qilish</SectionTitle>
+            <AckStatus
+              taskId={t.id}
+              initial={t.assignees
+                .map((a) => ({ userId: a.user_id, name: a.person?.full_name ?? '—', required: a.ack_required, acknowledgedAt: a.acknowledged_at }))
+                .sort((a, b) => a.name.localeCompare(b.name))}
+            />
+          </Card>
+        </div>
       </div>
     </div>
   );

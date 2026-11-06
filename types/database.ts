@@ -3701,6 +3701,151 @@ export type Database = {
           },
         ]
       }
+      neosmm_catalog_cache: {
+        Row: {
+          data: Json
+          fetched_at: string
+          kind: string
+          owner_id: string
+        }
+        Insert: {
+          data: Json
+          fetched_at?: string
+          kind: string
+          owner_id: string
+        }
+        Update: {
+          data?: Json
+          fetched_at?: string
+          kind?: string
+          owner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neosmm_catalog_cache_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neosmm_orders: {
+        Row: {
+          accepted_at: string | null
+          can_cancel: boolean
+          can_refill: boolean
+          cancel_requested_at: string | null
+          charge: string | null
+          checked_at: string | null
+          code: string | null
+          created_at: string
+          currency: string
+          error: string | null
+          estimate: string | null
+          id: string
+          item_category: string | null
+          item_id: number
+          item_name: string
+          item_type: string | null
+          kind: string
+          owner_id: string
+          params: Json
+          price: string
+          price_unit: number | null
+          provider: string
+          provider_order_id: number | null
+          quantity: number | null
+          refill_id: number | null
+          refill_status: string | null
+          remains: string | null
+          start_count: string | null
+          state: string
+          status: string | null
+          submitted_at: string | null
+          target: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          can_cancel?: boolean
+          can_refill?: boolean
+          cancel_requested_at?: string | null
+          charge?: string | null
+          checked_at?: string | null
+          code?: string | null
+          created_at?: string
+          currency?: string
+          error?: string | null
+          estimate?: string | null
+          id: string
+          item_category?: string | null
+          item_id: number
+          item_name: string
+          item_type?: string | null
+          kind: string
+          owner_id: string
+          params?: Json
+          price: string
+          price_unit?: number | null
+          provider?: string
+          provider_order_id?: number | null
+          quantity?: number | null
+          refill_id?: number | null
+          refill_status?: string | null
+          remains?: string | null
+          start_count?: string | null
+          state?: string
+          status?: string | null
+          submitted_at?: string | null
+          target: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          can_cancel?: boolean
+          can_refill?: boolean
+          cancel_requested_at?: string | null
+          charge?: string | null
+          checked_at?: string | null
+          code?: string | null
+          created_at?: string
+          currency?: string
+          error?: string | null
+          estimate?: string | null
+          id?: string
+          item_category?: string | null
+          item_id?: number
+          item_name?: string
+          item_type?: string | null
+          kind?: string
+          owner_id?: string
+          params?: Json
+          price?: string
+          price_unit?: number | null
+          provider?: string
+          provider_order_id?: number | null
+          quantity?: number | null
+          refill_id?: number | null
+          refill_status?: string | null
+          remains?: string | null
+          start_count?: string | null
+          state?: string
+          status?: string | null
+          submitted_at?: string | null
+          target?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neosmm_orders_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_assets: {
         Row: {
           asset_type: Database["public"]["Enums"]["meta_asset_type"]

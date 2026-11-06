@@ -8,6 +8,7 @@ import { TaskGate } from '@/components/tasks/TaskGate';
 import { can, canUsePanel, requireStaff } from '@/lib/auth';
 import { loadMyChats, unreadTotal } from '@/lib/chat';
 import { navigationFor } from '@/lib/navigation';
+import { isSmmOwner } from '@/lib/neosmm/server';
 import { loadGate } from '@/lib/tasks/gate';
 
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
@@ -17,9 +18,17 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   // Web panel = management (system owner, admins, Rahbar); other staff have their own cabinet.
   if (!canUsePanel(context)) redirect('/xodim');
   // Unread chat messages on the sidebar's Chat entry; today's KELDIM and new tasks to accept (TaskGate).
-  const [chats, gate] = await Promise.all([loadMyChats().catch(() => []), loadGate(context.userId, (context.profile?.full_name ?? '').split(' ')[0] || undefined)]);
+  const [chats, gate, smmOwner] = await Promise.all([
+    loadMyChats().catch(() => []),
+    loadGate(context.userId, (context.profile?.full_name ?? '').split(' ')[0] || undefined),
+    isSmmOwner(),
+  ]);
   const unread = unreadTotal(chats);
-  const sections = navigationFor(context).map((s) => (s.key === 'chat' ? { ...s, badge: unread } : s));
+  const sections = [
+    ...navigationFor(context).map((s) => (s.key === 'chat' ? { ...s, badge: unread } : s)),
+    // "Smm Api": only the one configured owner account ever sees it (lib/neosmm/server).
+    ...(smmOwner ? [{ key: 'smm', label: 'Smm Api', icon: 'trendingUp' as const, href: '/smm-api', pages: [{ href: '/smm-api', label: 'Smm Api' }] }] : []),
+  ];
   const create: CreateItem[] = [
     // "+ Vazifa yaratish" is the main action: content, script, equipment, shooting, montaj and post in one task.
     can(context, 'tasks.manage') ? { href: '/work/tasks/yaratish', label: 'Vazifa yaratish', icon: 'checkSquare' as const, hint: 'Kontent, ssenariy, syomka, montaj, post' } : null,

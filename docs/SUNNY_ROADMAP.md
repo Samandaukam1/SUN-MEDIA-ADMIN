@@ -387,6 +387,20 @@ Quality Guardian, Meeting Copilot, Time Machine, Executive Intelligence.
   Production'da anonim chaqiruvlar rad etiladi. Production bazasida haqiqiy hisoblar bilan sinov — ruxsat berilmadi, kutilmoqda.
 - Qoldi: haqiqiy qurilmada push va jonli oqim (2 hisob bilan); SUNMEDIA USER ilovasida qabul qilish ekrani yo‘q.
 
+### Smm Api — egasi uchun NeoSMM bo‘limi (2026-11-06, `0037db0`, migratsiya `20261106100000`)
+- Manzil: **https://sunmediagroup.uz/smm-api** (panel). Faqat `NEOSMM_OWNER_USER_ID` akkaunti (anisjonitp@gmail.com,
+  tasdiqlangan email, `system_owner`) — boshqalarga menyu yo‘q, sahifa va har bir server action 404; sozlanmasa yopiq.
+- Sirlar (Vercel, ikkala loyiha, Sensitive): `NEOSMM_API_KEY` (faqat serverda), `NEOSMM_OWNER_USER_ID`,
+  `NEOSMM_RATE_PER=1000` — SMM `rate` birligi hujjatda yo‘q, egasi botdagi “1000 ta uchun” ni tasdiqladi.
+- Bo‘limlar: Hisob (balans, bot orqali to‘ldirish https://t.me/neosmmbot), Xizmatlar (Instagram filtri), Buyurtmalar,
+  O‘yin donati, Telegram sovg‘alari. Narxlar provayderniki, aniq o‘nlik arifmetika; ustama yo‘q.
+- Buyurtma: ko‘rib chiqish → “Buyurtmani tasdiqlash”; token avval bazaga (dublikat yo‘q), noaniq javob — “Natija
+  noma’lum — tekshirish kerak”, avtomatik qayta yuborilmaydi; egasi botdan raqamni biriktiradi yoki “tushmagan” deydi.
+- `neosmm_orders` / `neosmm_catalog_cache`: RLS, siyosat va grant yo‘q — faqat server (service role) egasi tekshiruvidan keyin.
+- Testlar: `tests/neosmm.test.mjs` (11, mock bilan: dublikat, parallel bosish, timeout, narx aniqligi); DB testi
+  `047_neosmm_orders` yozilgan — Docker ishlamagani uchun lokal ishga tushirilmagan. Haqiqiy buyurtma berib sinalmagan.
+- Shu reliz bilan: `Permissions-Policy: camera=(self)` — dumaloq video yozish brauzerda bloklanardi.
+
 ## Deploy (muhim)
 Vercel'da ikki loyiha bor: **`sun-media-admin`** → sunmediagroup.uz, **`sunmedia-admin`** → sunmedia-admin.vercel.app.
 `npm run deploy` faqat ikkinchisini yangilaydi. sunmediagroup.uz uchun HEAD'ni `sun-media-admin`

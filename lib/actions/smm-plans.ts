@@ -256,10 +256,16 @@ export async function smmPlans() {
   const ids = (plans ?? []).map((p) => p.id);
   const keys = [...new Set((plans ?? []).map((p) => p.queue_key))];
   const [{ data: parts }, { data: orders }, { data: queue }] = await Promise.all([
-    ids.length ? db.from('neosmm_plan_parts').select('plan_id, part_index, order_id, quantity, estimate, planned_at, due_at, state, note, dispatched_at').in('plan_id', ids).order('part_index') : Promise.resolve({ data: [] }),
+    ids.length ? db.from('neosmm_plan_parts').select('plan_id, part_index, order_id, quantity, estimate, planned_at, due_at, state, note, dispatched_at, retry_count').in('plan_id', ids).order('part_index') : Promise.resolve({ data: [] }),
     ids.length ? db.from('neosmm_orders').select(ORDER_COLUMNS).in('owner_id', owners).in('plan_id', ids).order('created_at') : Promise.resolve({ data: [] }),
     keys.length ? db.from('neosmm_queue').select('queue_key, order_id, hold, acquired_at').in('queue_key', keys) : Promise.resolve({ data: [] }),
   ]);
+  // Who holds each key when it is not the plan's own part: the order a queued part is really waiting for.
+  const own = new Set((parts ?? []).map((x) => x.order_id));
+  const foreign = (queue ?? []).map((q) => q.order_id).filter((id) => !own.has(id));
+  const { data: holders } = foreign.length
+    ? await db.from('neosmm_orders').select('id, target, quantity, provider_order_id, status, state, item_id, created_at, plan_id').in('owner_id', owners).in('id', foreign)
+    : { data: [] };
   return {
     ok: true as const,
     plans: (plans ?? []).map((p) => ({
@@ -267,6 +273,7 @@ export async function smmPlans() {
       parts: (parts ?? []).filter((x) => x.plan_id === p.id),
       orders: (orders ?? []).filter((o) => o.plan_id === p.id),
       queue: (queue ?? []).find((q) => q.queue_key === p.queue_key) ?? null,
+      holder: (holders ?? []).find((o) => o.id === (queue ?? []).find((q) => q.queue_key === p.queue_key)?.order_id) ?? null,
     })),
   };
 }

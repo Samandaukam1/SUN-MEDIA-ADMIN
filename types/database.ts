@@ -3989,6 +3989,7 @@ export type Database = {
           estimate: string
           lease_until: string | null
           note: string | null
+          retry_count: number
           order_id: string
           part_index: number
           plan_id: string
@@ -4004,6 +4005,7 @@ export type Database = {
           estimate: string
           lease_until?: string | null
           note?: string | null
+          retry_count?: number
           order_id: string
           part_index: number
           plan_id: string
@@ -4019,6 +4021,7 @@ export type Database = {
           estimate?: string
           lease_until?: string | null
           note?: string | null
+          retry_count?: number
           order_id?: string
           part_index?: number
           plan_id?: string

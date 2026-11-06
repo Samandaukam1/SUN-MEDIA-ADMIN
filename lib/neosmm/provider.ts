@@ -84,6 +84,20 @@ export function createProvider({
         // The provider answered with an error: it did not take the request.
         return { ok: false, reason: retryAfter ? 'unavailable' : 'provider', message: translateError(raw, retryAfter), raw, retryAfter, accepted: 'no', body };
       }
+      if (res.status === 429) {
+        // Too Many Requests: refused before it was processed — certainly not taken; wait as long as it asks.
+        const retryAfter = toInt(res.headers.get('retry-after')) || 60;
+        last = {
+          ok: false,
+          reason: 'unavailable',
+          message: `NeoSMM so‘rovlar chegarasi: ${retryAfter} soniyadan keyin qayta urinish mumkin.`,
+          raw: 'HTTP 429 Too Many Requests',
+          retryAfter,
+          accepted: 'no',
+        };
+        if (mutation) return last;
+        continue;
+      }
       if (res.ok && json !== undefined) return { ok: true, data: json };
       last = {
         ok: false,

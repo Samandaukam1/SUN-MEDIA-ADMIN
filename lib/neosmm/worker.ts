@@ -6,25 +6,34 @@ import type { Json } from '@/types/database';
 
 import { adapterOf, smmEstimate, type Service } from './catalog';
 import { decCmp, parseDec } from './decimal';
-import { healthOf } from './health';
+import { healthOf, type ErrorKind } from './health';
 import { adoptOpenOrders, loadBalance, loadCatalog, loadHealth, neosmm, orderStore, ownerActive, refreshStatuses, smmConfig, type Balance, type Catalog } from './server';
+import { runPool } from './schedule';
 import { sendClaimed } from './submit';
 
 /**
  * The scheduled-order worker (called every minute by pg_cron through /api/smm/worker, and right after the owner creates
- * a plan). Each run: recovers interrupted claims, follows open orders, then sends at most a few due parts — each after
- * fresh checks of the plan, the service, its tariff and limits, and the balance. A part whose check fails is not sent:
- * the plan pauses with the reason (or, for a passing outage, the part simply waits). Nothing is ever resent by itself.
+ * a plan). Each run: recovers interrupted claims, follows open orders, then sends the due parts of independent plans —
+ * each after fresh checks of the plan, the service, its tariff and limits, and the balance. Plans never wait for each
+ * other: only parts on the same service + target share a queue key (the provider takes one active order per link and
+ * service). Checks run one by one (the balance is reserved part by part); the sends then go a few at a time. A part
+ * whose check fails is not sent: its plan pauses with the reason (or, for a passing outage, the part simply waits).
+ * An unclear result is never resent by itself.
  */
 
 export type WorkerReport = { recovered: number; adopted: number; checked: number; sent: number; paused: number; waiting: number; profiles: number; skipped?: string };
 
 const STATUS_STALE_MS = 150_000;
-const MAX_SENDS_PER_RUN = 3;
+const MAX_SENDS_PER_RUN = 12;
+// Provider connections open at once from one run (independent targets; NeoSMM publishes no rate limit — kept modest).
+const SEND_CONCURRENCY = 4;
+// Passing refusals: the database gives the part its own retry time; the plan stays active.
+const PASSING: ReadonlySet<ErrorKind> = new Set(['maintenance', 'active_order', 'network']);
 
 type Claimed = { plan_id: string; part_index: number; order_id: string };
 
-export async function runWorker({ planId = null, deadlineMs = 40_000 }: { planId?: string | null; deadlineMs?: number } = {}): Promise<WorkerReport> {
+/** `deadlineMs`: no new provider call starts after this (a started one may still take the 30 s write timeout). */
+export async function runWorker({ planId = null, deadlineMs = 25_000 }: { planId?: string | null; deadlineMs?: number } = {}): Promise<WorkerReport> {
   const started = Date.now();
   const report: WorkerReport = { recovered: 0, adopted: 0, checked: 0, sent: 0, paused: 0, waiting: 0, profiles: 0 };
   const { ownerIds, keyConfigured, rateUnit } = smmConfig();
@@ -48,16 +57,20 @@ export async function runWorker({ planId = null, deadlineMs = 40_000 }: { planId
   let spentSinceBalance = { n: 0n, s: 2 };
   const health = await loadHealth();
 
+  type Ready = { c: Claimed; send: () => Promise<void> };
+  const ready: Ready[] = [];
+  const unclaimOf = (c: Claimed) => async (reason: string | null, retryInSec?: number) => {
+    await db.rpc('neosmm_unclaim_part', {
+      p_order: c.order_id,
+      p_pause_reason: reason ?? undefined,
+      p_due_at: retryInSec ? new Date(Date.now() + retryInSec * 1000).toISOString() : undefined,
+    });
+    if (reason) report.paused++;
+    else report.waiting++;
+  };
+
   for (const c of claimed as Claimed[]) {
-    const unclaim = async (reason: string | null, retryInSec?: number) => {
-      await db.rpc('neosmm_unclaim_part', {
-        p_order: c.order_id,
-        p_pause_reason: reason ?? undefined,
-        p_due_at: retryInSec ? new Date(Date.now() + retryInSec * 1000).toISOString() : undefined,
-      });
-      if (reason) report.paused++;
-      else report.waiting++;
-    };
+    const unclaim = unclaimOf(c);
     if (Date.now() - started > deadlineMs) {
       await unclaim(null);
       continue;
@@ -156,20 +169,39 @@ export async function runWorker({ planId = null, deadlineMs = 40_000 }: { planId
       profile_id: plan.profile_id,
       refill_policy: plan.refill_policy,
     };
-    // Last check under the plan's lock (pause / cancel / ownership), the order row written in the same transaction.
-    const { data: begun } = await db.rpc('neosmm_begin_send', { p_order: c.order_id, p_row: row as unknown as Json });
-    if (begun !== 'ok') {
-      report.waiting++;
-      continue;
-    }
-    const outcome = await sendClaimed(orderStore(plan.owner_id), neosmm, { id: c.order_id, currency: plan.currency }, { action: 'add', ...params });
-    if (outcome.state === 'accepted') {
-      report.sent++;
-      const spent = parseDec(outcome.charge) ?? need;
-      const s = Math.max(spent.s, spentSinceBalance.s);
-      spentSinceBalance = { n: spentSinceBalance.n * 10n ** BigInt(s - spentSinceBalance.s) + spent.n * 10n ** BigInt(s - spent.s), s };
-      if (!outcome.saved) console.error('smm worker: accepted order not saved', { order: c.order_id, provider: outcome.providerOrderId });
-    } else report.paused++;
+    // Reserved now, so the next part's balance check already counts this one.
+    const s = Math.max(need.s, spentSinceBalance.s);
+    spentSinceBalance = { n: spentSinceBalance.n * 10n ** BigInt(s - spentSinceBalance.s) + need.n * 10n ** BigInt(s - need.s), s };
+    ready.push({
+      c,
+      send: async () => {
+        // Last check under the plan's lock (pause / cancel / ownership), the order row written in the same transaction;
+        // the provider call follows at once, so no written row is left unsent by this run.
+        const { data: begun } = await db.rpc('neosmm_begin_send', { p_order: c.order_id, p_row: row as unknown as Json });
+        if (begun !== 'ok') {
+          report.waiting++;
+          return;
+        }
+        const outcome = await sendClaimed(orderStore(plan.owner_id), neosmm, { id: c.order_id, currency: plan.currency }, { action: 'add', ...params });
+        if (outcome.state === 'accepted') {
+          report.sent++;
+          if (!outcome.saved) console.error('smm worker: accepted order not saved', { order: c.order_id, provider: outcome.providerOrderId });
+        } else if (outcome.state === 'rejected' && PASSING.has(outcome.errorKind)) {
+          report.waiting++;
+          // The provider asked for a longer wait than the database's own step: honour it.
+          if (outcome.retryAfter) {
+            const at = new Date(Date.now() + outcome.retryAfter * 1000).toISOString();
+            await db.from('neosmm_plan_parts').update({ due_at: at }).eq('plan_id', c.plan_id).eq('part_index', c.part_index).eq('state', 'planned').lt('due_at', at);
+          }
+        } else report.paused++;
+      },
+    });
   }
+
+  await runPool(ready, SEND_CONCURRENCY, async (r) => {
+    if (Date.now() - started > deadlineMs) await unclaimOf(r.c)(null);
+    // One part's trouble never stops the others; whatever was written is settled by neosmm_recover, never resent.
+    else await r.send().catch((e) => console.error('smm worker: send failed', { order: r.c.order_id, error: e instanceof Error ? e.message : 'unknown' }));
+  });
   return report;
 }

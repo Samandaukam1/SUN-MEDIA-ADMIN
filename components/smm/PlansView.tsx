@@ -10,18 +10,13 @@ import { Notice } from '@/components/ui/Notice';
 import { smmPlanControl, smmPlans } from '@/lib/actions/smm-plans';
 import { isFinal, statusLabel } from '@/lib/neosmm/catalog';
 import { decText, formatSom, parseDec } from '@/lib/neosmm/decimal';
+import { PLAN_PHASE, planPhase } from '@/lib/neosmm/schedule';
 import { projectSending } from '@/lib/neosmm/split';
 import { formatShortDateTime } from '@/lib/time';
 
 export type SmmPlan = Awaited<ReturnType<typeof smmPlans>>['plans'][number];
 
 const POLL_MS = 60_000;
-const PLAN_STATUS = {
-  active: { label: 'Faol', tone: 'info' },
-  paused: { label: 'Pauza', tone: 'warning' },
-  cancelled: { label: 'Bekor qilingan', tone: 'neutral' },
-  completed: { label: 'Tugagan', tone: 'success' },
-} as const;
 const PART_STATE: Record<string, string> = {
   planned: 'Navbatda',
   dispatching: 'Tekshirilmoqda',
@@ -89,8 +84,8 @@ export function PlansView({ initial, error: initialError }: { initial: SmmPlan[]
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-[13px] text-muted">
-          Rejadagi qismlarni server o‘zi yuboradi (har daqiqada tekshiradi) — brauzer yoki kompyuter yopiq bo‘lsa ham. Bir xizmat va bir havolada bir vaqtda bitta buyurtma: oldingisi
-          tugamaguncha keyingisi kutadi.
+          Rejadagi qismlarni server o‘zi yuboradi (har daqiqada tekshiradi) — brauzer yoki kompyuter yopiq bo‘lsa ham. Har bir profil va reja o‘z jadvali bo‘yicha mustaqil
+          ishlaydi. Faqat bir xil xizmat va bir xil profil/havolada bir vaqtda bitta buyurtma bo‘ladi (NeoSMM qoidasi): oldingisi tugamaguncha keyingisi kutadi.
         </p>
         <Button variant="secondary" onClick={() => void reload()} icon={<Icon name="refresh" size={16} />}>
           Yangilash
@@ -139,7 +134,9 @@ function PlanCard({ plan: p, busy, message, onControl }: { plan: SmmPlan; busy: 
   const waitingForQueue = !!p.queue && nextIdx >= 0 && !p.parts.some((x) => x.order_id === p.queue!.order_id) && Date.parse(p.parts[nextIdx].due_at) <= now;
   const holderIsOwnPart = !!p.queue && p.parts.some((x) => x.order_id === p.queue!.order_id);
   const lastProjected = [...projected].reverse().find((x) => x !== null) ?? null;
-  const st = PLAN_STATUS[p.status as keyof typeof PLAN_STATUS] ?? { label: p.status, tone: 'neutral' as const };
+  const st = PLAN_PHASE[planPhase(p, now)];
+  const left = p.parts.filter((x) => x.state === 'planned' || x.state === 'dispatching');
+  const h = p.holder;
   const open = p.status === 'active' || p.status === 'paused';
 
   return (
@@ -162,7 +159,13 @@ function PlanCard({ plan: p, busy, message, onControl }: { plan: SmmPlan; busy: 
       </div>
 
       {p.pause_reason && p.status === 'paused' ? <Notice tone="warning">{p.pause_reason}</Notice> : null}
-      {waitingForQueue && p.status === 'active' ? <Notice tone="info">Oldingi buyurtma tugashini kutmoqda (shu xizmat va havoladagi boshqa buyurtma).</Notice> : null}
+      {waitingForQueue && p.status === 'active' ? (
+        <Notice tone="info">
+          Oldingi buyurtma tugashini kutmoqda: shu xizmat (ID {p.service_id}) va shu profil/havoladagi
+          {h ? ` buyurtma ${h.provider_order_id ? `#${h.provider_order_id}` : h.id.slice(0, 8)}${h.quantity ? ` · ${h.quantity.toLocaleString('ru-RU')} ta` : ''}${h.status ? ` · ${statusLabel(h.status).label}` : ''} (${formatShortDateTime(h.created_at)})` : ' boshqa buyurtma'}
+          . NeoSMM bitta havolaga bitta xizmatdan bir vaqtda faqat bitta faol buyurtma oladi. Boshqa profillardagi buyurtmalar bunga bog‘liq emas.
+        </Notice>
+      ) : null}
       {holderIsOwnPart && p.status === 'active' && nextIdx >= 0 ? (
         <p className="text-[12.5px] text-muted">Keyingi qism oldingi qism tugagach va o‘z vaqti kelgach yuboriladi.</p>
       ) : null}
@@ -172,7 +175,10 @@ function PlanCard({ plan: p, busy, message, onControl }: { plan: SmmPlan; busy: 
           Reja: <b>{p.total_quantity.toLocaleString('ru-RU')}</b> ta, {p.part_count} qism
           {p.part_count > 1 ? ` · ${Math.round(p.window_seconds / 3600)} soat oralig‘ida` : ''}
         </span>
-        <span>Yuborilgan: {submitted.toLocaleString('ru-RU')} ta</span>
+        <span>
+          Yuborilgan: {submitted.toLocaleString('ru-RU')} ta · {sentParts.length}/{p.part_count} qism
+          {open && left.length ? ` · qolgan ${left.length} qism (${left.reduce((n, x) => n + x.quantity, 0).toLocaleString('ru-RU')} ta)` : ''}
+        </span>
         <span>
           Provayder hisobi: bajarilgan {reportedDone.toLocaleString('ru-RU')}
           {reportedLeft ? ` · qoldi ${reportedLeft.toLocaleString('ru-RU')}` : ''}

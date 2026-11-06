@@ -181,7 +181,7 @@ async function buildReview(owner: string, input: OrderInput, token: string): Pro
       refill: policyFrom(service.refill, healthRow),
       providerParams: planned.ok ? { action: 'add', ...planned.plan.params } : {},
     };
-    if (queueBusy) review.warnings.push('Oldingi buyurtma tugashini kutmoqda: shu xizmat va havolada tugamagan buyurtma bor. Tasdiqlasangiz, bu buyurtma navbatga qo‘yiladi va u tugagach yuboriladi.');
+    if (queueBusy) review.warnings.push('Oldingi buyurtma tugashini kutmoqda: shu xizmatda shu profil/havola uchun tugamagan buyurtma bor (NeoSMM bitta havolaga bitta xizmatdan bir vaqtda bittasini oladi). Tasdiqlasangiz, bu buyurtma navbatga qo‘yiladi va u tugagach yuboriladi. Boshqa profillardagi buyurtmalar bunga ta’sir qilmaydi.');
     if (/guarantee|kafolat|refill|♻|lifetime|umrbod/i.test(service.name) && !service.refill)
       review.warnings.push('Nomida kafolat / refill yozilgan, lekin provayder bu xizmat uchun refill imkoniyatini ko‘rsatmagan.');
     if (planned.ok && planned.plan.billed !== planned.plan.quantity) review.warnings.push(`Drip-feed: jami ${planned.plan.billed} ta (miqdor × marta) hisoblandi.`);
@@ -437,7 +437,7 @@ async function queueManual(owner: string, token: string, review: Review, smm: { 
   return {
     ok: true,
     state: 'queued',
-    message: 'Oldingi buyurtma tugashini kutmoqda. Buyurtma navbatga qo‘yildi: oldingisi tugagach server o‘zi yuboradi (narx oshsa yoki balans yetmasa — to‘xtab, sizdan so‘raydi). “Rejalar” bo‘limida kuzating.',
+    message: 'Shu xizmat va shu profildagi oldingi buyurtma tugashini kutmoqda. Buyurtma navbatga qo‘yildi: oldingisi tugagach server o‘zi yuboradi (narx oshsa yoki balans yetmasa — to‘xtab, sizdan so‘raydi). “Rejalar” bo‘limida kuzating.',
   };
 }
 

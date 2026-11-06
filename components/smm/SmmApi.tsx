@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/Badge';
 import { Button, buttonClass } from '@/components/ui/Button';
@@ -71,6 +71,17 @@ export function SmmApi({
     };
   }, [refresh]);
 
+  // A service whose latest order here was refused is marked before the next try (an accepted one clears it).
+  const rejections = useMemo(() => {
+    const m = new Map<number, { at: string; message: string }>();
+    for (const o of [...orders].reverse()) {
+      if (o.kind !== 'smm') continue;
+      if (o.state === 'accepted') m.delete(o.item_id);
+      else if (o.state === 'rejected' && o.error) m.set(o.item_id, { at: o.created_at, message: o.error });
+    }
+    return m;
+  }, [orders]);
+
   const balanceText = lastGood ? formatSom(lastGood.balance, lastGood.currency) : null;
   const tabs = [
     { key: 'hisob', label: 'Hisob', href: '/smm-api' },
@@ -125,7 +136,7 @@ export function SmmApi({
       <Tabs items={tabs} active={tab} />
 
       {tab === 'hisob' ? <Overview config={config} orders={orders} /> : null}
-      {tab === 'xizmatlar' && catalog ? <ServicesView catalog={catalog as Catalog<'services'>} config={config} balance={lastGood} /> : null}
+      {tab === 'xizmatlar' && catalog ? <ServicesView catalog={catalog as Catalog<'services'>} config={config} balance={lastGood} rejections={rejections} /> : null}
       {tab === 'buyurtmalar' ? <OrdersView initial={orders} error={ordersError} /> : null}
       {tab === 'donat' && catalog ? <DonatView catalog={catalog as Catalog<'donat_services'>} balance={lastGood} /> : null}
       {tab === 'sovgalar' && catalog ? <GiftsView catalog={catalog as Catalog<'gifts'>} balance={lastGood} /> : null}

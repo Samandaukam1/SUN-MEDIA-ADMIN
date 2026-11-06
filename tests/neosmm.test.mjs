@@ -279,3 +279,10 @@ test('owners are explicit account ids only: a list is read, anything else is ign
   assert.deepEqual(parseOwnerIds(`${a.slice(0, -1)}`), [], 'a typo locks the module');
   assert.deepEqual(parseOwnerIds(undefined), []);
 });
+
+test('“Provider error: Incorrect service ID” is NeoSMM’s supplier refusing the service, explained in Uzbek', () => {
+  assert.equal(catalog.translateError('Provider error: Incorrect service ID'), catalog.UPSTREAM_SERVICE_ERROR);
+  assert.match(catalog.translateError('Provider error: Incorrect service ID'), /qabul qilinmadi/);
+  assert.match(catalog.translateError('Invalid service ID'), /topilmadi yoki hozir faol emas/, 'NeoSMM’s own error stays as before');
+  assert.match(catalog.translateError('Provider error: Something else'), /^NeoSMM ta’minotchisi javobi: Something else/);
+});

@@ -11,6 +11,7 @@ import { smmPlace, smmReview, type OrderInput, type Review } from '@/lib/actions
 import { adapterOf, lines, SUBSCRIPTION_COST, UNSUPPORTED_TYPE, type DonatProduct, type Gift, type Service } from '@/lib/neosmm/catalog';
 import { formatSom } from '@/lib/neosmm/decimal';
 import type { Balance } from '@/lib/neosmm/server';
+import { formatShortDateTime } from '@/lib/time';
 
 export type OrderTarget = { kind: 'smm'; service: Service } | { kind: 'gift'; gift: Gift } | { kind: 'donat'; product: DonatProduct };
 type PublicReview = Omit<Review, 'providerParams'>;
@@ -22,11 +23,14 @@ export function OrderDialog({
   target,
   rateUnit = null,
   balance,
+  lastRejection = null,
   onClose,
 }: {
   target: OrderTarget;
   rateUnit?: number | null;
   balance: Extract<Balance, { ok: true }> | null;
+  /** This service's latest order here was refused: said before another try. */
+  lastRejection?: { at: string; message: string } | null;
   onClose: () => void;
 }) {
   const [f, setF] = useState<Record<string, string>>({});
@@ -185,6 +189,11 @@ export function OrderDialog({
           }}
         >
           {target.kind === 'smm' ? <ServiceSummary service={target.service} rateUnit={rateUnit} /> : null}
+          {lastRejection ? (
+            <Notice tone="warning" title={`${formatShortDateTime(lastRejection.at)} dagi urinish qabul qilinmagan`}>
+              {lastRejection.message}
+            </Notice>
+          ) : null}
           {cannot ? <Notice tone="warning">{cannot}</Notice> : null}
 
           {target.kind === 'smm' && adapter && adapter !== 'subscription' ? (

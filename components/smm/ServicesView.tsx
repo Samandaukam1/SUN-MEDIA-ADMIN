@@ -10,6 +10,7 @@ import { smmCatalog } from '@/lib/actions/smm';
 import { adapterOf, platformOf, type Service } from '@/lib/neosmm/catalog';
 import { decCmp, formatSom, parseDec } from '@/lib/neosmm/decimal';
 import type { Balance, Catalog } from '@/lib/neosmm/server';
+import { formatShortDateTime } from '@/lib/time';
 
 import { OrderDialog } from './OrderDialog';
 import { Freshness, type SmmConfig } from './SmmApi';
@@ -20,7 +21,17 @@ type Sort = 'id' | 'cheap' | 'dear';
 const priceOf = (s: Service) => parseDec(s.rate) ?? { n: 0n, s: 0 };
 
 /** Every SMM service of the account, Instagram first in the filters; nothing is dropped without being counted. */
-export function ServicesView({ catalog: initial, config, balance }: { catalog: Catalog<'services'>; config: SmmConfig; balance: Extract<Balance, { ok: true }> | null }) {
+export function ServicesView({
+  catalog: initial,
+  config,
+  balance,
+  rejections,
+}: {
+  catalog: Catalog<'services'>;
+  config: SmmConfig;
+  balance: Extract<Balance, { ok: true }> | null;
+  rejections: Map<number, { at: string; message: string }>;
+}) {
   const [catalog, setCatalog] = useState(initial);
   const [refreshing, setRefreshing] = useState(false);
   const [q, setQ] = useState('');
@@ -165,6 +176,9 @@ export function ServicesView({ catalog: initial, config, balance }: { catalog: C
                     {s.cancel ? <Badge tone="info">Bekor qilish</Badge> : null}
                     {s.dripfeed ? <Badge tone="violet">Drip-feed</Badge> : null}
                   </div>
+                  {rejections.has(s.id) ? (
+                    <p className="text-[12.5px] text-warning">⚠ {formatShortDateTime(rejections.get(s.id)!.at)} dagi buyurtmani provayder qabul qilmagan</p>
+                  ) : null}
                   <div className="mt-auto flex justify-end">
                     <Button variant="secondary" onClick={() => setOpen(s)}>
                       {adapter ? 'Buyurtma berish' : 'Batafsil'}
@@ -184,7 +198,7 @@ export function ServicesView({ catalog: initial, config, balance }: { catalog: C
         </div>
       ) : null}
 
-      {open ? <OrderDialog target={{ kind: 'smm', service: open }} rateUnit={unit} balance={balance} onClose={() => setOpen(null)} /> : null}
+      {open ? <OrderDialog target={{ kind: 'smm', service: open }} rateUnit={unit} balance={balance} lastRejection={rejections.get(open.id) ?? null} onClose={() => setOpen(null)} /> : null}
     </div>
   );
 }

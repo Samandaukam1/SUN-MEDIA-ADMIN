@@ -331,8 +331,15 @@ export const isCompleted = (raw: string | null | undefined) => key(raw) === 'com
 export const MISSING_KEY = 'NeoSMM API kaliti sozlanmagan. Vercel’da server sirlariga NEOSMM_API_KEY qo‘shing.';
 
 /** The provider's error in Uzbek; an unknown one is shown as it came (as text). */
+export const UPSTREAM_SERVICE_ERROR =
+  'NeoSMM’ning ta’minotchisi bu xizmatni qabul qilmadi (“Incorrect service ID”): xizmat ro‘yxatda ko‘rinsa ham, hozir NeoSMM tomonida ishlamayapti. Buyurtma qabul qilinmadi. Boshqa xizmatni tanlang yoki @neosmmbot ga yozing.';
+
 export function translateError(message: string, retryAfter?: number | null): string {
-  const m = message.trim();
+  const raw = message.trim();
+  // "Provider error: …" — NeoSMM passed the request on and its own supplier refused it (NeoSMM's own errors have no prefix).
+  const upstream = /^provider error:\s*/i.test(raw);
+  const m = raw.replace(/^provider error:\s*/i, '');
+  if (upstream && /incorrect service|invalid service|service (is )?(disabled|not found|not active)/i.test(m)) return UPSTREAM_SERVICE_ERROR;
   if (retryAfter) return `Provayderda texnik ishlar: ${Math.max(1, Math.ceil(retryAfter / 60))} daqiqadan keyin qayta urinib ko‘ring.`;
   if (/invalid api key/i.test(m)) return 'NeoSMM API kaliti noto‘g‘ri yoki eskirgan.';
   if (/api access is disabled/i.test(m)) return 'NeoSMM hisobingiz uchun API o‘chirilgan.';
@@ -347,5 +354,5 @@ export function translateError(message: string, retryAfter?: number | null): str
   if (/link|url/i.test(m)) return 'Havola provayder tomonidan qabul qilinmadi.';
   if (/invalid action/i.test(m)) return 'Provayder bu amalni tanimadi.';
   if (/donat service is temporarily unavailable/i.test(m)) return 'Donat vaqtincha yopiq. Keyinroq urinib ko‘ring.';
-  return `Provayder javobi: ${m.slice(0, 300)}`;
+  return `${upstream ? 'NeoSMM ta’minotchisi' : 'Provayder'} javobi: ${m.slice(0, 300)}`;
 }

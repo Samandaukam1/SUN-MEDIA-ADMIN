@@ -9,6 +9,7 @@ import { SelectInput, TextInput } from '@/components/ui/Inputs';
 import { smmCatalog } from '@/lib/actions/smm';
 import { adapterOf, platformOf, type Service } from '@/lib/neosmm/catalog';
 import { decCmp, formatSom, parseDec } from '@/lib/neosmm/decimal';
+import { HEALTH_FILTERS, HEALTH_LABEL, healthOf, inFilter, type HealthFilter, type HealthRow } from '@/lib/neosmm/health';
 import type { Balance, Catalog } from '@/lib/neosmm/server';
 import { formatShortDateTime } from '@/lib/time';
 
@@ -26,12 +27,16 @@ export function ServicesView({
   config,
   balance,
   rejections,
+  health: initialHealth,
 }: {
   catalog: Catalog<'services'>;
   config: SmmConfig;
   balance: Extract<Balance, { ok: true }> | null;
   rejections: Map<number, { at: string; message: string }>;
+  health: HealthRow[];
 }) {
+  const [health, setHealth] = useState(() => new Map(initialHealth.map((r) => [r.service_id, r])));
+  const [state, setState] = useState<HealthFilter>('all');
   const [catalog, setCatalog] = useState(initial);
   const [refreshing, setRefreshing] = useState(false);
   const [q, setQ] = useState('');
@@ -41,7 +46,17 @@ export function ServicesView({
   const [shown, setShown] = useState(PAGE);
   const [open, setOpen] = useState<Service | null>(null);
 
-  const withPlatform = useMemo(() => catalog.items.map((s) => ({ s, platform: platformOf(s) })), [catalog.items]);
+  const withPlatform = useMemo(() => catalog.items.map((s) => ({ s, platform: platformOf(s), health: healthOf(health.get(s.id)) })), [catalog.items, health]);
+  // Services that left the catalogue keep their history and reason (they take no new orders).
+  const removed = useMemo(() => {
+    const listed = new Set(catalog.items.map((s) => s.id));
+    return [...health.values()].filter((r) => r.missing_since && !listed.has(r.service_id));
+  }, [catalog.items, health]);
+  const stateCounts = useMemo(() => {
+    const c: Record<HealthFilter, number> = { recent: 0, untested: 0, problem: removed.length, all: withPlatform.length };
+    for (const x of withPlatform) for (const k of ['recent', 'untested', 'problem'] as const) if (inFilter(x.health.state, k)) c[k]++;
+    return c;
+  }, [withPlatform, removed.length]);
   const platforms = useMemo(() => {
     const counts = new Map<string, number>();
     for (const x of withPlatform) counts.set(x.platform, (counts.get(x.platform) ?? 0) + 1);
@@ -57,6 +72,7 @@ export function ServicesView({
     const term = q.trim().toLowerCase();
     const out = withPlatform
       .filter((x) => platform === 'Hammasi' || x.platform === platform)
+      .filter((x) => inFilter(x.health.state, state))
       .filter((x) => !category || x.s.category === category)
       .filter((x) => !term || String(x.s.id) === term.replace(/^#/, '') || x.s.name.toLowerCase().includes(term) || x.s.category.toLowerCase().includes(term))
       .map((x) => x.s);
@@ -64,7 +80,7 @@ export function ServicesView({
     else if (sort === 'dear') out.sort((a, b) => decCmp(priceOf(b), priceOf(a)) || a.id - b.id);
     else out.sort((a, b) => a.id - b.id);
     return out;
-  }, [withPlatform, platform, category, q, sort]);
+  }, [withPlatform, platform, category, q, sort, state]);
 
   const reload = async () => {
     setRefreshing(true);
@@ -101,6 +117,26 @@ export function ServicesView({
           </button>
         ))}
       </div>
+
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Xizmat holati">
+        {HEALTH_FILTERS.map((x) => (
+          <button
+            key={x.key}
+            type="button"
+            aria-pressed={state === x.key}
+            onClick={() => {
+              setState(x.key);
+              setShown(PAGE);
+            }}
+            className={`h-9 rounded-full border px-3.5 text-sm font-medium ${state === x.key ? 'border-ink bg-ink text-bg' : 'border-line bg-surface text-muted hover:text-ink'}`}
+          >
+            {x.label} · {stateCounts[x.key]}
+          </button>
+        ))}
+      </div>
+      <p className="text-[12.5px] text-muted">
+        Holat faqat shu yerdan berilgan buyurtmalar va provayder javoblaridan olinadi — sinov buyurtmasi berilmaydi va “100% ishlaydi” degan baho yo‘q.
+      </p>
 
       <div className="grid gap-3 sm:grid-cols-[1fr_220px_180px]">
         <TextInput
@@ -152,6 +188,7 @@ export function ServicesView({
         <ul className="grid gap-3 lg:grid-cols-2">
           {list.slice(0, shown).map((s) => {
             const adapter = adapterOf(s.type);
+            const h = healthOf(health.get(s.id));
             return (
               <li key={s.id}>
                 <Card className="flex h-full flex-col gap-3 p-4">
@@ -175,13 +212,22 @@ export function ServicesView({
                     {s.refill ? <Badge tone="success">Refill</Badge> : null}
                     {s.cancel ? <Badge tone="info">Bekor qilish</Badge> : null}
                     {s.dripfeed ? <Badge tone="violet">Drip-feed</Badge> : null}
+                    <Badge tone={h.tone} dot>
+                      {h.label}
+                    </Badge>
                   </div>
+                  {h.state === 'blocked' || h.state === 'disabled' || h.state === 'completed' || h.state === 'accepted' ? (
+                    <p className={`text-[12.5px] ${h.orderable ? 'text-muted' : 'text-danger'}`}>
+                      {h.at ? `${formatShortDateTime(h.at)}: ` : ''}
+                      {h.reason ?? (h.state === 'completed' ? 'shu yerdan berilgan buyurtma bajarilgan' : '')}
+                    </p>
+                  ) : null}
                   {rejections.has(s.id) ? (
                     <p className="text-[12.5px] text-warning">⚠ {formatShortDateTime(rejections.get(s.id)!.at)} dagi buyurtmani provayder qabul qilmagan</p>
                   ) : null}
                   <div className="mt-auto flex justify-end">
                     <Button variant="secondary" onClick={() => setOpen(s)}>
-                      {adapter ? 'Buyurtma berish' : 'Batafsil'}
+                      {adapter && h.orderable ? 'Buyurtma berish' : 'Batafsil'}
                     </Button>
                   </div>
                 </Card>
@@ -190,6 +236,24 @@ export function ServicesView({
           })}
         </ul>
       )}
+      {state === 'problem' && removed.length ? (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{HEALTH_LABEL.removed}</p>
+          <ul className="grid gap-2 lg:grid-cols-2">
+            {removed.map((r) => (
+              <li key={r.service_id}>
+                <Card className="p-3 text-[13px]">
+                  <p className="text-muted">
+                    #{r.service_id} · {r.service_category ?? '—'}
+                  </p>
+                  <p className="font-medium break-words">{r.service_name ?? `Xizmat #${r.service_id}`}</p>
+                  <p className="text-muted">Katalogda yo‘q: {formatShortDateTime(r.missing_since)} dan beri · tarix “Buyurtmalar”da saqlanadi</p>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {list.length > shown ? (
         <div className="flex justify-center">
           <Button variant="secondary" onClick={() => setShown((n) => n + PAGE)}>
@@ -198,7 +262,24 @@ export function ServicesView({
         </div>
       ) : null}
 
-      {open ? <OrderDialog target={{ kind: 'smm', service: open }} rateUnit={unit} balance={balance} lastRejection={rejections.get(open.id) ?? null} onClose={() => setOpen(null)} /> : null}
+      {open ? (
+        <OrderDialog
+          target={{ kind: 'smm', service: open }}
+          rateUnit={unit}
+          balance={balance}
+          lastRejection={rejections.get(open.id) ?? null}
+          health={health.get(open.id) ?? null}
+          onHealthChange={(row) =>
+            setHealth((m) => {
+              const next = new Map(m);
+              if (row) next.set(open.id, row);
+              else next.delete(open.id);
+              return next;
+            })
+          }
+          onClose={() => setOpen(null)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -7,6 +7,7 @@
 
 import { toInt, type Kind } from './catalog';
 import { decText, parseDec } from './decimal';
+import { classifyProviderError, type ErrorKind } from './health';
 import type { Call } from './provider';
 
 export const UNKNOWN_RESULT = 'Natija noma’lum — tekshirish kerak';
@@ -30,6 +31,10 @@ export type NewOrder = {
   estimate: string | null;
   can_cancel: boolean;
   can_refill: boolean;
+  target_key?: string | null;
+  queue_key?: string | null;
+  profile_id?: string | null;
+  refill_policy?: Record<string, unknown> | null;
 };
 
 export type OrderPatch = Partial<{
@@ -38,6 +43,8 @@ export type OrderPatch = Partial<{
   charge: string | null;
   currency: string;
   error: string | null;
+  provider_error: string | null;
+  error_kind: ErrorKind | null;
   submitted_at: string;
   accepted_at: string;
 }>;
@@ -50,7 +57,7 @@ export interface OrderStore {
 
 export type SubmitOutcome =
   | { state: 'accepted'; providerOrderId: number; charge: string | null; saved: boolean }
-  | { state: 'rejected'; message: string; retryAfter?: number }
+  | { state: 'rejected'; message: string; retryAfter?: number; errorKind: ErrorKind }
   | { state: 'unknown'; message: string }
   | { state: 'duplicate'; existing: OrderState | null; providerOrderId: number | null };
 
@@ -62,14 +69,23 @@ const money = (v: unknown) => {
 export async function submitOrder(store: OrderStore, call: Call, row: NewOrder, providerParams: Record<string, string>): Promise<SubmitOutcome> {
   const claim = await store.claim(row);
   if (!claim.claimed) return { state: 'duplicate', existing: claim.state, providerOrderId: claim.providerOrderId };
+  return sendClaimed(store, call, { id: row.id, currency: row.currency }, providerParams);
+}
 
+/** The one provider call for a row already written as "submitting" (by `submitOrder`, or by the worker's claim). */
+export async function sendClaimed(
+  store: Pick<OrderStore, 'update'>,
+  call: Call,
+  row: { id: string; currency: string },
+  providerParams: Record<string, string>,
+): Promise<Exclude<SubmitOutcome, { state: 'duplicate' }>> {
   const res = await call(providerParams, { mutation: true });
   const now = new Date().toISOString();
   if (res.ok) {
     const data = (res.data && typeof res.data === 'object' ? res.data : {}) as Record<string, unknown>;
     const providerOrderId = toInt(data.order);
     if (providerOrderId === null) {
-      await store.update(row.id, { state: 'unknown', error: `${UNKNOWN_RESULT} (javobda buyurtma raqami yo‘q)`, submitted_at: now });
+      await store.update(row.id, { state: 'unknown', error: `${UNKNOWN_RESULT} (javobda buyurtma raqami yo‘q)`, error_kind: 'other', submitted_at: now });
       return { state: 'unknown', message: UNKNOWN_RESULT };
     }
     const patch: OrderPatch = {
@@ -86,9 +102,10 @@ export async function submitOrder(store: OrderStore, call: Call, row: NewOrder, 
     return { state: 'accepted', providerOrderId, charge: patch.charge ?? null, saved };
   }
   if (res.accepted === 'no') {
-    await store.update(row.id, { state: 'rejected', error: res.message, submitted_at: now });
-    return { state: 'rejected', message: res.message, retryAfter: res.retryAfter };
+    const errorKind = res.reason === 'provider' || res.reason === 'unavailable' ? classifyProviderError(res.raw, res.retryAfter) : res.reason === 'config' ? 'account' : 'network';
+    await store.update(row.id, { state: 'rejected', error: res.message, provider_error: res.raw ?? null, error_kind: errorKind, submitted_at: now });
+    return { state: 'rejected', message: res.message, retryAfter: res.retryAfter, errorKind };
   }
-  await store.update(row.id, { state: 'unknown', error: `${UNKNOWN_RESULT}: ${res.message}`, submitted_at: now });
+  await store.update(row.id, { state: 'unknown', error: `${UNKNOWN_RESULT}: ${res.message}`, error_kind: 'network', submitted_at: now });
   return { state: 'unknown', message: UNKNOWN_RESULT };
 }

@@ -351,7 +351,9 @@ export function translateError(message: string, retryAfter?: number | null): str
   const max = /max(?:imum)? quantity is (\d+)/i.exec(m);
   if (max) return `Miqdor ko‘pi bilan ${max[1]} bo‘lishi mumkin.`;
   if (/order not found|incorrect order/i.test(m)) return 'Buyurtma provayderda topilmadi.';
-  if (/link|url/i.test(m)) return 'Havola provayder tomonidan qabul qilinmadi.';
+  if (/active order|already (have|has) (an? )?(active )?order|wait until .*order/i.test(m))
+    return 'Shu havola uchun bu xizmatda tugamagan buyurtma bor (masalan bot orqali berilgan) — oldingisi tugashini kuting.';
+  if (/link|url/i.test(m)) return `Havola provayder tomonidan qabul qilinmadi (“${m.slice(0, 160)}”).`;
   if (/invalid action/i.test(m)) return 'Provayder bu amalni tanimadi.';
   if (/donat service is temporarily unavailable/i.test(m)) return 'Donat vaqtincha yopiq. Keyinroq urinib ko‘ring.';
   return `${upstream ? 'NeoSMM ta’minotchisi' : 'Provayder'} javobi: ${m.slice(0, 300)}`;

@@ -78,7 +78,8 @@ export function createProvider({
       }
       if (json && typeof json === 'object' && !Array.isArray(json) && 'error' in json) {
         const body = json as Record<string, unknown>;
-        const raw = typeof body.error === 'string' ? body.error : 'Error';
+        // The provider's words, kept for the record — with the key cut out should it ever be echoed back.
+        const raw = (typeof body.error === 'string' ? body.error : 'Error').split(apiKey).join('[kalit]').slice(0, 1000);
         const retryAfter = toInt(body.retry_after) ?? undefined;
         // The provider answered with an error: it did not take the request.
         return { ok: false, reason: retryAfter ? 'unavailable' : 'provider', message: translateError(raw, retryAfter), raw, retryAfter, accepted: 'no', body };

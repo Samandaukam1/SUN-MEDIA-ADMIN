@@ -1,17 +1,24 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { Checkbox, TextArea, TextInput } from '@/components/ui/Inputs';
+import { Checkbox, SelectInput, TextArea, TextInput } from '@/components/ui/Inputs';
 import { Notice } from '@/components/ui/Notice';
 import { smmPlace, smmReview, type OrderInput, type Review } from '@/lib/actions/smm';
-import { adapterOf, lines, SUBSCRIPTION_COST, UNSUPPORTED_TYPE, type DonatProduct, type Gift, type Service } from '@/lib/neosmm/catalog';
+import { smmProfileList } from '@/lib/actions/smm-plans';
+import { adapterOf, lines, platformOf, SUBSCRIPTION_COST, UNSUPPORTED_TYPE, type DonatProduct, type Gift, type Service } from '@/lib/neosmm/catalog';
 import { formatSom } from '@/lib/neosmm/decimal';
+import type { HealthRow } from '@/lib/neosmm/health';
 import type { Balance } from '@/lib/neosmm/server';
+import { parseTarget } from '@/lib/neosmm/targets';
 import { formatShortDateTime } from '@/lib/time';
+
+import { TargetField } from './bits';
+import { ServiceHealthPanel } from './ServiceHealthPanel';
+import { SplitPlanner } from './SplitPlanner';
 
 export type OrderTarget = { kind: 'smm'; service: Service } | { kind: 'gift'; gift: Gift } | { kind: 'donat'; product: DonatProduct };
 type PublicReview = Omit<Review, 'providerParams'>;
@@ -24,6 +31,8 @@ export function OrderDialog({
   rateUnit = null,
   balance,
   lastRejection = null,
+  health = null,
+  onHealthChange,
   onClose,
 }: {
   target: OrderTarget;
@@ -31,8 +40,13 @@ export function OrderDialog({
   balance: Extract<Balance, { ok: true }> | null;
   /** This service's latest order here was refused: said before another try. */
   lastRejection?: { at: string; message: string } | null;
+  /** SMM: the service's evidence row (null — nothing recorded yet). */
+  health?: HealthRow | null;
+  onHealthChange?: (row: HealthRow | null) => void;
   onClose: () => void;
 }) {
+  const [mode, setMode] = useState<'single' | 'split'>('single');
+  const [profiles, setProfiles] = useState<{ id: string; username: string; display_name: string | null }[] | null>(null);
   const [f, setF] = useState<Record<string, string>>({});
   const [drip, setDrip] = useState(false);
   const [acceptUnverified, setAcceptUnverified] = useState(false);
@@ -40,7 +54,7 @@ export function OrderDialog({
   const [busy, setBusy] = useState<'review' | 'place' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [done, setDone] = useState<{ ok: boolean; message: string } | null>(null);
+  const [done, setDone] = useState<{ ok: boolean; message: string; queued?: boolean } | null>(null);
   const set = (k: string) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
 
   const name = target.kind === 'smm' ? target.service.name : target.kind === 'gift' ? target.gift.name : target.product.name;
@@ -48,6 +62,16 @@ export function OrderDialog({
   const adapter = target.kind === 'smm' ? adapterOf(target.service.type) : null;
   const cannot =
     target.kind === 'smm' && !adapter ? UNSUPPORTED_TYPE(target.service.type) : target.kind === 'smm' && adapter === 'subscription' ? SUBSCRIPTION_COST : null;
+  const platform = target.kind === 'smm' ? platformOf(target.service) : '';
+  const linkInfo = target.kind === 'smm' ? parseTarget(f.link ?? '', platform) : null;
+  const isPost = linkInfo?.platform === 'Instagram' && linkInfo.kind === 'post';
+
+  // A post / reels link: its profile card only by the owner's explicit choice.
+  useEffect(() => {
+    if (!isPost || profiles) return;
+    smmProfileList().then(setProfiles, () => setProfiles([]));
+  }, [isPost, profiles]);
+  const profileId = isPost && f.profileId ? f.profileId : null;
 
   const input = (unverifiedOk = acceptUnverified): OrderInput =>
     target.kind === 'smm'
@@ -62,6 +86,7 @@ export function OrderDialog({
             hashtag: f.hashtag,
             answerNumber: num(f.answer ?? ''),
             ...(drip ? { runs: num(f.runs ?? ''), interval: num(f.interval ?? '') } : {}),
+            ...(profileId ? { profileId } : {}),
           },
         }
       : target.kind === 'gift'
@@ -89,7 +114,7 @@ export function OrderDialog({
     setError(null);
     try {
       const res = await smmPlace(review.token, input(), { price: review.price, cost: review.cost });
-      if (res.ok) setDone({ ok: true, message: res.message });
+      if (res.ok) setDone({ ok: true, message: res.message, queued: res.state === 'queued' });
       else if (res.state === 'changed' && res.review) {
         setReview(res.review);
         setNotice(res.message);
@@ -103,6 +128,33 @@ export function OrderDialog({
     }
   };
 
+  const targetInput =
+    target.kind === 'smm' ? (
+      <div className="space-y-3">
+        <TargetField value={f.link ?? ''} onChange={(v) => setF((x) => ({ ...x, link: v }))} platform={platform} />
+        {linkInfo?.platform === 'Instagram' ? (
+          <p className="text-[12.5px] text-muted">
+            {linkInfo.kind === 'profile'
+              ? `Profil: @${linkInfo.username} — buyurtma shu profil kartasiga bog‘lanadi.`
+              : linkInfo.kind === 'post'
+                ? 'Post / reels havolasi — profil havoladan taxmin qilinmaydi.'
+                : 'Instagram havolasi (profil yoki post emas).'}
+          </p>
+        ) : null}
+        {isPost ? (
+          <SelectInput label="Profil kartasi (ixtiyoriy)" value={f.profileId ?? ''} onChange={set('profileId')}>
+            <option value="">Bog‘lamaslik</option>
+            {(profiles ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                @{p.username}
+                {p.display_name ? ` — ${p.display_name}` : ''}
+              </option>
+            ))}
+          </SelectInput>
+        ) : null}
+      </div>
+    ) : null;
+
   const blocked = review?.blocked && review.blocked !== 'UNVERIFIED' ? review.blocked : null;
   const unverified = review?.blocked === 'UNVERIFIED';
 
@@ -115,8 +167,11 @@ export function OrderDialog({
             <Button variant="secondary" onClick={onClose}>
               Yopish
             </Button>
-            <Link href="/smm-api?bolim=buyurtmalar" className="inline-flex h-10 items-center rounded-xl bg-accent px-4 text-sm font-medium text-accent-fg">
-              Buyurtmalarga o‘tish
+            <Link
+              href={done.queued ? '/smm-api?bolim=rejalar' : '/smm-api?bolim=buyurtmalar'}
+              className="inline-flex h-10 items-center rounded-xl bg-accent px-4 text-sm font-medium text-accent-fg"
+            >
+              {done.queued ? 'Navbatni ko‘rish' : 'Buyurtmalarga o‘tish'}
             </Link>
           </div>
         </div>
@@ -139,6 +194,18 @@ export function OrderDialog({
             />
             <Item label={review.costIsEstimate ? 'Taxminiy narx' : 'Narx'} value={review.cost ? formatSom(review.cost, review.currency) : 'Hisoblab bo‘lmaydi'} strong />
             <Item label="Balans" value={review.balance ? formatSom(review.balance, review.currency) : balance ? `${formatSom(balance.balance, balance.currency)} (oldingi)` : 'Noma’lum'} />
+            {review.health ? <Item label="Xizmat holati" value={`${review.health.label}${review.health.reason ? ` — ${review.health.reason}` : ''}`} /> : null}
+            {review.refill ? (
+              <Item
+                label="Kafolat"
+                value={
+                  review.refill.verified
+                    ? `${review.refill.days} kun (${review.refill.starts === 'accepted' ? 'qabul qilingandan' : 'bajarilgandan'}) · ${review.refill.basis ?? ''}`
+                    : `Muddat tasdiqlanmagan${review.refill.api ? ' (API: refill so‘rash mumkin)' : ''}`
+                }
+              />
+            ) : null}
+            {review.queueBusy ? <Item label="Navbat" value="Oldingi buyurtma tugashini kutmoqda" strong /> : null}
           </dl>
           {review.check ? (
             review.check.verified && review.check.valid ? (
@@ -176,9 +243,14 @@ export function OrderDialog({
               Orqaga
             </Button>
             <Button onClick={() => void place()} loading={busy === 'place'} disabled={!!blocked || unverified || review.enough === false || !review.cost}>
-              Buyurtmani tasdiqlash
+              {review.queueBusy ? 'Tasdiqlash va navbatga qo‘yish' : 'Buyurtmani tasdiqlash'}
             </Button>
           </div>
+        </div>
+      ) : target.kind === 'smm' && mode === 'split' ? (
+        <div className="space-y-4">
+          <ModeSwitch mode={mode} onChange={setMode} />
+          <SplitPlanner service={target.service} link={f.link ?? ''} profileId={profileId} targetField={targetInput} onClose={onClose} />
         </div>
       ) : (
         <form
@@ -189,6 +261,8 @@ export function OrderDialog({
           }}
         >
           {target.kind === 'smm' ? <ServiceSummary service={target.service} rateUnit={rateUnit} /> : null}
+          {target.kind === 'smm' ? <ServiceHealthPanel service={target.service} row={health} onChange={(row) => onHealthChange?.(row)} /> : null}
+          {target.kind === 'smm' && adapter === 'default' ? <ModeSwitch mode={mode} onChange={setMode} /> : null}
           {lastRejection ? (
             <Notice tone="warning" title={`${formatShortDateTime(lastRejection.at)} dagi urinish qabul qilinmagan`}>
               {lastRejection.message}
@@ -198,7 +272,7 @@ export function OrderDialog({
 
           {target.kind === 'smm' && adapter && adapter !== 'subscription' ? (
             <>
-              <TextInput label="Havola" placeholder="https://…" value={f.link ?? ''} onChange={set('link')} required inputMode="url" autoComplete="off" />
+              {targetInput}
               {adapter === 'comments' || adapter === 'usernames' ? (
                 <TextArea
                   label={adapter === 'comments' ? 'Izohlar (har qatorda bittadan)' : 'Foydalanuvchilar (har qatorda bittadan)'}
@@ -275,6 +349,29 @@ export function OrderDialog({
         </form>
       )}
     </Dialog>
+  );
+}
+
+function ModeSwitch({ mode, onChange }: { mode: 'single' | 'split'; onChange: (m: 'single' | 'split') => void }) {
+  return (
+    <div className="flex gap-2" role="group" aria-label="Buyurtma usuli">
+      {(
+        [
+          ['single', 'Bitta buyurtma'],
+          ['split', 'Bo‘lib yuborish'],
+        ] as const
+      ).map(([k, label]) => (
+        <button
+          key={k}
+          type="button"
+          aria-pressed={mode === k}
+          onClick={() => onChange(k)}
+          className={`h-9 rounded-full border px-3.5 text-sm font-medium ${mode === k ? 'border-ink bg-ink text-bg' : 'border-line bg-surface text-muted hover:text-ink'}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
   );
 }
 

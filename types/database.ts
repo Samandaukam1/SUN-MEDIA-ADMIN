@@ -3732,6 +3732,18 @@ export type Database = {
       }
       neosmm_orders: {
         Row: {
+          completed_at: string | null
+          error_kind: string | null
+          part_index: number | null
+          plan_id: string | null
+          profile_id: string | null
+          provider_error: string | null
+          queue_key: string | null
+          refill_checked_at: string | null
+          refill_error: string | null
+          refill_policy: Json | null
+          refill_requested_at: string | null
+          target_key: string | null
           accepted_at: string | null
           can_cancel: boolean
           can_refill: boolean
@@ -3767,6 +3779,18 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          completed_at?: string | null
+          error_kind?: string | null
+          part_index?: number | null
+          plan_id?: string | null
+          profile_id?: string | null
+          provider_error?: string | null
+          queue_key?: string | null
+          refill_checked_at?: string | null
+          refill_error?: string | null
+          refill_policy?: Json | null
+          refill_requested_at?: string | null
+          target_key?: string | null
           accepted_at?: string | null
           can_cancel?: boolean
           can_refill?: boolean
@@ -3802,6 +3826,18 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          completed_at?: string | null
+          error_kind?: string | null
+          part_index?: number | null
+          plan_id?: string | null
+          profile_id?: string | null
+          provider_error?: string | null
+          queue_key?: string | null
+          refill_checked_at?: string | null
+          refill_error?: string | null
+          refill_policy?: Json | null
+          refill_requested_at?: string | null
+          target_key?: string | null
           accepted_at?: string | null
           can_cancel?: boolean
           can_refill?: boolean
@@ -3845,6 +3881,396 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      neosmm_plan_parts: {
+        Row: {
+          billed: number
+          dispatched_at: string | null
+          due_at: string
+          estimate: string
+          lease_until: string | null
+          note: string | null
+          order_id: string
+          part_index: number
+          plan_id: string
+          planned_at: string
+          quantity: number
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          billed: number
+          dispatched_at?: string | null
+          due_at: string
+          estimate: string
+          lease_until?: string | null
+          note?: string | null
+          order_id: string
+          part_index: number
+          plan_id: string
+          planned_at: string
+          quantity: number
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          billed?: number
+          dispatched_at?: string | null
+          due_at?: string
+          estimate?: string
+          lease_until?: string | null
+          note?: string | null
+          order_id?: string
+          part_index?: number
+          plan_id?: string
+          planned_at?: string
+          quantity?: number
+          state?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      neosmm_plans: {
+        Row: {
+          can_cancel: boolean
+          can_refill: boolean
+          created_at: string
+          currency: string
+          estimate: string
+          id: string
+          origin: string
+          owner_id: string
+          params: Json
+          part_count: number
+          pause_reason: string | null
+          paused_at: string | null
+          price: string
+          price_unit: number
+          profile_id: string | null
+          provider: string
+          queue_key: string
+          refill_policy: Json | null
+          service_category: string | null
+          service_id: number
+          service_name: string
+          service_type: string | null
+          spacing_seconds: number
+          start_at: string
+          status: string
+          target: string
+          target_key: string
+          total_quantity: number
+          updated_at: string
+          window_seconds: number
+        }
+        Insert: {
+          can_cancel?: boolean
+          can_refill?: boolean
+          created_at?: string
+          currency?: string
+          estimate: string
+          id: string
+          origin: string
+          owner_id: string
+          params?: Json
+          part_count: number
+          pause_reason?: string | null
+          paused_at?: string | null
+          price: string
+          price_unit: number
+          profile_id?: string | null
+          provider?: string
+          queue_key: string
+          refill_policy?: Json | null
+          service_category?: string | null
+          service_id: number
+          service_name: string
+          service_type?: string | null
+          spacing_seconds: number
+          start_at: string
+          status?: string
+          target: string
+          target_key: string
+          total_quantity: number
+          updated_at?: string
+          window_seconds: number
+        }
+        Update: {
+          can_cancel?: boolean
+          can_refill?: boolean
+          created_at?: string
+          currency?: string
+          estimate?: string
+          id?: string
+          origin?: string
+          owner_id?: string
+          params?: Json
+          part_count?: number
+          pause_reason?: string | null
+          paused_at?: string | null
+          price?: string
+          price_unit?: number
+          profile_id?: string | null
+          provider?: string
+          queue_key?: string
+          refill_policy?: Json | null
+          service_category?: string | null
+          service_id?: number
+          service_name?: string
+          service_type?: string | null
+          spacing_seconds?: number
+          start_at?: string
+          status?: string
+          target?: string
+          target_key?: string
+          total_quantity?: number
+          updated_at?: string
+          window_seconds?: number
+        }
+        Relationships: []
+      }
+      neosmm_profile_observations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          display_name: string | null
+          followers: number | null
+          following: number | null
+          id: string
+          media_count: number | null
+          note: string | null
+          observed_at: string
+          origin: string
+          profile_id: string
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          display_name?: string | null
+          followers?: number | null
+          following?: number | null
+          id?: string
+          media_count?: number | null
+          note?: string | null
+          observed_at: string
+          origin: string
+          profile_id: string
+          source: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          display_name?: string | null
+          followers?: number | null
+          following?: number | null
+          id?: string
+          media_count?: number | null
+          note?: string | null
+          observed_at?: string
+          origin?: string
+          profile_id?: string
+          source?: string
+        }
+        Relationships: []
+      }
+      neosmm_profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          created_by: string
+          display_name: string | null
+          display_name_source: string | null
+          id: string
+          ig_user_id: string | null
+          platform: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          created_by: string
+          display_name?: string | null
+          display_name_source?: string | null
+          id?: string
+          ig_user_id?: string | null
+          platform?: string
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          created_by?: string
+          display_name?: string | null
+          display_name_source?: string | null
+          id?: string
+          ig_user_id?: string | null
+          platform?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      neosmm_queue: {
+        Row: {
+          acquired_at: string
+          hold: string
+          order_id: string
+          part_index: number | null
+          plan_id: string | null
+          queue_key: string
+          updated_at: string
+        }
+        Insert: {
+          acquired_at?: string
+          hold: string
+          order_id: string
+          part_index?: number | null
+          plan_id?: string | null
+          queue_key: string
+          updated_at?: string
+        }
+        Update: {
+          acquired_at?: string
+          hold?: string
+          order_id?: string
+          part_index?: number | null
+          plan_id?: string | null
+          queue_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      neosmm_recent_targets: {
+        Row: {
+          hidden_at: string | null
+          kind: string
+          last_used_at: string
+          platform: string
+          profile_id: string | null
+          target: string
+          target_key: string
+          use_count: number
+          username: string | null
+        }
+        Insert: {
+          hidden_at?: string | null
+          kind: string
+          last_used_at?: string
+          platform: string
+          profile_id?: string | null
+          target: string
+          target_key: string
+          use_count?: number
+          username?: string | null
+        }
+        Update: {
+          hidden_at?: string | null
+          kind?: string
+          last_used_at?: string
+          platform?: string
+          profile_id?: string | null
+          target?: string
+          target_key?: string
+          use_count?: number
+          username?: string | null
+        }
+        Relationships: []
+      }
+      neosmm_service_health: {
+        Row: {
+          blocked_at: string | null
+          blocked_order: string | null
+          blocked_reason: string | null
+          cleared_at: string | null
+          cleared_by: string | null
+          disabled_at: string | null
+          disabled_by: string | null
+          last_accepted_at: string | null
+          last_accepted_order: string | null
+          last_completed_at: string | null
+          last_completed_order: string | null
+          last_seen_at: string | null
+          missing_since: string | null
+          provider: string
+          refill_basis: string | null
+          refill_days: number | null
+          refill_starts: string | null
+          refill_verified_at: string | null
+          refill_verified_by: string | null
+          service_category: string | null
+          service_id: number
+          service_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          blocked_at?: string | null
+          blocked_order?: string | null
+          blocked_reason?: string | null
+          cleared_at?: string | null
+          cleared_by?: string | null
+          disabled_at?: string | null
+          disabled_by?: string | null
+          last_accepted_at?: string | null
+          last_accepted_order?: string | null
+          last_completed_at?: string | null
+          last_completed_order?: string | null
+          last_seen_at?: string | null
+          missing_since?: string | null
+          provider?: string
+          refill_basis?: string | null
+          refill_days?: number | null
+          refill_starts?: string | null
+          refill_verified_at?: string | null
+          refill_verified_by?: string | null
+          service_category?: string | null
+          service_id: number
+          service_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          blocked_at?: string | null
+          blocked_order?: string | null
+          blocked_reason?: string | null
+          cleared_at?: string | null
+          cleared_by?: string | null
+          disabled_at?: string | null
+          disabled_by?: string | null
+          last_accepted_at?: string | null
+          last_accepted_order?: string | null
+          last_completed_at?: string | null
+          last_completed_order?: string | null
+          last_seen_at?: string | null
+          missing_since?: string | null
+          provider?: string
+          refill_basis?: string | null
+          refill_days?: number | null
+          refill_starts?: string | null
+          refill_verified_at?: string | null
+          refill_verified_by?: string | null
+          service_category?: string | null
+          service_id?: number
+          service_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      neosmm_worker_tokens: {
+        Row: {
+          expires_at: string
+          token_hash: string
+        }
+        Insert: {
+          expires_at: string
+          token_hash: string
+        }
+        Update: {
+          expires_at?: string
+          token_hash?: string
+        }
+        Relationships: []
       }
       meta_assets: {
         Row: {
@@ -8011,6 +8437,22 @@ export type Database = {
       }
     }
     Functions: {
+      neosmm_begin_send: { Args: { p_order: string; p_row: Json }; Returns: string }
+      neosmm_claim_parts: {
+        Args: { p_lease_seconds?: number; p_limit: number; p_plan?: string }
+        Returns: { order_id: string; part_index: number; plan_id: string }[]
+      }
+      neosmm_consume_worker_token: { Args: { p_hash: string }; Returns: boolean }
+      neosmm_create_plan: { Args: { p_parts: Json; p_plan: Json }; Returns: string }
+      neosmm_plan_control: { Args: { p_action: string; p_owner_ids: string[]; p_plan: string }; Returns: Json }
+      neosmm_queue_acquire: {
+        Args: { p_hold?: string; p_key: string; p_order: string; p_part?: number; p_plan?: string }
+        Returns: string
+      }
+      neosmm_queue_release: { Args: { p_order: string }; Returns: undefined }
+      neosmm_recover: { Args: never; Returns: number }
+      neosmm_store_services: { Args: { p_items: Json; p_owner: string }; Returns: undefined }
+      neosmm_unclaim_part: { Args: { p_due_at?: string; p_order: string; p_pause_reason?: string }; Returns: undefined }
       acknowledge_task: { Args: { p_task_id: string }; Returns: string }
       add_content_equipment: {
         Args: { p_content_id: string; p_name: string }

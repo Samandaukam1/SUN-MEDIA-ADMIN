@@ -10,19 +10,37 @@ import {
   enoughBalance,
   isFinal,
   planSmm,
+  platformOf,
   samePrice,
   smmEstimate,
   toInt,
   type Kind,
   type SmmInput,
 } from '@/lib/neosmm/catalog';
-import { decText, parseDec } from '@/lib/neosmm/decimal';
-import { ORDER_COLUMNS, loadBalance, loadCatalog, neosmm, orderStore, requireSmmOwner, smmConfig, smmOwnerIds, type Balance, type CatalogKind } from '@/lib/neosmm/server';
+import { healthOf } from '@/lib/neosmm/health';
+import { policyFrom, type RefillPolicy } from '@/lib/neosmm/refill';
+import {
+  ORDER_COLUMNS,
+  adoptOpenOrders,
+  ensureProfile,
+  loadBalance,
+  loadCatalog,
+  loadHealth,
+  neosmm,
+  orderStore,
+  profileExists,
+  recordTarget,
+  refreshStatuses,
+  requireSmmOwner,
+  smmConfig,
+  smmOwnerIds,
+  type Balance,
+  type CatalogKind,
+} from '@/lib/neosmm/server';
 import { submitOrder, UNKNOWN_RESULT, type NewOrder } from '@/lib/neosmm/submit';
+import { parseTarget, queueKey } from '@/lib/neosmm/targets';
 import { createAdminClient } from '@/lib/supabase/admin';
-import type { Database } from '@/types/database';
-
-type OrderUpdate = Database['public']['Tables']['neosmm_orders']['Update'];
+import type { Json } from '@/types/database';
 
 /**
  * Smm Api actions. Every one starts with `requireSmmOwner()` (the configured owner account, nobody else) before any
@@ -54,6 +72,8 @@ const smmForm = z.object({
   answerNumber: int.optional(),
   runs: int.optional(),
   interval: int.optional(),
+  /** For a post / reel link: the profile card the owner explicitly links it to. */
+  profileId: z.uuid().optional(),
 });
 const orderInput = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('smm'), id: int.positive(), form: smmForm }),
@@ -92,6 +112,13 @@ export type Review = {
   warnings: string[];
   canCancel: boolean;
   canRefill: boolean;
+  /** SMM: another order on this service and target is unfinished — this one would wait for it. */
+  queueBusy?: boolean;
+  /** SMM: the evidence-based state of the service. */
+  health?: { label: string; reason: string | null; at: string | null };
+  /** SMM on Instagram: what the link is (a post never names its profile here). */
+  targetKind?: 'profile' | 'post' | 'link' | null;
+  refill?: RefillPolicy;
   providerParams: Record<string, string>;
 };
 
@@ -111,11 +138,21 @@ async function buildReview(owner: string, input: OrderInput, token: string): Pro
     if (!service) throw new Error('Xizmat hozir ro‘yxatda yo‘q (o‘chirilgan yoki faol emas).');
     const planned = planSmm(service, input.form as SmmInput);
     const cost = planned.ok ? smmEstimate(service, planned.plan.billed, rateUnit) : null;
+    const healthRow = (await loadHealth()).get(service.id) ?? null;
+    const health = healthOf(healthRow);
+    const target = planned.ok ? parseTarget(planned.plan.target, platformOf(service)) : null;
     const blocked = !planned.ok
       ? planned.error
       : !rateUnit
         ? 'SMM tarifi qaysi miqdor uchun ekani hali tasdiqlanmagan — narxni hisoblab bo‘lmaydi, buyurtma yuborilmaydi.'
-        : null;
+        : !health.orderable
+          ? `Xizmat holati: ${health.label}${health.reason ? ` — ${health.reason}` : ''}. Yangi buyurtma qabul qilinmaydi.`
+          : null;
+    let queueBusy = false;
+    if (target) {
+      const { data: holder } = await createAdminClient().from('neosmm_queue').select('order_id').eq('queue_key', queueKey(service.id, target)).maybeSingle();
+      queueBusy = !!holder && holder.order_id !== token;
+    }
     const review: Review = {
       ...base,
       itemId: service.id,
@@ -138,8 +175,13 @@ async function buildReview(owner: string, input: OrderInput, token: string): Pro
       blocked,
       canCancel: service.cancel,
       canRefill: service.refill,
+      queueBusy,
+      health: { label: health.label, reason: health.reason, at: health.at },
+      targetKind: target?.kind ?? null,
+      refill: policyFrom(service.refill, healthRow),
       providerParams: planned.ok ? { action: 'add', ...planned.plan.params } : {},
     };
+    if (queueBusy) review.warnings.push('Oldingi buyurtma tugashini kutmoqda: shu xizmat va havolada tugamagan buyurtma bor. Tasdiqlasangiz, bu buyurtma navbatga qo‘yiladi va u tugagach yuboriladi.');
     if (/guarantee|kafolat|refill|♻|lifetime|umrbod/i.test(service.name) && !service.refill)
       review.warnings.push('Nomida kafolat / refill yozilgan, lekin provayder bu xizmat uchun refill imkoniyatini ko‘rsatmagan.');
     if (planned.ok && planned.plan.billed !== planned.plan.quantity) review.warnings.push(`Drip-feed: jami ${planned.plan.billed} ta (miqdor × marta) hisoblandi.`);
@@ -256,6 +298,7 @@ export async function smmReview(raw: OrderInput): Promise<ReviewResult> {
 
 export type PlaceResult =
   | { ok: true; state: 'accepted'; providerOrderId: number; saved: boolean; message: string }
+  | { ok: true; state: 'queued'; message: string }
   | { ok: false; state: 'rejected' | 'unknown' | 'duplicate' | 'blocked' | 'paused' | 'changed'; message: string; review?: Omit<Review, 'providerParams'> };
 
 /** "Buyurtmani tasdiqlash": everything is checked again on the server; a changed tariff comes back for a new review. */
@@ -278,6 +321,26 @@ export async function smmPlace(token: string, raw: OrderInput, reviewed: { price
     return { ok: false, state: 'changed', message: 'Narx o‘zgardi — yangi narxni ko‘rib, qayta tasdiqlang.', review: publicReview(review) };
   if (review.enough === false) return { ok: false, state: 'blocked', message: 'Balansda mablag‘ yetarli emas. Bot orqali to‘ldiring va balansni yangilang.' };
 
+  // SMM: the canonical target, its profile card (Instagram account links; a post only by the owner's choice), the
+  // service's verified refill terms as a snapshot, and the queue key — taken before the provider is called.
+  let smm: { key: string; targetKey: string; profileId: string | null; policy: RefillPolicy } | null = null;
+  if (review.kind === 'smm') {
+    const target = parseTarget(review.target, platformOf({ category: review.category ?? '', name: review.itemName }));
+    if (!target) return { ok: false, state: 'blocked', message: 'Havolani tushunib bo‘lmadi.' };
+    const chosen = input.data.kind === 'smm' ? input.data.form.profileId : undefined;
+    const profileId =
+      target.platform === 'Instagram' && target.kind === 'profile' && target.username
+        ? await ensureProfile(owner, target.username)
+        : chosen && (await profileExists(chosen))
+          ? chosen
+          : null;
+    smm = { key: queueKey(review.itemId, target), targetKey: target.key, profileId, policy: review.refill ?? { api: review.canRefill, verified: false } };
+    await recordTarget(review.target, target, profileId);
+    await adoptOpenOrders();
+    const { data: holder } = await createAdminClient().rpc('neosmm_queue_acquire', { p_key: smm.key, p_order: token, p_hold: 'sending' });
+    if (holder !== token) return queueManual(owner, token, review, smm);
+  }
+
   const row: NewOrder = {
     id: token,
     owner_id: owner,
@@ -295,11 +358,14 @@ export async function smmPlace(token: string, raw: OrderInput, reviewed: { price
     estimate: review.cost,
     can_cancel: review.canCancel,
     can_refill: review.canRefill,
+    ...(smm ? { target_key: smm.targetKey, queue_key: smm.key, profile_id: smm.profileId, refill_policy: smm.policy as Record<string, unknown> } : {}),
   };
   let outcome;
   try {
     outcome = await submitOrder(orderStore(owner), neosmm, row, review.providerParams);
   } catch (e) {
+    // Not written, so not sent: the reservation goes back.
+    if (smm) await createAdminClient().rpc('neosmm_queue_release', { p_order: token });
     return { ok: false, state: 'blocked', message: e instanceof Error ? e.message : 'Buyurtmani saqlab bo‘lmadi — provayderga yuborilmadi.' };
   }
   if (outcome.state === 'accepted')
@@ -316,13 +382,63 @@ export async function smmPlace(token: string, raw: OrderInput, reviewed: { price
     if (outcome.retryAfter) pausedUntil.set(ACCOUNT, Date.now() + outcome.retryAfter * 1000);
     return { ok: false, state: 'rejected', message: outcome.message };
   }
-  if (outcome.state === 'duplicate')
+  if (outcome.state === 'duplicate') {
+    // A repeated click may have re-taken a key its own (finished) order had already freed: tidy that up.
+    if (smm) await createAdminClient().rpc('neosmm_recover');
     return {
       ok: false,
       state: 'duplicate',
       message: outcome.providerOrderId ? `Bu buyurtma allaqachon yuborilgan: #${outcome.providerOrderId}.` : 'Bu buyurtma allaqachon yuborilgan — “Buyurtmalar”da tekshiring.',
     };
+  }
   return { ok: false, state: 'unknown', message: `${UNKNOWN_RESULT}. Qayta yubormang: NeoSMM botida tekshiring va “Buyurtmalar”da natijani belgilang.` };
+}
+
+/**
+ * The same service and target already has an unfinished order: this confirmed order becomes a one-part plan that the
+ * server sends when the key is free (with the same checks as any plan part: price not higher, limits, balance).
+ */
+async function queueManual(owner: string, token: string, review: Review, smm: { key: string; targetKey: string; profileId: string | null; policy: RefillPolicy }): Promise<PlaceResult> {
+  const { rateUnit } = smmConfig();
+  if (!review.quantity || !review.cost || !rateUnit) return { ok: false, state: 'blocked', message: 'Bu buyurtmani navbatga qo‘yib bo‘lmaydi.' };
+  const params = Object.fromEntries(Object.entries(review.providerParams).filter(([k]) => k !== 'action'));
+  const billed = review.providerParams.runs ? review.quantity * Number(review.providerParams.runs) : review.quantity;
+  const now = new Date().toISOString();
+  const { data, error } = await createAdminClient().rpc('neosmm_create_plan', {
+    p_plan: {
+      id: token,
+      owner_id: owner,
+      origin: 'queued',
+      service_id: review.itemId,
+      service_name: review.itemName,
+      service_category: review.category,
+      service_type: review.type,
+      target: review.target.slice(0, 500),
+      target_key: smm.targetKey,
+      queue_key: smm.key,
+      profile_id: smm.profileId,
+      params,
+      total_quantity: review.quantity,
+      spacing_seconds: 0,
+      start_at: now,
+      window_seconds: 0,
+      price: review.price,
+      price_unit: rateUnit,
+      currency: review.currency,
+      estimate: review.cost,
+      can_cancel: review.canCancel,
+      can_refill: review.canRefill,
+      refill_policy: smm.policy,
+    } as unknown as Json,
+    p_parts: [{ part_index: 0, order_id: randomUUID(), quantity: review.quantity, billed, estimate: review.cost, planned_at: now }] as unknown as Json,
+  });
+  if (error) return { ok: false, state: 'blocked', message: 'Navbatga qo‘yib bo‘lmadi — yuborilmadi.' };
+  if (data === 'exists') return { ok: false, state: 'duplicate', message: 'Bu buyurtma allaqachon navbatda — “Rejalar”da ko‘ring.' };
+  return {
+    ok: true,
+    state: 'queued',
+    message: 'Oldingi buyurtma tugashini kutmoqda. Buyurtma navbatga qo‘yildi: oldingisi tugagach server o‘zi yuboradi (narx oshsa yoki balans yetmasa — to‘xtab, sizdan so‘raydi). “Rejalar” bo‘limida kuzating.',
+  };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -340,80 +456,15 @@ export async function smmOrders() {
   return { ok: true as const, orders: data ?? [] };
 }
 
-const money = (v: unknown) => {
-  const d = parseDec(v);
-  return d ? decText(d) : null;
-};
-const short = (v: unknown, max = 80) => (typeof v === 'string' || typeof v === 'number' ? String(v).slice(0, max) : null);
-
-function statusPatch(d: Record<string, unknown>): OrderUpdate {
-  return {
-    status: short(d.status),
-    charge: money(d.charge),
-    remains: short(d.remains, 40),
-    start_count: short(d.start_count, 40),
-    ...(typeof d.currency === 'string' && /^[A-Z]{3}$/.test(d.currency) ? { currency: d.currency } : {}),
-    ...(typeof d.code === 'string' && d.code ? { code: d.code.slice(0, 500) } : {}),
-    ...(typeof d.reason === 'string' && d.reason ? { error: d.reason.slice(0, 500) } : {}),
-    checked_at: new Date().toISOString(),
-  };
-}
-
 const lastRefresh = new Map<string, number>();
 
-/** Statuses of the open orders: SMM in batches of up to 100, gifts and donat one by one (their own actions). */
+/** Statuses of the open orders (shared with the worker; a final status frees the order's queue key). */
 export async function smmRefresh(manual = false) {
   await requireSmmOwner();
   if (!manual && Date.now() - (lastRefresh.get(ACCOUNT) ?? 0) < 20_000) return { ok: true as const, checked: 0, failed: 0 };
   lastRefresh.set(ACCOUNT, Date.now());
-  const db = createAdminClient();
-  const { data: open } = await db
-    .from('neosmm_orders')
-    .select('id, kind, provider_order_id, status, refill_id, refill_status')
-    .in('owner_id', smmOwnerIds())
-    .eq('state', 'accepted')
-    .not('provider_order_id', 'is', null)
-    .limit(500);
-  const rows = (open ?? []).filter((r) => !isFinal(r.status) || (r.refill_id && !isFinal(r.refill_status)));
-  let checked = 0;
-  let failed = 0;
-  const save = async (id: string, patch: OrderUpdate) => {
-    const { error } = await db.from('neosmm_orders').update(patch).eq('id', id).in('owner_id', smmOwnerIds());
-    if (error) failed++;
-    else checked++;
-  };
-
-  const smm = rows.filter((r) => r.kind === 'smm' && !isFinal(r.status));
-  for (let i = 0; i < smm.length; i += 100) {
-    const batch = smm.slice(i, i + 100);
-    const res = batch.length === 1 ? await neosmm({ action: 'status', order: String(batch[0].provider_order_id) }) : await neosmm({ action: 'status', orders: batch.map((r) => r.provider_order_id).join(',') });
-    if (!res.ok) {
-      failed += batch.length;
-      continue;
-    }
-    const data = res.data as Record<string, unknown> | Record<string, unknown>[];
-    for (const r of batch) {
-      const one =
-        batch.length === 1
-          ? data
-          : Array.isArray(data)
-            ? data.find((x) => toInt((x as Record<string, unknown>).order) === r.provider_order_id)
-            : (data as Record<string, unknown>)[String(r.provider_order_id)];
-      if (one && typeof one === 'object' && !('error' in one)) await save(r.id, statusPatch(one as Record<string, unknown>));
-      else failed++;
-    }
-  }
-  for (const r of rows.filter((x) => x.kind !== 'smm' && !isFinal(x.status)).slice(0, 25)) {
-    const res = await neosmm({ action: r.kind === 'gift' ? 'gift_status' : 'donat_status', order: String(r.provider_order_id) });
-    if (res.ok && res.data && typeof res.data === 'object') await save(r.id, statusPatch(res.data as Record<string, unknown>));
-    else failed++;
-  }
-  for (const r of rows.filter((x) => x.refill_id && !isFinal(x.refill_status)).slice(0, 25)) {
-    const res = await neosmm({ action: 'refill_status', refill: String(r.refill_id) });
-    if (res.ok && res.data && typeof res.data === 'object') await save(r.id, { refill_status: short((res.data as Record<string, unknown>).status) });
-    else failed++;
-  }
-  return { ok: true as const, checked, failed };
+  const r = await refreshStatuses();
+  return { ok: true as const, ...r };
 }
 
 async function ownRows(owner: string, ids: string[]) {
@@ -452,12 +503,18 @@ export async function smmRefill(id: string) {
   const [r] = await ownRows(owner, [id]);
   if (!r || r.kind !== 'smm' || r.state !== 'accepted' || !r.provider_order_id) return { ok: false as const, message: 'Buyurtma topilmadi.' };
   if (!r.can_refill) return { ok: false as const, message: 'Bu xizmatda refill imkoniyati yo‘q.' };
+  const db = createAdminClient();
+  const now = new Date().toISOString();
   const res = await neosmm({ action: 'refill', order: String(r.provider_order_id) }, { mutation: true });
-  if (!res.ok) return { ok: false as const, message: res.accepted === 'unknown' ? `${UNKNOWN_RESULT}: keyinroq holatni tekshiring.` : res.message };
+  if (!res.ok) {
+    if (res.accepted === 'no') await db.from('neosmm_orders').update({ refill_requested_at: now, refill_error: res.message.slice(0, 500) }).eq('id', r.id).in('owner_id', smmOwnerIds());
+    return { ok: false as const, message: res.accepted === 'unknown' ? `${UNKNOWN_RESULT}: keyinroq holatni tekshiring.` : res.message };
+  }
   const refill = toInt((res.data as Record<string, unknown>)?.refill);
   if (!refill) return { ok: false as const, message: 'Provayder refill raqamini qaytarmadi.' };
-  await createAdminClient().from('neosmm_orders').update({ refill_id: refill, refill_status: 'Pending' }).eq('id', r.id).in('owner_id', smmOwnerIds());
-  return { ok: true as const, message: `Refill so‘rovi qabul qilindi: #${refill}.` };
+  // "Pending" until refill_status says otherwise: only the provider confirms a refill.
+  await db.from('neosmm_orders').update({ refill_id: refill, refill_status: 'Pending', refill_requested_at: now, refill_checked_at: null, refill_error: null }).eq('id', r.id).in('owner_id', smmOwnerIds());
+  return { ok: true as const, message: `Qayta to‘ldirish so‘rovi qabul qilindi: #${refill}. Natijani provayder holati ko‘rsatadi.` };
 }
 
 /** An unclear submission, settled by the owner after checking in the bot: its provider number, or "not placed". */

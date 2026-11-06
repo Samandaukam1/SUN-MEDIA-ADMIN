@@ -5,7 +5,7 @@ import { getPublicEnv } from '@/lib/env';
 import type { Database } from '@/types/database';
 
 /** Pages anyone may open without signing in (auth return links, the "no access" notice). */
-const OPEN_PATHS = ['/auth/callback', '/no-access', '/api/assistant', '/api/push', '/app'];
+const OPEN_PATHS = ['/auth/callback', '/no-access', '/api/assistant', '/api/push', '/api/smm/worker', '/app'];
 
 /** The public website: the landing page, its pages and the files search engines ask for. */
 const SITE_PATHS = ['/xizmatlar', '/keyslar', '/hamkorlar', '/tariflar', '/biz-haqimizda', '/aloqa', '/ariza'];

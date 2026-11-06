@@ -12,13 +12,17 @@ import { smmBalance } from '@/lib/actions/smm';
 import { formatSom } from '@/lib/neosmm/decimal';
 import type { Balance, Catalog, CatalogKind } from '@/lib/neosmm/server';
 import type { DonatProduct, Gift, Service } from '@/lib/neosmm/catalog';
+import type { HealthRow } from '@/lib/neosmm/health';
+import type { Observation } from '@/lib/neosmm/profiles';
 import { formatShortDateTime } from '@/lib/time';
 
 import { DonatView, GiftsView } from './FixedViews';
-import { OrdersView, type SmmOrder } from './OrdersView';
+import { OrdersView, type OrderProfile, type SmmOrder } from './OrdersView';
+import { PlansView, type SmmPlan } from './PlansView';
+import { ProfilesView, type SmmProfileCard } from './ProfilesView';
 import { ServicesView } from './ServicesView';
 
-export type SmmTab = 'hisob' | 'xizmatlar' | 'buyurtmalar' | 'donat' | 'sovgalar';
+export type SmmTab = 'hisob' | 'xizmatlar' | 'buyurtmalar' | 'rejalar' | 'profillar' | 'donat' | 'sovgalar';
 export type SmmConfig = { keyConfigured: boolean; rateUnit: number | null };
 
 export const BOT_URL = 'https://t.me/neosmmbot';
@@ -32,6 +36,10 @@ export function SmmApi({
   orders,
   ordersError,
   catalog,
+  health = [],
+  plans = null,
+  profiles = null,
+  openProfile = null,
 }: {
   tab: SmmTab;
   config: SmmConfig;
@@ -39,6 +47,10 @@ export function SmmApi({
   orders: SmmOrder[];
   ordersError: string | null;
   catalog: Catalog<CatalogKind> | null;
+  health?: HealthRow[];
+  plans?: { plans: SmmPlan[]; error: string | null } | null;
+  profiles?: SmmProfileCard[] | null;
+  openProfile?: string | null;
 }) {
   const [balance, setBalance] = useState(initialBalance);
   const [lastGood, setLastGood] = useState<Extract<Balance, { ok: true }> | null>(initialBalance.ok ? initialBalance : null);
@@ -82,11 +94,21 @@ export function SmmApi({
     return m;
   }, [orders]);
 
+  const orderProfiles = useMemo(
+    () =>
+      Object.fromEntries(
+        (profiles ?? []).map((p) => [p.id, { id: p.id, username: p.username, display_name: p.display_name, observations: p.observations as Observation[] } satisfies OrderProfile]),
+      ),
+    [profiles],
+  );
+
   const balanceText = lastGood ? formatSom(lastGood.balance, lastGood.currency) : null;
   const tabs = [
     { key: 'hisob', label: 'Hisob', href: '/smm-api' },
     { key: 'xizmatlar', label: 'Xizmatlar', href: '/smm-api?bolim=xizmatlar' },
     { key: 'buyurtmalar', label: 'Buyurtmalar', href: '/smm-api?bolim=buyurtmalar', count: orders.length || undefined },
+    { key: 'rejalar', label: 'Rejalar', href: '/smm-api?bolim=rejalar' },
+    { key: 'profillar', label: 'Profillar', href: '/smm-api?bolim=profillar' },
     { key: 'donat', label: 'O‘yin donati', href: '/smm-api?bolim=donat' },
     { key: 'sovgalar', label: 'Telegram sovg‘alari', href: '/smm-api?bolim=sovgalar' },
   ];
@@ -136,8 +158,10 @@ export function SmmApi({
       <Tabs items={tabs} active={tab} />
 
       {tab === 'hisob' ? <Overview config={config} orders={orders} /> : null}
-      {tab === 'xizmatlar' && catalog ? <ServicesView catalog={catalog as Catalog<'services'>} config={config} balance={lastGood} rejections={rejections} /> : null}
-      {tab === 'buyurtmalar' ? <OrdersView initial={orders} error={ordersError} /> : null}
+      {tab === 'xizmatlar' && catalog ? <ServicesView catalog={catalog as Catalog<'services'>} config={config} balance={lastGood} rejections={rejections} health={health} /> : null}
+      {tab === 'buyurtmalar' ? <OrdersView initial={orders} error={ordersError} profiles={orderProfiles} /> : null}
+      {tab === 'rejalar' && plans ? <PlansView initial={plans.plans} error={plans.error} /> : null}
+      {tab === 'profillar' && profiles ? <ProfilesView initial={profiles} openId={openProfile} /> : null}
       {tab === 'donat' && catalog ? <DonatView catalog={catalog as Catalog<'donat_services'>} balance={lastGood} /> : null}
       {tab === 'sovgalar' && catalog ? <GiftsView catalog={catalog as Catalog<'gifts'>} balance={lastGood} /> : null}
     </div>
@@ -165,6 +189,14 @@ function Overview({ config, orders }: { config: SmmConfig; orders: SmmOrder[] })
         <Row label="Kuzatilmoqda" value={String(open)} />
         {unclear ? <Row label="Natija noma’lum" value={`${unclear} ta — tekshirish kerak`} tone="warning" /> : null}
         <p className="text-[12.5px] text-muted">Bot orqali berilgan buyurtmalar bu yerga kelmaydi: API ularning ro‘yxatini bermaydi.</p>
+      </Card>
+      <Card className="space-y-2 p-5 text-sm md:col-span-2">
+        <p className="font-semibold">Rejalashtirish va navbat</p>
+        <p className="text-[13px] text-muted">
+          Rejadagi qismlarni server yuboradi: bazadagi jadval (pg_cron) har daqiqada ish bor-yo‘qligini tekshiradi va bo‘lsa serverdagi yuboruvchini chaqiradi — brauzer yoki kompyuter yopiq
+          bo‘lsa ham. Ochiq buyurtmalarning holati ham shu yo‘l bilan taxminan har 3 daqiqada yangilanadi. Bir xizmat va bir havolada bir vaqtda faqat bitta buyurtma faol bo‘ladi; ikkinchisi
+          “Oldingi buyurtma tugashini kutmoqda” bo‘lib navbatda turadi.
+        </p>
       </Card>
     </div>
   );

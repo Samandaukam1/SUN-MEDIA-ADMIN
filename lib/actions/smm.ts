@@ -17,7 +17,7 @@ import {
   type SmmInput,
 } from '@/lib/neosmm/catalog';
 import { decText, parseDec } from '@/lib/neosmm/decimal';
-import { ORDER_COLUMNS, loadBalance, loadCatalog, neosmm, orderStore, requireSmmOwner, smmConfig, type Balance, type CatalogKind } from '@/lib/neosmm/server';
+import { ORDER_COLUMNS, loadBalance, loadCatalog, neosmm, orderStore, requireSmmOwner, smmConfig, smmOwnerIds, type Balance, type CatalogKind } from '@/lib/neosmm/server';
 import { submitOrder, UNKNOWN_RESULT, type NewOrder } from '@/lib/neosmm/submit';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { Database } from '@/types/database';
@@ -95,6 +95,8 @@ export type Review = {
   providerParams: Record<string, string>;
 };
 
+// One NeoSMM account behind every owner: its maintenance pause and the refresh throttle are shared.
+const ACCOUNT = 'neosmm';
 const pausedUntil = new Map<string, number>();
 
 async function buildReview(owner: string, input: OrderInput, token: string): Promise<Review> {
@@ -262,7 +264,7 @@ export async function smmPlace(token: string, raw: OrderInput, reviewed: { price
   if (!z.uuid().safeParse(token).success) return { ok: false, state: 'blocked', message: 'Ko‘rib chiqishni qaytadan boshlang.' };
   const input = orderInput.safeParse(raw);
   if (!input.success) return { ok: false, state: 'blocked', message: 'Maydonlar noto‘g‘ri to‘ldirilgan.' };
-  const pause = pausedUntil.get(owner) ?? 0;
+  const pause = pausedUntil.get(ACCOUNT) ?? 0;
   if (pause > Date.now()) return { ok: false, state: 'paused', message: `Provayderda texnik ishlar: ${Math.ceil((pause - Date.now()) / 60_000)} daqiqadan keyin urinib ko‘ring.` };
 
   let review: Review;
@@ -311,7 +313,7 @@ export async function smmPlace(token: string, raw: OrderInput, reviewed: { price
         : `Provayder qabul qildi (#${outcome.providerOrderId}), lekin bazaga yozib bo‘lmadi. Raqamni yozib qo‘ying; qayta yubormang.`,
     };
   if (outcome.state === 'rejected') {
-    if (outcome.retryAfter) pausedUntil.set(owner, Date.now() + outcome.retryAfter * 1000);
+    if (outcome.retryAfter) pausedUntil.set(ACCOUNT, Date.now() + outcome.retryAfter * 1000);
     return { ok: false, state: 'rejected', message: outcome.message };
   }
   if (outcome.state === 'duplicate')
@@ -327,11 +329,11 @@ export async function smmPlace(token: string, raw: OrderInput, reviewed: { price
 // History, status, cancel, refill, reconciliation
 // ---------------------------------------------------------------------------------------------------------------
 export async function smmOrders() {
-  const owner = await requireSmmOwner();
+  await requireSmmOwner();
   const { data, error } = await createAdminClient()
     .from('neosmm_orders')
     .select(ORDER_COLUMNS)
-    .eq('owner_id', owner)
+    .in('owner_id', smmOwnerIds())
     .order('created_at', { ascending: false })
     .limit(300);
   if (error) return { ok: false as const, message: 'Buyurtmalarni o‘qib bo‘lmadi.', orders: [] };
@@ -361,14 +363,14 @@ const lastRefresh = new Map<string, number>();
 
 /** Statuses of the open orders: SMM in batches of up to 100, gifts and donat one by one (their own actions). */
 export async function smmRefresh(manual = false) {
-  const owner = await requireSmmOwner();
-  if (!manual && Date.now() - (lastRefresh.get(owner) ?? 0) < 20_000) return { ok: true as const, checked: 0, failed: 0 };
-  lastRefresh.set(owner, Date.now());
+  await requireSmmOwner();
+  if (!manual && Date.now() - (lastRefresh.get(ACCOUNT) ?? 0) < 20_000) return { ok: true as const, checked: 0, failed: 0 };
+  lastRefresh.set(ACCOUNT, Date.now());
   const db = createAdminClient();
   const { data: open } = await db
     .from('neosmm_orders')
     .select('id, kind, provider_order_id, status, refill_id, refill_status')
-    .eq('owner_id', owner)
+    .in('owner_id', smmOwnerIds())
     .eq('state', 'accepted')
     .not('provider_order_id', 'is', null)
     .limit(500);
@@ -376,7 +378,7 @@ export async function smmRefresh(manual = false) {
   let checked = 0;
   let failed = 0;
   const save = async (id: string, patch: OrderUpdate) => {
-    const { error } = await db.from('neosmm_orders').update(patch).eq('id', id).eq('owner_id', owner);
+    const { error } = await db.from('neosmm_orders').update(patch).eq('id', id).in('owner_id', smmOwnerIds());
     if (error) failed++;
     else checked++;
   };
@@ -418,7 +420,7 @@ async function ownRows(owner: string, ids: string[]) {
   const { data } = await createAdminClient()
     .from('neosmm_orders')
     .select('id, kind, state, provider_order_id, status, can_cancel, can_refill, item_id')
-    .eq('owner_id', owner)
+    .in('owner_id', smmOwnerIds())
     .in('id', ids);
   return data ?? [];
 }
@@ -438,7 +440,7 @@ export async function smmCancel(ids: string[]) {
   for (const r of rows) {
     const a = answers.find((x) => toInt(x?.order) === r.provider_order_id);
     const accepted = !!a && (a.cancel === 1 || a.cancel === '1' || a.cancel === true);
-    if (accepted) await db.from('neosmm_orders').update({ cancel_requested_at: new Date().toISOString() }).eq('id', r.id).eq('owner_id', owner);
+    if (accepted) await db.from('neosmm_orders').update({ cancel_requested_at: new Date().toISOString() }).eq('id', r.id).in('owner_id', smmOwnerIds());
     results.push({ id: r.id, ok: accepted, message: accepted ? 'Bekor qilish so‘rovi qabul qilindi (holat keyin yangilanadi).' : typeof a?.error === 'string' ? `Bekor qilinmadi: ${a.error.slice(0, 200)}` : 'Provayder javob bermadi.' });
   }
   return { ok: true as const, message: '', results };
@@ -454,20 +456,20 @@ export async function smmRefill(id: string) {
   if (!res.ok) return { ok: false as const, message: res.accepted === 'unknown' ? `${UNKNOWN_RESULT}: keyinroq holatni tekshiring.` : res.message };
   const refill = toInt((res.data as Record<string, unknown>)?.refill);
   if (!refill) return { ok: false as const, message: 'Provayder refill raqamini qaytarmadi.' };
-  await createAdminClient().from('neosmm_orders').update({ refill_id: refill, refill_status: 'Pending' }).eq('id', r.id).eq('owner_id', owner);
+  await createAdminClient().from('neosmm_orders').update({ refill_id: refill, refill_status: 'Pending' }).eq('id', r.id).in('owner_id', smmOwnerIds());
   return { ok: true as const, message: `Refill so‘rovi qabul qilindi: #${refill}.` };
 }
 
 /** An unclear submission, settled by the owner after checking in the bot: its provider number, or "not placed". */
 export async function smmResolve(id: string, providerOrderId: number | null) {
-  const owner = await requireSmmOwner();
+  await requireSmmOwner();
   if (!z.uuid().safeParse(id).success) return { ok: false as const, message: 'Buyurtma topilmadi.' };
   const db = createAdminClient();
-  const { data: r } = await db.from('neosmm_orders').select('id, kind, state, created_at').eq('id', id).eq('owner_id', owner).maybeSingle();
+  const { data: r } = await db.from('neosmm_orders').select('id, kind, state, created_at').eq('id', id).in('owner_id', smmOwnerIds()).maybeSingle();
   const stuck = r && (r.state === 'unknown' || (r.state === 'submitting' && Date.now() - Date.parse(r.created_at) > 120_000));
   if (!r || !stuck) return { ok: false as const, message: 'Bu buyurtmaning natijasi allaqachon aniq.' };
   if (providerOrderId === null) {
-    await db.from('neosmm_orders').update({ state: 'not_placed', error: 'Egasi tekshirdi: provayderga tushmagan.' }).eq('id', id).eq('owner_id', owner);
+    await db.from('neosmm_orders').update({ state: 'not_placed', error: 'Egasi tekshirdi: provayderga tushmagan.' }).eq('id', id).in('owner_id', smmOwnerIds());
     return { ok: true as const, message: 'Yuborilmagan deb belgilandi.' };
   }
   if (!Number.isSafeInteger(providerOrderId) || providerOrderId <= 0) return { ok: false as const, message: 'Buyurtma raqami noto‘g‘ri.' };
@@ -475,7 +477,7 @@ export async function smmResolve(id: string, providerOrderId: number | null) {
     .from('neosmm_orders')
     .update({ state: 'accepted', provider_order_id: providerOrderId, error: null, accepted_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('owner_id', owner);
+    .in('owner_id', smmOwnerIds());
   if (error) return { ok: false as const, message: error.code === '23505' ? 'Bu raqam boshqa buyurtmaga yozilgan.' : 'Saqlab bo‘lmadi.' };
   return { ok: true as const, message: `#${providerOrderId} biriktirildi — holat yangilanadi.` };
 }

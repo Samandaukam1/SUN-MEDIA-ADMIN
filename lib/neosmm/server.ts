@@ -1,43 +1,43 @@
 import 'server-only';
 
 import { notFound } from 'next/navigation';
-import { z } from 'zod';
 
 import { getSessionContext } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { Json } from '@/types/database';
 
 import { normalizeDonat, normalizeGifts, normalizeServices, type DonatProduct, type Gift, type Service } from './catalog';
+import { parseOwnerIds } from './owners';
 import { createProvider, type Call, type ProviderError } from './provider';
 import type { NewOrder, OrderPatch, OrderState, OrderStore } from './submit';
 
 /**
- * Smm Api on the server: who the owner is (NEOSMM_OWNER_USER_ID — one verified account, never a role), the key
+ * Smm Api on the server: who the owners are (NEOSMM_OWNER_USER_ID — explicit verified account ids, never a role), the key
  * (NEOSMM_API_KEY), the confirmed quantity basis of SMM tariffs (NEOSMM_RATE_PER — until it is set, SMM costs are not
  * estimated and SMM orders are not sent), catalogues with a bounded cache, and the order rows. Everything that reads
  * or writes goes through `requireSmmOwner()` first.
  */
 
-const uuid = z.uuid();
-
 export function smmConfig() {
-  const owner = process.env.NEOSMM_OWNER_USER_ID?.trim() ?? '';
   const per = process.env.NEOSMM_RATE_PER?.trim() ?? '';
   return {
-    ownerId: uuid.safeParse(owner).success ? owner.toLowerCase() : null,
+    ownerIds: parseOwnerIds(process.env.NEOSMM_OWNER_USER_ID),
     keyConfigured: !!process.env.NEOSMM_API_KEY?.trim(),
     rateUnit: /^[1-9]\d{0,6}$/.test(per) ? Number(per) : null,
   };
 }
 
-/** The signed-in person is the configured owner (an active staff account) — false for everyone else, and when unset. */
+/** The signed-in person is one of the configured owners (an active staff account) — null for everyone else, and when unset. */
 export async function isSmmOwner(): Promise<string | null> {
-  const { ownerId } = smmConfig();
-  if (!ownerId) return null;
+  const { ownerIds } = smmConfig();
+  if (!ownerIds.length) return null;
   const context = await getSessionContext();
   if (!context || context.status !== 'active' || context.kind !== 'staff') return null;
-  return context.userId.toLowerCase() === ownerId ? context.userId : null;
+  return ownerIds.includes(context.userId.toLowerCase()) ? context.userId : null;
 }
+
+/** The owners share one NeoSMM account, so they share its orders: rows of any configured owner. */
+export const smmOwnerIds = () => smmConfig().ownerIds;
 
 /** Owner or a plain 404 (the module does not exist for anyone else). */
 export async function requireSmmOwner(): Promise<string> {
@@ -125,11 +125,11 @@ export function orderStore(owner: string): OrderStore {
       const { error } = await db.from('neosmm_orders').insert({ ...row, state: 'submitting' satisfies OrderState });
       if (!error) return { claimed: true };
       if (error.code !== '23505') throw new Error('Buyurtmani saqlab bo‘lmadi — provayderga yuborilmadi.');
-      const { data } = await db.from('neosmm_orders').select('state, provider_order_id').eq('id', row.id).eq('owner_id', owner).maybeSingle();
+      const { data } = await db.from('neosmm_orders').select('state, provider_order_id').eq('id', row.id).in('owner_id', smmOwnerIds()).maybeSingle();
       return { claimed: false, state: (data?.state as OrderState | undefined) ?? null, providerOrderId: data?.provider_order_id ?? null };
     },
     async update(id: string, patch: OrderPatch) {
-      const { error, count } = await db.from('neosmm_orders').update(patch, { count: 'exact' }).eq('id', id).eq('owner_id', owner);
+      const { error, count } = await db.from('neosmm_orders').update(patch, { count: 'exact' }).eq('id', id).in('owner_id', smmOwnerIds());
       return !error && (count ?? 0) > 0;
     },
   };

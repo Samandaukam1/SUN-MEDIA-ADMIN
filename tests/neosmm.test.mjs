@@ -268,3 +268,14 @@ test('submission: accepted by the provider but not saved — the number is still
   assert.equal(calls, 1);
   assert.equal(store.rows.get('00000000-0000-4000-8000-000000000005').state, 'submitting', 'left as unclear for reconciliation');
 });
+
+test('owners are explicit account ids only: a list is read, anything else is ignored (locks, never opens)', async () => {
+  const { parseOwnerIds } = await import('../lib/neosmm/owners.ts');
+  const a = 'ddbdd22b-ebd8-45b3-bdaa-cd75cd7d879e';
+  const b = '08886B6B-0BFE-40EC-9E1C-7732827646A2';
+  assert.deepEqual(parseOwnerIds(`${a}, ${b}`), [a, b.toLowerCase()]);
+  assert.deepEqual(parseOwnerIds(`${a}\n${a};${b}`), [a, b.toLowerCase()], 'duplicates and separators');
+  assert.deepEqual(parseOwnerIds('system_owner, admin, *, '), [], 'roles or wildcards never count');
+  assert.deepEqual(parseOwnerIds(`${a.slice(0, -1)}`), [], 'a typo locks the module');
+  assert.deepEqual(parseOwnerIds(undefined), []);
+});

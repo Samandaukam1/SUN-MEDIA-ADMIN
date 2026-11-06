@@ -388,8 +388,10 @@ Quality Guardian, Meeting Copilot, Time Machine, Executive Intelligence.
 - Qoldi: haqiqiy qurilmada push va jonli oqim (2 hisob bilan); SUNMEDIA USER ilovasida qabul qilish ekrani yo‘q.
 
 ### Smm Api — egasi uchun NeoSMM bo‘limi (2026-11-06, `0037db0`, migratsiya `20261106100000`)
-- Manzil: **https://sunmediagroup.uz/smm-api** (panel). Faqat `NEOSMM_OWNER_USER_ID` akkaunti (anisjonitp@gmail.com,
-  tasdiqlangan email, `system_owner`) — boshqalarga menyu yo‘q, sahifa va har bir server action 404; sozlanmasa yopiq.
+- Manzil: **https://sunmediagroup.uz/smm-api** (panel). Faqat `NEOSMM_OWNER_USER_ID` dagi akkauntlar (vergul bilan,
+  aniq ID — rol emas): anisjonitp@gmail.com va anisjon@sunmedia.uz (ikkalasi tasdiqlangan email, `system_owner`).
+  Ikkalasi bitta NeoSMM hisobini va uning buyurtmalar tarixini ko‘radi. Boshqalarga menyu yo‘q, sahifa va har bir
+  server action 404; sozlanmasa yopiq.
 - Sirlar (Vercel, ikkala loyiha, Sensitive): `NEOSMM_API_KEY` (faqat serverda), `NEOSMM_OWNER_USER_ID`,
   `NEOSMM_RATE_PER=1000` — SMM `rate` birligi hujjatda yo‘q, egasi botdagi “1000 ta uchun” ni tasdiqladi.
 - Bo‘limlar: Hisob (balans, bot orqali to‘ldirish https://t.me/neosmmbot), Xizmatlar (Instagram filtri), Buyurtmalar,

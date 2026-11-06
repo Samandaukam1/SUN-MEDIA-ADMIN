@@ -403,6 +403,29 @@ Quality Guardian, Meeting Copilot, Time Machine, Executive Intelligence.
   `047_neosmm_orders` yozilgan — Docker ishlamagani uchun lokal ishga tushirilmagan. Haqiqiy buyurtma berib sinalmagan.
 - Shu reliz bilan: `Permissions-Policy: camera=(self)` — dumaloq video yozish brauzerda bloklanardi.
 
+### Smm Api — rejalar, navbat, xizmat holati, profillar, kafolat (2026-11-07, `6c5d273`, migratsiya `20261107100000`)
+- **Bo‘lib yuborish**: jami → min/max ichidagi butun qismlar, yig‘indi aynan jami (`lib/neosmm/split.ts`, 30 qismgacha);
+  vaqtlar start + oyna bo‘yicha teng (3 qism / 48 soat → hozir, +24, +48). Har qism — alohida oddiy buyurtma
+  (provayder drip-feed’i ishlatilmaydi). Oyna — yuborish oralig‘i, yetkazish muddati emas.
+- **Rejalashtirgich**: `cron sunmedia-smm-worker` (har daqiqa) → `private.request_smm_worker()` faqat ish bo‘lsa
+  bir martalik token (bazada faqat sha256) bilan `POST https://sunmediagroup.uz/api/smm/worker`. Kalit kerak emas:
+  Vault yoki Vercel’ga yangi sir qo‘shilmadi. Ish: tiklash → ochiq buyurtmalar holati (~3 daq) → ko‘pi bilan 3 qism.
+- **Navbat**: `neosmm_queue` (kalit `neosmm:<service>:<canonical target>`, PK) — qo‘lda va rejadagi buyurtma bir xil
+  band qiladi; ikkinchisi “Oldingi buyurtma tugashini kutmoqda” (qo‘lda bo‘lsa 1 qismli `queued` reja). Kalitni
+  faqat yakuniy holat / aniq rad / “tushmagan” bo‘shatadi (trigger `neosmm_orders_changed`). Partial/Canceled/rad
+  etilgan — reja pauza; noma’lum — kalit ushlanadi, qayta yuborilmaydi. Kechikishda “burst” yo‘q: qolganlar oraliq
+  bilan qayta hisoblanadi.
+- **Xizmat holati** (`neosmm_service_health`): Tekshirilmagan / Buyurtma qabul qilingan / Yaqinda bajarilgan (30 kun) /
+  Vaqtincha bloklangan (faqat “Incorrect/Invalid service ID”) / Katalogdan olib tashlangan / Qo‘lda o‘chirilgan.
+  949, 1225, 1485 — yozuvdagi rad etish bo‘yicha bloklangan (yuborilgan `service` katalog qiymati bilan bir xil edi).
+  Xom provayder xatosi endi `provider_error`da saqlanadi.
+- **Profillar**: `neosmm_profiles` + `neosmm_profile_observations` (manba va vaqt bilan). Meta/Instagram ulanishi
+  yo‘q (0 ta) — sonlar faqat qo‘lda; NeoSMM profil ma’lumotini bermaydi.
+- **Kafolat**: har buyurtmada `refill_policy` snapshot; muddat faqat egasi xizmat yoki buyurtma uchun manbasi bilan
+  kiritsa. Hisoblagich brauzerda, server vaqtlari bilan.
+- Testlar: `tests/neosmm-plans.test.mjs` (13); DB holat mashinasi PGlite’da 18 ssenariy (scratchpad, repoda emas).
+  Haqiqiy test buyurtmasi berilmagan.
+
 ## Deploy (muhim)
 Vercel'da ikki loyiha bor: **`sun-media-admin`** → sunmediagroup.uz, **`sunmedia-admin`** → sunmedia-admin.vercel.app.
 `npm run deploy` faqat ikkinchisini yangilaydi. sunmediagroup.uz uchun HEAD'ni `sun-media-admin`

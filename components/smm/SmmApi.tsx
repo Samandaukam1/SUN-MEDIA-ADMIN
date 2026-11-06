@@ -19,7 +19,7 @@ import { formatShortDateTime } from '@/lib/time';
 import { DonatView, GiftsView } from './FixedViews';
 import { OrdersView, type OrderProfile, type SmmOrder } from './OrdersView';
 import { PlansView, type SmmPlan } from './PlansView';
-import { ProfilesView, type SmmProfileCard } from './ProfilesView';
+import { ProfilesView, type IgCallback, type SmmProfileCard } from './ProfilesView';
 import { ServicesView } from './ServicesView';
 
 export type SmmTab = 'hisob' | 'xizmatlar' | 'buyurtmalar' | 'rejalar' | 'profillar' | 'donat' | 'sovgalar';
@@ -40,6 +40,8 @@ export function SmmApi({
   plans = null,
   profiles = null,
   openProfile = null,
+  igConfigured = false,
+  igResult = null,
 }: {
   tab: SmmTab;
   config: SmmConfig;
@@ -51,6 +53,8 @@ export function SmmApi({
   plans?: { plans: SmmPlan[]; error: string | null } | null;
   profiles?: SmmProfileCard[] | null;
   openProfile?: string | null;
+  igConfigured?: boolean;
+  igResult?: IgCallback;
 }) {
   const [balance, setBalance] = useState(initialBalance);
   const [lastGood, setLastGood] = useState<Extract<Balance, { ok: true }> | null>(initialBalance.ok ? initialBalance : null);
@@ -161,7 +165,7 @@ export function SmmApi({
       {tab === 'xizmatlar' && catalog ? <ServicesView catalog={catalog as Catalog<'services'>} config={config} balance={lastGood} rejections={rejections} health={health} /> : null}
       {tab === 'buyurtmalar' ? <OrdersView initial={orders} error={ordersError} profiles={orderProfiles} /> : null}
       {tab === 'rejalar' && plans ? <PlansView initial={plans.plans} error={plans.error} /> : null}
-      {tab === 'profillar' && profiles ? <ProfilesView initial={profiles} openId={openProfile} /> : null}
+      {tab === 'profillar' && profiles ? <ProfilesView initial={profiles} openId={openProfile} igConfigured={igConfigured} igResult={igResult} /> : null}
       {tab === 'donat' && catalog ? <DonatView catalog={catalog as Catalog<'donat_services'>} balance={lastGood} /> : null}
       {tab === 'sovgalar' && catalog ? <GiftsView catalog={catalog as Catalog<'gifts'>} balance={lastGood} /> : null}
     </div>

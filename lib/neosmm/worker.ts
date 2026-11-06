@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { syncDue } from '@/lib/instagram/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { Json } from '@/types/database';
 
@@ -16,7 +17,7 @@ import { sendClaimed } from './submit';
  * the plan pauses with the reason (or, for a passing outage, the part simply waits). Nothing is ever resent by itself.
  */
 
-export type WorkerReport = { recovered: number; adopted: number; checked: number; sent: number; paused: number; waiting: number; skipped?: string };
+export type WorkerReport = { recovered: number; adopted: number; checked: number; sent: number; paused: number; waiting: number; profiles: number; skipped?: string };
 
 const STATUS_STALE_MS = 150_000;
 const MAX_SENDS_PER_RUN = 3;
@@ -25,7 +26,7 @@ type Claimed = { plan_id: string; part_index: number; order_id: string };
 
 export async function runWorker({ planId = null, deadlineMs = 40_000 }: { planId?: string | null; deadlineMs?: number } = {}): Promise<WorkerReport> {
   const started = Date.now();
-  const report: WorkerReport = { recovered: 0, adopted: 0, checked: 0, sent: 0, paused: 0, waiting: 0 };
+  const report: WorkerReport = { recovered: 0, adopted: 0, checked: 0, sent: 0, paused: 0, waiting: 0, profiles: 0 };
   const { ownerIds, keyConfigured, rateUnit } = smmConfig();
   if (!ownerIds.length) return { ...report, skipped: 'owners' };
   if (!keyConfigured) return { ...report, skipped: 'key' };
@@ -33,7 +34,11 @@ export async function runWorker({ planId = null, deadlineMs = 40_000 }: { planId
 
   report.recovered = ((await db.rpc('neosmm_recover')).data as number | null) ?? 0;
   report.adopted = await adoptOpenOrders();
-  if (!planId) report.checked = (await refreshStatuses(STATUS_STALE_MS)).checked;
+  if (!planId) {
+    report.checked = (await refreshStatuses(STATUS_STALE_MS)).checked;
+    // Connected Instagram profiles due for their hourly reading (independent of NeoSMM; a failure there is recorded per card).
+    report.profiles = await syncDue().catch(() => 0);
+  }
 
   const { data: claimed, error } = await db.rpc('neosmm_claim_parts', { p_limit: MAX_SENDS_PER_RUN, p_lease_seconds: 120, p_plan: planId ?? undefined });
   if (error || !claimed?.length) return report;

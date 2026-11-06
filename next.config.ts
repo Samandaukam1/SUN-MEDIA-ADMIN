@@ -29,7 +29,8 @@ const csp = [
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
-  `img-src 'self' data: blob: ${supabase}`.trim(),
+  // Instagram profile photos (profile_picture_url from the Instagram API, refreshed hourly) come from Meta's CDN.
+  `img-src 'self' data: blob: ${supabase} https://*.cdninstagram.com https://*.fbcdn.net`.trim(),
   `connect-src 'self' ${supabase} ${supabaseWs}${isDev ? ' ws: http://localhost:*' : ''}`.trim(),
   `media-src 'self' blob: ${supabase}`.trim(),
   "object-src 'none'",

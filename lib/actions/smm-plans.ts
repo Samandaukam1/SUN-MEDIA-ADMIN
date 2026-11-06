@@ -390,6 +390,8 @@ export async function smmTargetHide(key: string) {
 // Profile cards and observations
 // ---------------------------------------------------------------------------------------------------------------
 const OBS_COLUMNS = 'id, profile_id, observed_at, followers, following, media_count, display_name, source, origin, note';
+// The Instagram connection as the card shows it — never a token.
+const IG_COLUMNS = 'profile_id, status, username, account_type, permissions, connected_at, last_attempt_at, last_success_at, last_error, last_error_at, next_sync_at, token_expires_at';
 
 export async function smmProfiles() {
   await requireSmmOwner();
@@ -398,16 +400,18 @@ export async function smmProfiles() {
   const { data: profiles } = await db.from('neosmm_profiles').select('id, platform, username, ig_user_id, display_name, display_name_source, avatar_url, created_at').order('updated_at', { ascending: false }).limit(200);
   const ids = (profiles ?? []).map((p) => p.id);
   if (!ids.length) return [];
-  const [{ data: obs }, { data: orders }, { data: plans }] = await Promise.all([
+  const [{ data: obs }, { data: orders }, { data: plans }, { data: ig }] = await Promise.all([
     db.from('neosmm_profile_observations').select(OBS_COLUMNS).in('profile_id', ids).order('observed_at', { ascending: true }).limit(5000),
     db.from('neosmm_orders').select('id, profile_id, state, status, charge, estimate, currency, queue_key, created_at').in('owner_id', owners).in('profile_id', ids).limit(2000),
     db.from('neosmm_plans').select('id, profile_id, status').in('owner_id', owners).in('profile_id', ids).limit(500),
+    db.from('neosmm_ig_connections').select(IG_COLUMNS).in('profile_id', ids),
   ]);
   return (profiles ?? []).map((p) => ({
     ...p,
     observations: (obs ?? []).filter((o) => o.profile_id === p.id),
     orders: (orders ?? []).filter((o) => o.profile_id === p.id),
     plans: (plans ?? []).filter((x) => x.profile_id === p.id),
+    ig: (ig ?? []).find((x) => x.profile_id === p.id) ?? null,
   }));
 }
 
@@ -418,14 +422,15 @@ export async function smmProfile(id: string) {
   const owners = smmOwnerIds();
   const { data: profile } = await db.from('neosmm_profiles').select('id, platform, username, ig_user_id, display_name, display_name_source, avatar_url, created_at').eq('id', id).maybeSingle();
   if (!profile) return null;
-  const [{ data: observations }, { data: orders }, { data: plans }] = await Promise.all([
+  const [{ data: observations }, { data: orders }, { data: plans }, { data: ig }] = await Promise.all([
     db.from('neosmm_profile_observations').select(OBS_COLUMNS).eq('profile_id', id).order('observed_at', { ascending: true }).limit(2000),
     db.from('neosmm_orders').select(ORDER_COLUMNS).in('owner_id', owners).eq('profile_id', id).order('created_at', { ascending: false }).limit(300),
     db.from('neosmm_plans').select(PLAN_COLUMNS).in('owner_id', owners).eq('profile_id', id).order('created_at', { ascending: false }).limit(100),
+    db.from('neosmm_ig_connections').select(IG_COLUMNS).eq('profile_id', id).maybeSingle(),
   ]);
   const keys = [...new Set((orders ?? []).map((o) => o.queue_key).filter((k): k is string => !!k))];
   const { data: queue } = keys.length ? await db.from('neosmm_queue').select('queue_key, order_id, hold, acquired_at').in('queue_key', keys) : { data: [] };
-  return { profile, observations: observations ?? [], orders: orders ?? [], plans: plans ?? [], queue: queue ?? [] };
+  return { profile, observations: observations ?? [], orders: orders ?? [], plans: plans ?? [], queue: queue ?? [], ig: ig ?? null };
 }
 
 const observation = z.object({

@@ -3730,6 +3730,105 @@ export type Database = {
           },
         ]
       }
+      neosmm_ig_connections: {
+        Row: {
+          account_type: string | null
+          app_scoped_id: string | null
+          connected_at: string | null
+          connected_by: string | null
+          disconnected_at: string | null
+          failures: number
+          id: string
+          ig_user_id: string
+          last_attempt_at: string | null
+          last_error: string | null
+          last_error_at: string | null
+          last_success_at: string | null
+          next_sync_at: string | null
+          permissions: string[]
+          profile_id: string
+          status: string
+          token_expires_at: string | null
+          token_obtained_at: string | null
+          token_refreshed_at: string | null
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          account_type?: string | null
+          app_scoped_id?: string | null
+          connected_at?: string | null
+          connected_by?: string | null
+          disconnected_at?: string | null
+          failures?: number
+          id?: string
+          ig_user_id: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          last_error_at?: string | null
+          last_success_at?: string | null
+          next_sync_at?: string | null
+          permissions?: string[]
+          profile_id: string
+          status?: string
+          token_expires_at?: string | null
+          token_obtained_at?: string | null
+          token_refreshed_at?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          account_type?: string | null
+          app_scoped_id?: string | null
+          connected_at?: string | null
+          connected_by?: string | null
+          disconnected_at?: string | null
+          failures?: number
+          id?: string
+          ig_user_id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          last_error_at?: string | null
+          last_success_at?: string | null
+          next_sync_at?: string | null
+          permissions?: string[]
+          profile_id?: string
+          status?: string
+          token_expires_at?: string | null
+          token_obtained_at?: string | null
+          token_refreshed_at?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
+      neosmm_ig_oauth_states: {
+        Row: {
+          created_at: string
+          expires_at: string
+          owner_id: string
+          profile_id: string
+          state_hash: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          owner_id: string
+          profile_id: string
+          state_hash: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          owner_id?: string
+          profile_id?: string
+          state_hash?: string
+          used_at?: string | null
+        }
+        Relationships: []
+      }
       neosmm_orders: {
         Row: {
           completed_at: string | null
@@ -8437,6 +8536,11 @@ export type Database = {
       }
     }
     Functions: {
+      neosmm_ig_state_consume: { Args: { p_hash: string; p_owner: string }; Returns: string }
+      neosmm_ig_states_sweep: { Args: never; Returns: undefined }
+      neosmm_ig_token_drop: { Args: { p_connection: string }; Returns: undefined }
+      neosmm_ig_token_read: { Args: { p_connection: string }; Returns: string }
+      neosmm_ig_token_save: { Args: { p_connection: string; p_token: string }; Returns: undefined }
       neosmm_begin_send: { Args: { p_order: string; p_row: Json }; Returns: string }
       neosmm_claim_parts: {
         Args: { p_lease_seconds?: number; p_limit: number; p_plan?: string }

@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { Dialog } from '@/components/ui/Dialog';
 import { TextInput } from '@/components/ui/Inputs';
 import { Notice } from '@/components/ui/Notice';
+import { smmIgConnect, smmIgDisconnect, smmIgSyncNow } from '@/lib/actions/smm-instagram';
 import { smmObservationAdd, smmObservationDelete, smmProfile, smmProfiles } from '@/lib/actions/smm-plans';
 import { isFinal } from '@/lib/neosmm/catalog';
 import { decText, formatSom, parseDec } from '@/lib/neosmm/decimal';
@@ -43,10 +44,24 @@ const sumCharges = (orders: { charge: string | null }[]) => {
  * (start_count, remains, status, charge), not the profile's name, photo or current count — those are observations,
  * each with its source and time; none means "Ma’lumot olinmagan".
  */
-export function ProfilesView({ initial, openId }: { initial: SmmProfileCard[]; openId: string | null }) {
+export type IgCallback = { code: string; user: string | null; missing: string | null; message: string | null } | null;
+type IgConn = SmmProfileCard['ig'];
+
+const IG_RESULT: Record<string, { tone: 'success' | 'warning' | 'danger'; text: (r: NonNullable<IgCallback>) => string }> = {
+  connected: { tone: 'success', text: (r) => `Instagram ulandi${r.user ? `: @${r.user}` : ''}. Haqiqiy profil ma’lumotlari olindi.${r.missing ? ` API qaytarmagan maydonlar: ${r.missing}.` : ''}` },
+  mismatch: { tone: 'danger', text: (r) => `Boshqa akkaunt bilan kirildi${r.user ? ` (@${r.user})` : ''} — bu karta boshqa akkaunt uchun. Hech narsa bog‘lanmadi va saqlanmadi. To‘g‘ri akkaunt bilan “Qayta ulash”ni bosing.` },
+  taken: { tone: 'danger', text: (r) => `${r.user ? `@${r.user}` : 'Bu akkaunt'} allaqachon boshqa profil kartasiga bog‘langan — dublikat yaratilmadi.` },
+  not_professional: { tone: 'danger', text: () => 'Bu Business yoki Creator akkaunt emas — Instagram Login faqat professional akkauntlar uchun.' },
+  denied: { tone: 'warning', text: () => 'Ruxsat berilmadi — ulanish bekor qilindi.' },
+  failed: { tone: 'danger', text: (r) => `Ulab bo‘lmadi${r.message ? `: ${r.message}` : '.'}` },
+  state: { tone: 'warning', text: () => 'Ulanish havolasi eskirgan yoki allaqachon ishlatilgan. Kartadan qaytadan “Instagram’ni ulash”ni bosing.' },
+};
+
+export function ProfilesView({ initial, openId, igConfigured, igResult }: { initial: SmmProfileCard[]; openId: string | null; igConfigured: boolean; igResult: IgCallback }) {
   const router = useRouter();
   const [profiles, setProfiles] = useState(initial);
-  const [open, setOpen] = useState<string | null>(openId);
+  const [open, setOpen] = useState<string | null>(igResult ? null : openId);
+  const result = igResult && IG_RESULT[igResult.code] ? { ...IG_RESULT[igResult.code], r: igResult } : null;
 
   const reload = useCallback(async () => {
     try {
@@ -64,9 +79,11 @@ export function ProfilesView({ initial, openId }: { initial: SmmProfileCard[]; o
 
   return (
     <div className="space-y-4">
+      {result ? <Notice tone={result.tone}>{result.text(result.r)}</Notice> : null}
       <Notice tone="info" title="Profil ma’lumotlari manbai">
-        Instagram ma’lumot ulanishi (Meta) hozir sozlanmagan, NeoSMM esa profil ismi, rasmi va joriy obunachilar sonini bermaydi. Shuning uchun sonlar faqat siz qo‘lda kiritgan kuzatuvlardan
-        olinadi — har birida manba va vaqt bor. Kuzatuv bo‘lmasa “Ma’lumot olinmagan”.
+        NeoSMM profil ismi, rasmi va obunachilar sonini bermaydi. Ular kartaga Instagram’ni rasmiy ulash (Instagram Login, faqat profilni o‘qish ruxsati) orqali har soatda, yoki siz qo‘lda
+        kiritgan kuzatuvlardan keladi — har birida manba va vaqt bor. Kuzatuv bo‘lmasa “Ma’lumot olinmagan”.
+        {!igConfigured ? ' Instagram ilovasi hali sozlanmagan — “Instagram’ni ulash” sozlangach ishlaydi.' : ''}
       </Notice>
       {profiles.length === 0 ? (
         <Card className="p-8 text-center text-sm text-muted">Hali profil kartasi yo‘q. Instagram profil havolasiga buyurtma berilganda karta o‘zi yaratiladi.</Card>
@@ -74,17 +91,116 @@ export function ProfilesView({ initial, openId }: { initial: SmmProfileCard[]; o
         <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {profiles.map((p) => (
             <li key={p.id}>
-              <ProfileCard profile={p} onOpen={() => setOpen(p.id)} />
+              <ProfileCard profile={p} onOpen={() => setOpen(p.id)} onChanged={reload} igConfigured={igConfigured} />
             </li>
           ))}
         </ul>
       )}
-      {open ? <ProfileDialog id={open} onClose={close} /> : null}
+      {open ? <ProfileDialog id={open} onClose={close} igConfigured={igConfigured} /> : null}
     </div>
   );
 }
 
-function ProfileCard({ profile: p, onOpen }: { profile: SmmProfileCard; onOpen: () => void }) {
+const IG_STATE = {
+  none: { label: 'Ulanmagan', tone: 'neutral' },
+  disconnected: { label: 'Ulanmagan', tone: 'neutral' },
+  connected: { label: 'Ulangan', tone: 'success' },
+  reauth: { label: 'Qayta ulash kerak', tone: 'warning' },
+  error: { label: 'Yangilashda xato', tone: 'danger' },
+} as const;
+
+/** The card's Instagram connection: its state, last reading and the owner's actions. */
+export function IgControls({ profileId, ig, igConfigured, onChanged }: { profileId: string; ig: IgConn; igConfigured: boolean; onChanged: () => void | Promise<void> }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const state = (ig?.status ?? 'none') as keyof typeof IG_STATE;
+  const st = IG_STATE[state] ?? IG_STATE.none;
+  const linked = state === 'connected' || state === 'error' || state === 'reauth';
+
+  const connect = async (reconnect: boolean) => {
+    setBusy('connect');
+    setMsg(null);
+    try {
+      const r = await smmIgConnect(profileId, reconnect);
+      if (r.ok) window.location.assign(r.url);
+      else {
+        setMsg(r.message);
+        setBusy(null);
+      }
+    } catch {
+      setMsg('Ulanishni boshlab bo‘lmadi.');
+      setBusy(null);
+    }
+  };
+  const run = async (key: string, fn: () => Promise<{ ok: boolean; message: string }>) => {
+    setBusy(key);
+    try {
+      const r = await fn();
+      setMsg(r.message);
+      await onChanged();
+    } catch {
+      setMsg('Amalni bajarib bo‘lmadi.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="space-y-2 border-t border-line pt-3 text-[12.5px]">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-muted">Instagram:</span>
+        <Badge tone={st.tone} dot>
+          {st.label}
+        </Badge>
+        {linked && ig?.username ? <span className="text-muted">@{ig.username}</span> : null}
+      </div>
+      {linked ? (
+        <p className="text-muted">
+          Oxirgi yangilanish: <b className="text-ink">{ig?.last_success_at ? formatShortDateTime(ig.last_success_at) : 'hali yo‘q'}</b>
+          {state !== 'reauth' && ig?.next_sync_at ? ` · keyingisi ≈ ${formatShortDateTime(ig.next_sync_at)}` : ''}
+        </p>
+      ) : null}
+      {(state === 'error' || state === 'reauth') && ig?.last_error ? (
+        <p className={state === 'reauth' ? 'text-warning' : 'text-danger'}>
+          {ig.last_error}
+          {ig.last_error_at ? ` (${formatShortDateTime(ig.last_error_at)})` : ''}
+          {ig.last_success_at ? ' — oxirgi haqiqiy qiymat saqlangan.' : ''}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {!linked ? (
+          <Button variant="secondary" loading={busy === 'connect'} disabled={!!busy || !igConfigured} onClick={() => void connect(state === 'disconnected')}>
+            Instagram’ni ulash
+          </Button>
+        ) : (
+          <>
+            {state !== 'reauth' ? (
+              <Button variant="secondary" loading={busy === 'sync'} disabled={!!busy} onClick={() => void run('sync', () => smmIgSyncNow(profileId))}>
+                Hozir yangilash
+              </Button>
+            ) : null}
+            <Button variant={state === 'reauth' ? 'secondary' : 'ghost'} loading={busy === 'connect'} disabled={!!busy || !igConfigured} onClick={() => void connect(true)}>
+              Qayta ulash
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={!!busy}
+              onClick={() => {
+                if (confirm('Instagram ulanishi uzilsinmi? Token o‘chiriladi va avtomatik yangilash to‘xtaydi; buyurtmalar va kuzatuvlar saqlanadi.'))
+                  void run('off', () => smmIgDisconnect(profileId));
+              }}
+            >
+              Ulanishni uzish
+            </Button>
+          </>
+        )}
+      </div>
+      {msg ? <p className="text-muted">{msg}</p> : null}
+    </div>
+  );
+}
+
+function ProfileCard({ profile: p, onOpen, onChanged, igConfigured }: { profile: SmmProfileCard; onOpen: () => void; onChanged: () => Promise<void>; igConfigured: boolean }) {
   const stats = useMemo(() => profileStats(p.observations as Observation[]), [p.observations]);
   const points = useMemo(() => followerSeries(p.observations as Observation[]), [p.observations]);
   const spend = sumCharges(p.orders.filter((o) => o.state === 'accepted'));
@@ -92,8 +208,8 @@ function ProfileCard({ profile: p, onOpen }: { profile: SmmProfileCard; onOpen: 
   const last = p.observations.length ? (p.observations[p.observations.length - 1] as Observation) : null;
 
   return (
-    <button type="button" onClick={onOpen} className="block h-full w-full text-left">
-      <Card className="flex h-full flex-col gap-3 p-4 text-sm transition-colors hover:border-line-strong">
+    <Card className="flex h-full flex-col gap-3 p-4 text-sm transition-colors hover:border-line-strong">
+      <button type="button" onClick={onOpen} className="flex flex-1 flex-col gap-3 text-left" aria-label={`@${p.username} statistikasi va buyurtmalari`}>
         <div className="flex items-center gap-3">
           <Avatar name={p.display_name ?? p.username} url={p.avatar_url} size={44} />
           <div className="min-w-0">
@@ -124,12 +240,13 @@ function ProfileCard({ profile: p, onOpen }: { profile: SmmProfileCard; onOpen: 
             {spend.missing ? '*' : ''}
           </span>
         </div>
-      </Card>
-    </button>
+      </button>
+      <IgControls profileId={p.id} ig={p.ig} igConfigured={igConfigured} onChanged={onChanged} />
+    </Card>
   );
 }
 
-function ProfileDialog({ id, onClose }: { id: string; onClose: () => void }) {
+function ProfileDialog({ id, onClose, igConfigured }: { id: string; onClose: () => void; igConfigured: boolean }) {
   const [detail, setDetail] = useState<Detail | null | undefined>(undefined);
   const [busy, setBusy] = useState<string | null>(null);
   const [messages, setMessages] = useState<Record<string, string>>({});
@@ -202,6 +319,12 @@ function ProfileDialog({ id, onClose }: { id: string; onClose: () => void }) {
         <Notice tone="warning">Profil topilmadi.</Notice>
       ) : (
         <div className="space-y-5 text-sm">
+          <div className="flex items-center gap-3">
+            <Avatar name={p.display_name ?? p.username} url={p.avatar_url} size={56} />
+            <div className="min-w-0 flex-1">
+              <IgControls profileId={p.id} ig={detail.ig} igConfigured={igConfigured} onChanged={load} />
+            </div>
+          </div>
           <div className="grid gap-3 sm:grid-cols-4">
             <Stat label="Hozirgi (o‘lchangan)" value={stats.latest ? nf(stats.latest.followers) : 'Ma’lumot olinmagan'} hint={stats.latest ? formatShortDateTime(stats.latest.at) : undefined} />
             <Stat label="Birinchi o‘lchov" value={stats.first ? nf(stats.first.followers) : '—'} hint={stats.first ? formatShortDateTime(stats.first.at) : undefined} />

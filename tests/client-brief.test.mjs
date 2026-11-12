@@ -400,3 +400,45 @@ test('rule-based services cite their evidence; the client’s own request is con
   assert.ok(!f.services.some((s) => s.service === 'Veb-sayt'), 'not recommended without the client asking');
   assert.equal(f.website, null);
 });
+
+test('a cut-off answer (token limit) is retried once with twice the room; usage of both calls is counted', async () => {
+  process.env.OPENAI_API_KEY = 'sk-test-not-real';
+  const budgets = [];
+  const r = await AI.respond({
+    purpose: 'analysis',
+    instructions: 'x',
+    input: 'y',
+    schemaName: 's',
+    schema: {},
+    parse: (d) => d,
+    maxOutputTokens: 4000,
+    timeoutMs: 20_000,
+    sleep: async () => {},
+    fetchImpl: async (_url, init) => {
+      budgets.push(JSON.parse(init.body).max_output_tokens);
+      if (budgets.length === 1)
+        return new Response(JSON.stringify({ status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, output: [{ type: 'message', content: [{ type: 'output_text', text: '{"a":' }] }], usage: { input_tokens: 100, output_tokens: 4000 } }));
+      return new Response(JSON.stringify({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: '{"a":1}' }] }], usage: { input_tokens: 100, output_tokens: 5200 } }));
+    },
+  });
+  assert.equal(r.ok, true);
+  assert.deepEqual(budgets, [4000, 8000]);
+  assert.deepEqual([r.usage.input, r.usage.output], [200, 9200]);
+  const twice = await AI.respond({
+    purpose: 'analysis', instructions: 'x', input: 'y', schemaName: 's', schema: {}, parse: (d) => d, timeoutMs: 20_000, sleep: async () => {},
+    fetchImpl: async () => new Response(JSON.stringify({ status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' }, usage: { input_tokens: 1, output_tokens: 1 } })),
+  });
+  assert.equal(twice.kind, 'incomplete');
+  assert.match(twice.message, /token chegarasi/);
+  delete process.env.OPENAI_API_KEY;
+});
+
+test('“Boshqa” with own words on choice questions; not on ranges, derived lists, the website gate or rules; notes kept', () => {
+  const by = (k) => bank.find((q) => q.key === k);
+  for (const k of ['id.role', 'mk.social', 'mk.ads', 'cl.schedule', 'fd.repeat', 'ws.content_owner']) assert.equal(by(k).allowOther, true, k);
+  for (const k of ['cl.branches', 'cl.doctors', 'mk.budget', 'fd.check', 'cl.grow', 'web.need', 'clarify.site', 'id.industry']) assert.equal(!!by(k).allowOther, false, k);
+  const q = by('mk.social');
+  const v = E.validateAnswer(q, q.options, { choice: ['other'], other: 'Qizimiz yuritadi', note: 'Haftada 2 marta' });
+  assert.deepEqual(v.value, { choice: ['other'], other: 'Qizimiz yuritadi', note: 'Haftada 2 marta' });
+  assert.deepEqual(E.answerLabels(q, q.options, v.value), ['Boshqa: Qizimiz yuritadi', 'Izoh: Haftada 2 marta']);
+});

@@ -15,7 +15,7 @@ import { formatShortDateTime } from '@/lib/time';
 
 export const metadata: Metadata = { title: 'Mijoz tahlili' };
 // "Tahlilni qayta yaratish" runs the analysis after the reply.
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 /** One interview for managers: the report (A–I), every answer as the client saw it, the AI log and the notes. */
 export default async function BriefSessionPage({ params }: { params: Promise<{ id: string }> }) {

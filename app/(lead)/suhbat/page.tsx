@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 export const dynamic = 'force-dynamic';
 // The answer after a client's own words may wait for a short AI classification; the report runs after the reply.
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 /** The client's interview: full screen, the session's own key only (cookie), no staff navigation or data. */
 export default async function InterviewPage() {

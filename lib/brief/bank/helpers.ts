@@ -3,6 +3,9 @@ import type { Cond, Option, Question } from '../types';
 type Def = Omit<Question, 'version' | 'required' | 'priority' | 'uncovers' | 'category' | 'industries'> &
   Partial<Pick<Question, 'required' | 'priority' | 'uncovers' | 'category' | 'industries'>>;
 
+/** Count / amount ranges ("2–3 ta", "50 mln gacha"): a free "Boshqa" adds nothing there. */
+const rangeLike = (o: Option[] | undefined) => !!o?.length && o.every((x) => /^(one|none|\d|lt\d|gt\d)/.test(x.key));
+
 /** A curated question with sensible defaults (version 1, required, mid priority, uncovers its own key). */
 export const q = (d: Def): Question => ({
   version: 1,
@@ -14,6 +17,9 @@ export const q = (d: Def): Question => ({
   aiAdaptable: false,
   active: true,
   source: 'curated',
+  // Choice questions take the client's own words beside the options, unless it is a range, a derived list or a rule.
+  allowOther:
+    (d.type === 'single' || d.type === 'multi' || d.type === 'rank') && !d.optionsFrom && !rangeLike(d.options) && d.stage !== 'website_gate' && d.source !== 'rule',
   ...d,
 });
 

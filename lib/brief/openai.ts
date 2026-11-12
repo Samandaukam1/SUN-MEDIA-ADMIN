@@ -11,7 +11,7 @@ export type AiPurpose = 'question' | 'analysis';
 export type AiUsage = { input: number; output: number; costUsd: number | null };
 export type AiResult<T> =
   | { ok: true; data: T; model: string; usage: AiUsage }
-  | { ok: false; kind: 'config' | 'model' | 'timeout' | 'rate' | 'server' | 'bad_request' | 'invalid_output' | 'refused'; message: string; usage?: AiUsage };
+  | { ok: false; kind: 'config' | 'model' | 'timeout' | 'rate' | 'server' | 'bad_request' | 'invalid_output' | 'incomplete' | 'refused'; message: string; usage?: AiUsage };
 
 const ENDPOINT = 'https://api.openai.com/v1';
 const DEFAULT_MODELS: Record<AiPurpose, string> = { question: 'gpt-6-luna', analysis: 'gpt-6.1-sol' };
@@ -118,15 +118,19 @@ export async function respond<T>({
   if (modelBlocked(model)) return { ok: false, kind: 'model', message: `“${model}” modeli hozir mavjud emas.` };
 
   const started = Date.now();
-  const body = JSON.stringify({
-    model,
-    instructions,
-    input,
-    max_output_tokens: maxOutputTokens,
-    store: false,
-    text: { format: { type: 'json_schema', name: schemaName, schema, strict: true } },
-  });
+  // Reasoning models spend output tokens on thinking first: a cut-off answer is retried once with twice the room.
+  let budget = maxOutputTokens;
+  const bodyOf = () =>
+    JSON.stringify({
+      model,
+      instructions,
+      input,
+      max_output_tokens: budget,
+      store: false,
+      text: { format: { type: 'json_schema', name: schemaName, schema, strict: true } },
+    });
   let last: AiResult<T> = { ok: false, kind: 'server', message: 'AI javob bermadi.' };
+  let total: AiUsage = { input: 0, output: 0, costUsd: null };
   for (let attempt = 0; attempt < 2; attempt++) {
     const left = timeoutMs - (Date.now() - started);
     if (left < 1500) break;
@@ -135,7 +139,7 @@ export async function respond<T>({
       res = await fetchImpl(`${ENDPOINT}/responses`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-        body,
+        body: bodyOf(),
         signal: AbortSignal.timeout(left),
         cache: 'no-store',
       });
@@ -163,7 +167,18 @@ export async function respond<T>({
       if (attempt === 0) await sleep(res.status === 429 ? 1200 : 600);
       continue;
     }
-    const usage = usageOf(json);
+    const one = usageOf(json);
+    total = { input: total.input + one.input, output: total.output + one.output, costUsd: one.costUsd === null ? total.costUsd : (total.costUsd ?? 0) + one.costUsd };
+    const usage = total;
+    const reason = ((json.incomplete_details ?? {}) as { reason?: string }).reason;
+    if (json.status === 'incomplete') {
+      last = { ok: false, kind: 'incomplete', message: reason === 'max_output_tokens' ? 'AI javobi chala qoldi (token chegarasi).' : 'AI javobi chala qoldi.', usage };
+      if (reason === 'max_output_tokens' && attempt === 0) {
+        budget = Math.min(budget * 2, 64_000);
+        continue;
+      }
+      return last;
+    }
     const { text, refusal } = outputText(json);
     if (refusal) return { ok: false, kind: 'refused', message: 'AI bu so‘rovga javob bermadi.', usage };
     if (!text) return { ok: false, kind: 'invalid_output', message: 'AI javobi bo‘sh.', usage };

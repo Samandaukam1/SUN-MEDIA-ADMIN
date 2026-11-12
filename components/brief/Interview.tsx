@@ -12,10 +12,10 @@ import type { AnswerValue } from '@/lib/brief/types';
 const EASE = [0.22, 1, 0.36, 1] as const;
 const OTHER = 'other';
 
-type Draft = { choice: string[]; other: string; text: string; number: string };
-const emptyDraft: Draft = { choice: [], other: '', text: '', number: '' };
+type Draft = { choice: string[]; other: string; text: string; number: string; note: string };
+const emptyDraft: Draft = { choice: [], other: '', text: '', number: '', note: '' };
 const draftOf = (v: AnswerValue | null): Draft =>
-  v ? { choice: v.choice ?? [], other: v.other ?? '', text: v.text ?? '', number: v.number !== undefined ? String(v.number) : '' } : emptyDraft;
+  v ? { choice: v.choice ?? [], other: v.other ?? '', text: v.text ?? '', number: v.number !== undefined ? String(v.number) : '', note: v.note ?? '' } : emptyDraft;
 
 /**
  * The client's interview: one question per screen, large targets, keyboard (1–9 to pick, Enter to continue), every
@@ -143,6 +143,7 @@ function QuestionScreen({
   const q = view.question;
   const original = useMemo(() => draftOf(view.value), [view.value]);
   const [draft, setDraft] = useState<Draft>(original);
+  const [noteOpen, setNoteOpen] = useState(!!original.note);
   const heading = useRef<HTMLHeadingElement>(null);
   const multi = q.type === 'multi' || q.type === 'rank';
   const max = q.max ?? q.options.length + 1;
@@ -176,7 +177,7 @@ function QuestionScreen({
       ? { text: draft.text }
       : q.type === 'number'
         ? { number: Number(draft.number) }
-        : { choice: draft.choice, ...(draft.choice.includes(OTHER) ? { other: draft.other } : {}) };
+        : { choice: draft.choice, ...(draft.choice.includes(OTHER) ? { other: draft.other } : {}), ...(draft.note.trim() ? { note: draft.note } : {}) };
 
   const unchanged = !!view.value && JSON.stringify(draft) === JSON.stringify(original);
   const submit = () => {
@@ -281,6 +282,24 @@ function QuestionScreen({
           />
         ) : null}
       </div>
+
+      {q.type !== 'text' && q.type !== 'number' ? (
+        noteOpen ? (
+          <textarea
+            aria-label="Izoh (ixtiyoriy)"
+            value={draft.note}
+            maxLength={500}
+            rows={2}
+            onChange={(e) => setDraft({ ...draft, note: e.target.value })}
+            placeholder="Qo‘shimcha izoh yoki aniqlik (ixtiyoriy)…"
+            className="lg mt-3 w-full resize-none rounded-[18px] px-5 py-3 text-[15px] text-[#f4f4f5] placeholder:text-[#5e5e66] focus:outline-none focus-visible:shadow-[0_0_0_2px_#d4fc18]"
+          />
+        ) : (
+          <button type="button" onClick={() => setNoteOpen(true)} className="mt-3 text-[13.5px] text-[#8e8e96] underline-offset-4 hover:text-[#d4fc18] hover:underline">
+            + Izoh qo‘shish
+          </button>
+        )
+      ) : null}
 
       {error ? <ErrorLine text={error} /> : null}
 

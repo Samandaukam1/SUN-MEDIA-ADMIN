@@ -151,7 +151,7 @@ export async function briefRegenerate(id: string): Promise<Result> {
   const { data: s } = await supabase.from('brief_sessions').select('status').eq('id', id).maybeSingle();
   if (s?.status !== 'completed') return { ok: false, message: 'Tahlil faqat yakunlangan suhbat uchun.' };
   const { data: last } = await supabase.from('brief_reports').select('version, status, created_at').eq('session_id', id).order('version', { ascending: false }).limit(1).maybeSingle();
-  if (last?.status === 'pending' && Date.now() - Date.parse(last.created_at) < 3 * 60_000) return { ok: false, message: 'Tahlil hozir tayyorlanmoqda — biroz kuting.' };
+  if (last?.status === 'pending' && Date.now() - Date.parse(last.created_at) < 5 * 60_000) return { ok: false, message: 'Tahlil hozir tayyorlanmoqda — biroz kuting.' };
   const version = (last?.version ?? 0) + 1;
   const { error } = await supabase.from('brief_reports').insert({ session_id: id, version, status: 'pending', created_by: me.userId });
   if (error) return { ok: false, message: error.code === '23505' ? 'Tahlil allaqachon boshlangan.' : toUserMessage(error) };

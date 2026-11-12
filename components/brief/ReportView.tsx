@@ -293,6 +293,44 @@ export function ReportView({
         {msg ? <p className="mt-2 text-[12.5px] text-[#a8a8ac]">{msg}</p> : null}
       </GlassCard>
 
+      {completed && report?.status === 'pending' ? (
+        <GlassCard className="print:hidden">
+          <p className="text-[14px] text-[#a8a8ac]">AI tahlili tayyorlanmoqda (odatda 1–4 daqiqa). Sahifani birozdan so‘ng yangilang.</p>
+        </GlassCard>
+      ) : null}
+      {completed && report && (report.status === 'failed' || report.status === 'no_ai') ? (
+        <GlassCard className="border-[#fbbf24]/30 print:hidden">
+          <p className="text-[14.5px] text-[#fbbf24]">
+            {report.status === 'failed' ? `AI tahlili bajarilmadi: ${report.error ?? 'noma’lum xato'}` : 'AI tahlili hali yo‘q (AI ulanmagan edi).'}
+          </p>
+          <p className="mt-1 text-[13px] text-[#a8a8ac]">Quyida mijoz javoblari va aniq qoidalar asosidagi hisobot. Javoblar saqlangan — tahlilni qayta ishga tushirish mumkin.</p>
+          <button
+            type="button"
+            disabled={!!busy}
+            onClick={() => call('regen', () => briefRegenerate(sessionId))}
+            className="mt-3 h-10 rounded-full bg-[#d4fc18] px-5 text-[13px] font-semibold text-[#0b0b0c] disabled:opacity-50"
+          >
+            {busy === 'regen' ? 'Boshlanmoqda…' : 'AI tahlilini qayta ishga tushirish'}
+          </button>
+        </GlassCard>
+      ) : null}
+      {completed && a && (a.conclusion || a.profile_summary) ? (
+        <GlassCard glow>
+          <p className="text-[11.5px] font-semibold tracking-[0.18em] text-[#d4fc18] uppercase">Xulosa · AI talqini</p>
+          {a.profile_summary ? <p className="mt-3 text-[15px] leading-relaxed text-[#d9d9de]">{a.profile_summary}</p> : null}
+          {a.conclusion ? <p className="mt-3 text-[16px] leading-relaxed whitespace-pre-wrap text-white">{a.conclusion}</p> : null}
+          {a.services.length ? (
+            <p className="mt-4 flex flex-wrap gap-2">
+              {a.services.map((x) => (
+                <span key={x.service} className="rounded-full bg-[#d4fc18]/12 px-3 py-1 text-[12.5px] text-[#d4fc18]">
+                  {x.service}
+                </span>
+              ))}
+            </p>
+          ) : null}
+        </GlassCard>
+      ) : null}
+
       {!completed ? (
         <GlassCard>
           <p className="text-[14px] text-[#a8a8ac]">Suhbat hali yakunlanmagan. Hisobot mijoz javoblarni yuborgandan keyin tayyorlanadi. Hozirgacha berilgan javoblar pastda.</p>

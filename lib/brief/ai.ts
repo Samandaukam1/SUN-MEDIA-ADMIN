@@ -36,8 +36,8 @@ export async function aiClassify(description: string): Promise<AiResult<NonNulla
     schemaName: 'industry_classification',
     schema: CLASSIFY_SCHEMA as unknown as Record<string, unknown>,
     parse: parseClassification,
-    maxOutputTokens: 300,
-    timeoutMs: 8000,
+    maxOutputTokens: 2000,
+    timeoutMs: 15_000,
     instructions: `${ROLE}
 Task: classify the business into exactly one industry key and, if clear, one sub-industry key from the taxonomy. If nothing fits well, use "other" and a low confidence (0–1).
 Taxonomy (industry: label [sub-industries]):
@@ -59,8 +59,8 @@ export async function aiFollowup(input: { industry: string; digest: string; upco
     schemaName: 'next_question_decision',
     schema: DECISION_SCHEMA as unknown as Record<string, unknown>,
     parse: parseDecision,
-    maxOutputTokens: 500,
-    timeoutMs: 12_000,
+    maxOutputTokens: 4000,
+    timeoutMs: 60_000,
     instructions: `${ROLE}\n${DECISION_RULES}`,
     input: [
       `Industry: ${input.industry}`,
@@ -81,8 +81,8 @@ export async function aiGaps(input: { industry: string; digest: string; upcoming
       if (!Array.isArray(list)) return null;
       return list.map(parseDecision).filter((d): d is Decision => d !== null).slice(0, 2);
     },
-    maxOutputTokens: 900,
-    timeoutMs: 14_000,
+    maxOutputTokens: 6000,
+    timeoutMs: 90_000,
     instructions: `${ROLE}\nThe business discovery part is done. Identify at most two pieces of decision-relevant information that are still missing for this specific business and sub-industry. ${DECISION_RULES}`,
     input: [`Industry: ${input.industry}`, `Answers (key, stage, question → answer):\n${redact(input.digest)}`, `Questions still coming:\n${input.upcoming.map((u) => `- ${u}`).join('\n') || '—'}`].join(
       '\n\n',
@@ -105,8 +105,8 @@ export async function aiAnalysis(input: { digest: string; facts: Facts; answerKe
     schemaName: 'client_analysis',
     schema: ANALYSIS_SCHEMA as unknown as Record<string, unknown>,
     parse: (x) => sanitizeAnalysis(x, input.answerKeys, !!f.website),
-    maxOutputTokens: 4000,
-    timeoutMs: 75_000,
+    maxOutputTokens: 16_000,
+    timeoutMs: 240_000,
     instructions: `${ROLE}
 Write the INTERNAL report for SUN MEDIA managers (the client never sees it), in Uzbek (Latin).
 - Every claim has basis "confirmed" (stated by the client — cite the answer keys in evidence), "inferred" (your reasoning from cited answers) or "unknown".

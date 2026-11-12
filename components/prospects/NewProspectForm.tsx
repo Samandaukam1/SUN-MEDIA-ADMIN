@@ -8,7 +8,7 @@ import { idle, type ActionState } from '@/lib/actions/state';
 const field =
   'h-12 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-[15px] text-white outline-none transition-all placeholder:text-[#5c5c64] focus:border-[#d4fc18] focus:shadow-[0_0_0_4px_rgb(212_252_24/0.14)]';
 
-export function NewProspectForm() {
+export function NewProspectForm({ label = '+ Yangi mijoz tahlili' }: { label?: string }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState<ActionState, FormData>(createProspect, idle);
   const errors = state.status === 'error' ? (state.fieldErrors ?? {}) : {};
@@ -19,7 +19,7 @@ export function NewProspectForm() {
         onClick={() => setOpen(true)}
         className="inline-flex h-12 items-center gap-2 rounded-full bg-[#d4fc18] px-6 text-[15px] font-semibold text-[#0b0b0c] shadow-[0_10px_40px_-8px_rgb(212_252_24/0.55)] transition-transform hover:scale-[1.02]"
       >
-        + Yangi mijoz tahlili
+        {label}
       </button>
     );
   }

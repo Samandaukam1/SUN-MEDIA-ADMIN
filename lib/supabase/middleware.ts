@@ -5,11 +5,14 @@ import { getPublicEnv } from '@/lib/env';
 import type { Database } from '@/types/database';
 
 /** Pages anyone may open without signing in (auth return links, the "no access" notice). */
-const OPEN_PATHS = ['/auth/callback', '/no-access', '/api/assistant', '/api/push', '/api/smm/worker', '/api/agents/worker', '/api/smm/instagram/deauthorize', '/api/smm/instagram/data-deletion', '/app'];
+const OPEN_PATHS = ['/auth/callback', '/no-access', '/suhbat', '/api/assistant', '/api/push', '/api/smm/worker', '/api/agents/worker', '/api/smm/instagram/deauthorize', '/api/smm/instagram/data-deletion', '/app'];
 
 /** The public website: the landing page, its pages and the files search engines ask for. */
 const SITE_PATHS = ['/xizmatlar', '/keyslar', '/hamkorlar', '/tariflar', '/biz-haqimizda', '/aloqa', '/ariza'];
 const SITE_FILES = ['/robots.txt', '/sitemap.xml', '/manifest.webmanifest', '/opengraph-image', '/sw.js', '/offline.html'];
+
+/** Set when a manager hands this device to a client (see lib/actions/brief.ts). */
+export const KIOSK_COOKIE = 'sm_kiosk';
 
 const under = (path: string, prefix: string) => path === prefix || path.startsWith(`${prefix}/`);
 
@@ -40,6 +43,16 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   if (isSitePath(path) || path.startsWith('/_next/')) return response;
+
+  // Client interview mode ("Mijoz tahlili"): while a client holds this device, nothing but the interview opens —
+  // not the panel, not the staff assistant — until the manager unlocks it with their password.
+  if (request.cookies.get(KIOSK_COOKIE)?.value && !under(path, '/suhbat')) {
+    if (path.startsWith('/api/')) return new NextResponse(null, { status: 403, headers: { 'Cache-Control': 'no-store' } });
+    const target = request.nextUrl.clone();
+    target.pathname = '/suhbat';
+    target.search = '';
+    return NextResponse.redirect(target);
+  }
 
   const redirect = (pathname: string, search = '') => {
     const target = request.nextUrl.clone();

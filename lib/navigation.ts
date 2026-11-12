@@ -57,7 +57,10 @@ const SECTIONS: NavSection[] = [
     label: 'Mijoz tahlili',
     icon: 'sparkles',
     permission: 'prospects.manage',
-    pages: [{ href: '/tahlil', label: 'Yangi mijozlar', permission: 'prospects.manage' }],
+    pages: [
+      { href: '/tahlil', label: 'Tahlillar', permission: 'prospects.manage' },
+      { href: '/tahlil/savollar', label: 'Savollar banki', permission: 'prospects.manage' },
+    ],
   },
   {
     key: 'agents',

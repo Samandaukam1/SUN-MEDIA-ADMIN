@@ -6386,6 +6386,341 @@ export type Database = {
           },
         ]
       }
+      brief_question_versions: {
+        Row: {
+          key: string
+          version: number
+          definition: Json
+          active: boolean
+          note: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          key: string
+          version: number
+          definition: Json
+          active?: boolean
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          key?: string
+          version?: number
+          definition?: Json
+          active?: boolean
+          note?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+        ]
+      }
+      brief_sessions: {
+        Row: {
+          id: string
+          prospect_id: string | null
+          status: string
+          token_hash: string | null
+          token_expires_at: string | null
+          company_hint: string | null
+          contact_hint: string | null
+          industry: string | null
+          sub_industry: string | null
+          classification: Json | null
+          answer_order: string[]
+          current_key: string | null
+          revision: number
+          consent_at: string | null
+          started_at: string | null
+          last_seen_at: string | null
+          completed_at: string | null
+          req_window: string | null
+          req_count: number
+          ai_calls: number
+          ai_input_tokens: number
+          ai_output_tokens: number
+          ai_cost_usd: number | null
+          review_status: string
+          manager_notes: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          prospect_id?: string | null
+          status?: string
+          token_hash?: string | null
+          token_expires_at?: string | null
+          company_hint?: string | null
+          contact_hint?: string | null
+          industry?: string | null
+          sub_industry?: string | null
+          classification?: Json | null
+          answer_order?: string[]
+          current_key?: string | null
+          revision?: number
+          consent_at?: string | null
+          started_at?: string | null
+          last_seen_at?: string | null
+          completed_at?: string | null
+          req_window?: string | null
+          req_count?: number
+          ai_calls?: number
+          ai_input_tokens?: number
+          ai_output_tokens?: number
+          ai_cost_usd?: number | null
+          review_status?: string
+          manager_notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          prospect_id?: string | null
+          status?: string
+          token_hash?: string | null
+          token_expires_at?: string | null
+          company_hint?: string | null
+          contact_hint?: string | null
+          industry?: string | null
+          sub_industry?: string | null
+          classification?: Json | null
+          answer_order?: string[]
+          current_key?: string | null
+          revision?: number
+          consent_at?: string | null
+          started_at?: string | null
+          last_seen_at?: string | null
+          completed_at?: string | null
+          req_window?: string | null
+          req_count?: number
+          ai_calls?: number
+          ai_input_tokens?: number
+          ai_output_tokens?: number
+          ai_cost_usd?: number | null
+          review_status?: string
+          manager_notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brief_sessions_prospect_id_fkey"
+            columns: ["prospect_id"]
+            isOneToOne: false
+            referencedRelation: "prospects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brief_answers: {
+        Row: {
+          session_id: string
+          question_key: string
+          question_version: number
+          question: Json
+          value: Json
+          stage: string
+          source: string
+          edit_count: number
+          answered_at: string
+          updated_at: string
+        }
+        Insert: {
+          session_id: string
+          question_key: string
+          question_version?: number
+          question: Json
+          value: Json
+          stage: string
+          source?: string
+          edit_count?: number
+          answered_at?: string
+          updated_at?: string
+        }
+        Update: {
+          session_id?: string
+          question_key?: string
+          question_version?: number
+          question?: Json
+          value?: Json
+          stage?: string
+          source?: string
+          edit_count?: number
+          answered_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brief_answers_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "brief_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brief_ai_suggestions: {
+        Row: {
+          id: string
+          session_id: string
+          trigger_key: string
+          kind: string
+          status: string
+          question: Json | null
+          decision: Json | null
+          reject_reason: string | null
+          model: string | null
+          input_tokens: number | null
+          output_tokens: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          trigger_key: string
+          kind: string
+          status?: string
+          question?: Json | null
+          decision?: Json | null
+          reject_reason?: string | null
+          model?: string | null
+          input_tokens?: number | null
+          output_tokens?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          trigger_key?: string
+          kind?: string
+          status?: string
+          question?: Json | null
+          decision?: Json | null
+          reject_reason?: string | null
+          model?: string | null
+          input_tokens?: number | null
+          output_tokens?: number | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brief_ai_suggestions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "brief_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brief_reports: {
+        Row: {
+          id: string
+          session_id: string
+          version: number
+          status: string
+          facts: Json
+          analysis: Json | null
+          model: string | null
+          input_tokens: number | null
+          output_tokens: number | null
+          cost_usd: number | null
+          error: string | null
+          correction: Json | null
+          corrected_by: string | null
+          corrected_at: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          version: number
+          status?: string
+          facts?: Json
+          analysis?: Json | null
+          model?: string | null
+          input_tokens?: number | null
+          output_tokens?: number | null
+          cost_usd?: number | null
+          error?: string | null
+          correction?: Json | null
+          corrected_by?: string | null
+          corrected_at?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          version?: number
+          status?: string
+          facts?: Json
+          analysis?: Json | null
+          model?: string | null
+          input_tokens?: number | null
+          output_tokens?: number | null
+          cost_usd?: number | null
+          error?: string | null
+          correction?: Json | null
+          corrected_by?: string | null
+          corrected_at?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brief_reports_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "brief_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      brief_events: {
+        Row: {
+          id: number
+          session_id: string
+          kind: string
+          detail: Json
+          actor: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          session_id: string
+          kind: string
+          detail?: Json
+          actor?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          session_id?: string
+          kind?: string
+          detail?: Json
+          actor?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brief_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "brief_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prospect_analyses: {
         Row: {
           created_at: string
@@ -10269,6 +10604,34 @@ export type Database = {
           part_index: number
           plan_id: string
         }[]
+      }
+      brief_ai_reserve: {
+        Args: { p_limit: number; p_session: string }
+        Returns: boolean
+      }
+      brief_ai_usage: {
+        Args: { p_cost?: number; p_input: number; p_output: number; p_session: string }
+        Returns: undefined
+      }
+      brief_client_begin: {
+        Args: { p_session: string }
+        Returns: undefined
+      }
+      brief_client_open: {
+        Args: { p_hash: string; p_limit?: number }
+        Returns: Json
+      }
+      brief_complete: {
+        Args: { p_revision: number; p_session: string }
+        Returns: string
+      }
+      brief_save_answer: {
+        Args: { p_answer: Json; p_current: string | null; p_drop?: string[]; p_key: string; p_order: string[]; p_revision: number; p_session: string }
+        Returns: Json
+      }
+      brief_set_current: {
+        Args: { p_current: string | null; p_revision: number; p_session: string }
+        Returns: Json
       }
       neosmm_consume_worker_token: {
         Args: { p_hash: string }

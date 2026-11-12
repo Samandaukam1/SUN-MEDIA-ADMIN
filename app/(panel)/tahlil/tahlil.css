@@ -81,3 +81,16 @@
     }
   }
 }
+
+/* The internal report on paper: white page, dark text, no navigation or controls. */
+@media print {
+  body:has([data-print-root]) {
+    background: #fff !important;
+  }
+  [data-print-root] * {
+    color: #111 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+}

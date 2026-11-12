@@ -442,3 +442,29 @@ test('“Boshqa” with own words on choice questions; not on ranges, derived li
   assert.deepEqual(v.value, { choice: ['other'], other: 'Qizimiz yuritadi', note: 'Haftada 2 marta' });
   assert.deepEqual(E.answerLabels(q, q.options, v.value), ['Boshqa: Qizimiz yuritadi', 'Izoh: Haftada 2 marta']);
 });
+
+test('the manual studio and the Instagram analysis use OpenAI (text and screenshots in one message, JSON back)', async () => {
+  const { askClaude, aiConfigured } = await import('../lib/ai.ts');
+  process.env.OPENAI_API_KEY = 'sk-test-not-real';
+  process.env.ANTHROPIC_API_KEY = 'also-set';
+  const real = globalThis.fetch;
+  let seen;
+  globalThis.fetch = async (url, init) => {
+    seen = { url: String(url), body: JSON.parse(init.body) };
+    return new Response(JSON.stringify({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: '{"summary":"ok"}' }] }], usage: { input_tokens: 1, output_tokens: 1 } }));
+  };
+  try {
+    assert.equal(aiConfigured(), true);
+    const r = await askClaude({ system: 'Faqat JSON', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }, { type: 'text', text: 'profil' }] });
+    assert.match(seen.url, /api\.openai\.com\/v1\/responses$/, 'OpenAI first, even with an Anthropic key');
+    assert.equal(seen.body.text.format.type, 'json_object');
+    const parts = seen.body.input[0].content;
+    assert.deepEqual(parts.map((p) => p.type), ['input_image', 'input_text']);
+    assert.equal(parts[0].image_url, 'data:image/png;base64,AAAA');
+    assert.deepEqual(JSON.parse(r.text), { summary: 'ok' });
+  } finally {
+    globalThis.fetch = real;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+  }
+});

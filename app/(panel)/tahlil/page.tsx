@@ -62,10 +62,13 @@ export default async function ProspectsPage({ searchParams }: { searchParams: Pr
       ? ((
           await supabase
             .from('prospects')
-            .select('id, name, company, instagram, status, created_at, answers, analyses:prospect_analyses(kind, created_at)')
+            .select('id, name, company, instagram, status, created_at, answers, analyses:prospect_analyses(kind, created_at), interviews:brief_sessions(id)')
             .order('created_at', { ascending: false })
             .limit(200)
-        ).data ?? []).filter((p) => !needle || [p.name, p.company, p.instagram].some((v) => v?.toLowerCase().includes(needle)))
+        ).data ?? [])
+          // Clients who came through an interview are listed above, with their report.
+          .filter((p) => !(p.interviews ?? []).length)
+          .filter((p) => !needle || [p.name, p.company, p.instagram].some((v) => v?.toLowerCase().includes(needle)))
       : [];
   const ai = aiReady();
 

@@ -266,7 +266,7 @@ export function InstagramView({ prospectId, handle: initialHandle, analyses, aiR
           </button>
           {!aiReady ? (
             <p className="rounded-2xl border border-[#ffcf5c]/30 bg-[#ffcf5c]/[0.07] px-4 py-3 text-[13px] text-[#ffdf8c]">
-              AI hali ulanmagan: serverga <b>ANTHROPIC_API_KEY</b> qo‘shilgach ishlaydi. Hisob-kitob hozir ham ishlaydi.
+              AI hali ulanmagan: serverga <b>OPENAI_API_KEY</b> qo‘shilgach ishlaydi. Hisob-kitob hozir ham ishlaydi.
             </p>
           ) : null}
           {error ? <p className="text-[13.5px] text-[#ff8a8a]">{error}</p> : null}

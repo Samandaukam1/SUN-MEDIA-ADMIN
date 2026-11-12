@@ -125,7 +125,7 @@ export function BriefView({
 
   const notice = !aiReady ? (
     <p className="rounded-2xl border border-[#ffcf5c]/30 bg-[#ffcf5c]/[0.07] px-4 py-3 text-[13.5px] text-[#ffdf8c]">
-      AI hali ulanmagan: serverga <b>ANTHROPIC_API_KEY</b> qo‘shilgach, tahlil ishlaydi. Javoblar saqlanib turadi.
+      AI hali ulanmagan: serverga <b>OPENAI_API_KEY</b> qo‘shilgach, tahlil ishlaydi. Javoblar saqlanib turadi.
     </p>
   ) : answered < 5 ? (
     <p className="text-[13.5px] text-[#a8a8ac]">Tahlil uchun kamida 5 ta savolga javob kerak (hozir {answered} ta).</p>

@@ -99,7 +99,7 @@ export default async function BriefSessionPage({ params }: { params: Promise<{ i
         <div className="flex flex-wrap gap-2 print:hidden">
           {s.prospect ? (
             <Link href={`/tahlil/${s.prospect.id}`} className="h-10 rounded-full border border-white/12 px-4 text-[13px] leading-10 text-[#d9d9de] hover:border-[#d4fc18]/50">
-              Mijoz kartasi (Instagram tahlili)
+              Instagram tahlili (mijoz kartasi)
             </Link>
           ) : null}
           {!open ? <DeleteSession id={s.id} /> : null}

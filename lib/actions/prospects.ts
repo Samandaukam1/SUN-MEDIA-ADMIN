@@ -18,7 +18,7 @@ const PERMISSION = 'prospects.manage';
 export type ProspectResult = { ok: true } | { ok: false; message: string };
 
 function aiMessage(e: unknown): string {
-  if (e instanceof AiNotConfiguredError) return 'AI ulanmagan: serverga ANTHROPIC_API_KEY qo‘shilishi kerak.';
+  if (e instanceof AiNotConfiguredError) return 'AI ulanmagan: serverga OPENAI_API_KEY (yoki ANTHROPIC_API_KEY) qo‘shilishi kerak.';
   if (e instanceof AiFailedError) return e.message;
   return toUserMessage(e);
 }

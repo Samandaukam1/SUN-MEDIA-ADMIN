@@ -103,9 +103,11 @@ export async function respond<T>({
 }: {
   purpose: AiPurpose;
   instructions: string;
-  input: string;
+  /** Text, or Responses API input items (e.g. a user message with input_text and input_image parts). */
+  input: string | unknown[];
   schemaName: string;
-  schema: Record<string, unknown>;
+  /** A strict JSON schema; null asks for any JSON object (the caller's prompt describes it, `parse` checks it). */
+  schema: Record<string, unknown> | null;
   parse: (data: unknown) => T | null;
   maxOutputTokens?: number;
   timeoutMs?: number;
@@ -127,7 +129,7 @@ export async function respond<T>({
       input,
       max_output_tokens: budget,
       store: false,
-      text: { format: { type: 'json_schema', name: schemaName, schema, strict: true } },
+      text: { format: schema ? { type: 'json_schema', name: schemaName, schema, strict: true } : { type: 'json_object' } },
     });
   let last: AiResult<T> = { ok: false, kind: 'server', message: 'AI javob bermadi.' };
   let total: AiUsage = { input: 0, output: 0, costUsd: null };

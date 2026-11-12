@@ -9,6 +9,784 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      agent_approvals: {
+        Row: {
+          channel: string
+          comment: string | null
+          content_hash: string | null
+          created_at: string
+          decided_by: string | null
+          decision: string
+          id: string
+          item_id: string
+          scope: string | null
+          version_id: string | null
+        }
+        Insert: {
+          channel?: string
+          comment?: string | null
+          content_hash?: string | null
+          created_at?: string
+          decided_by?: string | null
+          decision: string
+          id?: string
+          item_id: string
+          scope?: string | null
+          version_id?: string | null
+        }
+        Update: {
+          channel?: string
+          comment?: string | null
+          content_hash?: string | null
+          created_at?: string
+          decided_by?: string | null
+          decision?: string
+          id?: string
+          item_id?: string
+          scope?: string | null
+          version_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_approvals_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_approvals_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "agent_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_approvals_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "agent_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_assets: {
+        Row: {
+          created_at: string
+          file_name: string | null
+          height: number | null
+          id: string
+          kind: string
+          mime: string | null
+          note: string | null
+          profile_id: string
+          storage_path: string
+          width: number | null
+        }
+        Insert: {
+          created_at?: string
+          file_name?: string | null
+          height?: number | null
+          id?: string
+          kind: string
+          mime?: string | null
+          note?: string | null
+          profile_id: string
+          storage_path: string
+          width?: number | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string | null
+          height?: number | null
+          id?: string
+          kind?: string
+          mime?: string | null
+          note?: string | null
+          profile_id?: string
+          storage_path?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_assets_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "agent_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_directions: {
+        Row: {
+          active: boolean
+          created_at: string
+          description: string | null
+          id: string
+          position: number
+          profile_id: string
+          title: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          position?: number
+          profile_id: string
+          title: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          description?: string | null
+          id?: string
+          position?: number
+          profile_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_directions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "agent_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_ig_connections: {
+        Row: {
+          account_type: string | null
+          connected_at: string | null
+          connected_by: string | null
+          id: string
+          ig_user_id: string
+          last_error: string | null
+          last_error_at: string | null
+          permissions: string[]
+          profile_id: string
+          status: string
+          token_expires_at: string | null
+          token_refreshed_at: string | null
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          account_type?: string | null
+          connected_at?: string | null
+          connected_by?: string | null
+          id?: string
+          ig_user_id: string
+          last_error?: string | null
+          last_error_at?: string | null
+          permissions?: string[]
+          profile_id: string
+          status?: string
+          token_expires_at?: string | null
+          token_refreshed_at?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          account_type?: string | null
+          connected_at?: string | null
+          connected_by?: string | null
+          id?: string
+          ig_user_id?: string
+          last_error?: string | null
+          last_error_at?: string | null
+          permissions?: string[]
+          profile_id?: string
+          status?: string
+          token_expires_at?: string | null
+          token_refreshed_at?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_ig_connections_connected_by_fkey"
+            columns: ["connected_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_ig_connections_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "agent_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_ig_oauth_states: {
+        Row: {
+          created_at: string
+          expires_at: string
+          owner_id: string
+          profile_id: string
+          state_hash: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          owner_id: string
+          profile_id: string
+          state_hash: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          owner_id?: string
+          profile_id?: string
+          state_hash?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_ig_oauth_states_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_ig_oauth_states_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "agent_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_insights: {
+        Row: {
+          fetched_at: string
+          id: string
+          item_id: string
+          media_id: string
+          metrics: Json
+        }
+        Insert: {
+          fetched_at?: string
+          id?: string
+          item_id: string
+          media_id: string
+          metrics?: Json
+        }
+        Update: {
+          fetched_at?: string
+          id?: string
+          item_id?: string
+          media_id?: string
+          metrics?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_insights_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "agent_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_items: {
+        Row: {
+          attempts: number
+          created_at: string
+          current_version_id: string | null
+          id: string
+          kind: string
+          last_error: string | null
+          lease_until: string | null
+          prepare_at: string
+          profile_id: string
+          published_at: string | null
+          regen_count: number
+          scheduled_at: string
+          status: string
+          target_date: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          current_version_id?: string | null
+          id?: string
+          kind: string
+          last_error?: string | null
+          lease_until?: string | null
+          prepare_at: string
+          profile_id: string
+          published_at?: string | null
+          regen_count?: number
+          scheduled_at: string
+          status?: string
+          target_date: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          current_version_id?: string | null
+          id?: string
+          kind?: string
+          last_error?: string | null
+          lease_until?: string | null
+          prepare_at?: string
+          profile_id?: string
+          published_at?: string | null
+          regen_count?: number
+          scheduled_at?: string
+          status?: string
+          target_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_items_current_version_fk"
+            columns: ["current_version_id"]
+            isOneToOne: false
+            referencedRelation: "agent_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_items_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "agent_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_memory: {
+        Row: {
+          active: boolean
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          meta: Json
+          profile_id: string
+        }
+        Insert: {
+          active?: boolean
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          meta?: Json
+          profile_id: string
+        }
+        Update: {
+          active?: boolean
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          meta?: Json
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_memory_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_memory_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "agent_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_profiles: {
+        Row: {
+          address: string | null
+          advantages: string | null
+          approval_mode: string
+          audience: string | null
+          auto_publish: boolean
+          bad_examples: string | null
+          business: string | null
+          client_id: string | null
+          colors: Json
+          created_at: string
+          created_by: string | null
+          cta: string | null
+          facts: string | null
+          forbidden: string | null
+          goal: string | null
+          good_examples: string | null
+          id: string
+          instagram_username: string | null
+          instructions: string | null
+          language: string
+          name: string
+          paused_at: string | null
+          phone: string | null
+          post_start_date: string
+          post_time: string
+          price_source: string | null
+          products: string | null
+          region: string | null
+          research_enabled: boolean
+          status: string
+          stories_per_day: number
+          story_time: string
+          telegram: string | null
+          tone: string | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          advantages?: string | null
+          approval_mode?: string
+          audience?: string | null
+          auto_publish?: boolean
+          bad_examples?: string | null
+          business?: string | null
+          client_id?: string | null
+          colors?: Json
+          created_at?: string
+          created_by?: string | null
+          cta?: string | null
+          facts?: string | null
+          forbidden?: string | null
+          goal?: string | null
+          good_examples?: string | null
+          id?: string
+          instagram_username?: string | null
+          instructions?: string | null
+          language?: string
+          name: string
+          paused_at?: string | null
+          phone?: string | null
+          post_start_date?: string
+          post_time?: string
+          price_source?: string | null
+          products?: string | null
+          region?: string | null
+          research_enabled?: boolean
+          status?: string
+          stories_per_day?: number
+          story_time?: string
+          telegram?: string | null
+          tone?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          advantages?: string | null
+          approval_mode?: string
+          audience?: string | null
+          auto_publish?: boolean
+          bad_examples?: string | null
+          business?: string | null
+          client_id?: string | null
+          colors?: Json
+          created_at?: string
+          created_by?: string | null
+          cta?: string | null
+          facts?: string | null
+          forbidden?: string | null
+          goal?: string | null
+          good_examples?: string | null
+          id?: string
+          instagram_username?: string | null
+          instructions?: string | null
+          language?: string
+          name?: string
+          paused_at?: string | null
+          phone?: string | null
+          post_start_date?: string
+          post_time?: string
+          price_source?: string | null
+          products?: string | null
+          region?: string | null
+          research_enabled?: boolean
+          status?: string
+          stories_per_day?: number
+          story_time?: string
+          telegram?: string | null
+          tone?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_profiles_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_profiles_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_publish_attempts: {
+        Row: {
+          attempts: number
+          container_id: string | null
+          created_at: string
+          error: string | null
+          error_kind: string | null
+          frame_index: number
+          id: string
+          idempotency_key: string
+          ig_user_id: string | null
+          item_id: string
+          media_id: string | null
+          profile_id: string
+          status: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          attempts?: number
+          container_id?: string | null
+          created_at?: string
+          error?: string | null
+          error_kind?: string | null
+          frame_index: number
+          id?: string
+          idempotency_key: string
+          ig_user_id?: string | null
+          item_id: string
+          media_id?: string | null
+          profile_id: string
+          status?: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          attempts?: number
+          container_id?: string | null
+          created_at?: string
+          error?: string | null
+          error_kind?: string | null
+          frame_index?: number
+          id?: string
+          idempotency_key?: string
+          ig_user_id?: string | null
+          item_id?: string
+          media_id?: string | null
+          profile_id?: string
+          status?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_publish_attempts_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "agent_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_publish_attempts_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "agent_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_publish_attempts_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "agent_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_settings: {
+        Row: {
+          daily_ai_limit: number
+          id: number
+          late_grace_minutes: number
+          prepare_lead_hours: number
+          publishing_enabled: boolean
+          regen_limit: number
+          research_weekday: number
+          simulate: boolean
+          updated_at: string
+        }
+        Insert: {
+          daily_ai_limit?: number
+          id?: number
+          late_grace_minutes?: number
+          prepare_lead_hours?: number
+          publishing_enabled?: boolean
+          regen_limit?: number
+          research_weekday?: number
+          simulate?: boolean
+          updated_at?: string
+        }
+        Update: {
+          daily_ai_limit?: number
+          id?: number
+          late_grace_minutes?: number
+          prepare_lead_hours?: number
+          publishing_enabled?: boolean
+          regen_limit?: number
+          research_weekday?: number
+          simulate?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      agent_usage: {
+        Row: {
+          cost_usd: number | null
+          created_at: string
+          id: string
+          input_tokens: number
+          model: string | null
+          output_tokens: number
+          profile_id: string | null
+          provider: string
+          purpose: string
+          web_searches: number
+        }
+        Insert: {
+          cost_usd?: number | null
+          created_at?: string
+          id?: string
+          input_tokens?: number
+          model?: string | null
+          output_tokens?: number
+          profile_id?: string | null
+          provider: string
+          purpose: string
+          web_searches?: number
+        }
+        Update: {
+          cost_usd?: number | null
+          created_at?: string
+          id?: string
+          input_tokens?: number
+          model?: string | null
+          output_tokens?: number
+          profile_id?: string | null
+          provider?: string
+          purpose?: string
+          web_searches?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_usage_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "agent_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_versions: {
+        Row: {
+          caption: string
+          content_hash: string
+          created_at: string
+          created_by: string | null
+          frames: Json
+          hashtags: string
+          id: string
+          idea: Json
+          item_id: string
+          manual_notes: string | null
+          model: string | null
+          note: string | null
+          provider: string
+          qa: Json
+          version_no: number
+        }
+        Insert: {
+          caption?: string
+          content_hash: string
+          created_at?: string
+          created_by?: string | null
+          frames?: Json
+          hashtags?: string
+          id?: string
+          idea?: Json
+          item_id: string
+          manual_notes?: string | null
+          model?: string | null
+          note?: string | null
+          provider?: string
+          qa?: Json
+          version_no: number
+        }
+        Update: {
+          caption?: string
+          content_hash?: string
+          created_at?: string
+          created_by?: string | null
+          frames?: Json
+          hashtags?: string
+          id?: string
+          idea?: Json
+          item_id?: string
+          manual_notes?: string | null
+          model?: string | null
+          note?: string | null
+          provider?: string
+          qa?: Json
+          version_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_versions_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "agent_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_worker_tokens: {
+        Row: {
+          expires_at: string
+          token_hash: string
+        }
+        Insert: {
+          expires_at: string
+          token_hash: string
+        }
+        Update: {
+          expires_at?: string
+          token_hash?: string
+        }
+        Relationships: []
+      }
       announcement_reads: {
         Row: {
           announcement_id: string
@@ -3701,679 +4479,6 @@ export type Database = {
           },
         ]
       }
-      neosmm_catalog_cache: {
-        Row: {
-          data: Json
-          fetched_at: string
-          kind: string
-          owner_id: string
-        }
-        Insert: {
-          data: Json
-          fetched_at?: string
-          kind: string
-          owner_id: string
-        }
-        Update: {
-          data?: Json
-          fetched_at?: string
-          kind?: string
-          owner_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "neosmm_catalog_cache_owner_id_fkey"
-            columns: ["owner_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      neosmm_ig_connections: {
-        Row: {
-          account_type: string | null
-          app_scoped_id: string | null
-          connected_at: string | null
-          connected_by: string | null
-          disconnected_at: string | null
-          failures: number
-          id: string
-          ig_user_id: string
-          last_attempt_at: string | null
-          last_error: string | null
-          last_error_at: string | null
-          last_success_at: string | null
-          next_sync_at: string | null
-          permissions: string[]
-          profile_id: string
-          status: string
-          token_expires_at: string | null
-          token_obtained_at: string | null
-          token_refreshed_at: string | null
-          updated_at: string
-          username: string | null
-        }
-        Insert: {
-          account_type?: string | null
-          app_scoped_id?: string | null
-          connected_at?: string | null
-          connected_by?: string | null
-          disconnected_at?: string | null
-          failures?: number
-          id?: string
-          ig_user_id: string
-          last_attempt_at?: string | null
-          last_error?: string | null
-          last_error_at?: string | null
-          last_success_at?: string | null
-          next_sync_at?: string | null
-          permissions?: string[]
-          profile_id: string
-          status?: string
-          token_expires_at?: string | null
-          token_obtained_at?: string | null
-          token_refreshed_at?: string | null
-          updated_at?: string
-          username?: string | null
-        }
-        Update: {
-          account_type?: string | null
-          app_scoped_id?: string | null
-          connected_at?: string | null
-          connected_by?: string | null
-          disconnected_at?: string | null
-          failures?: number
-          id?: string
-          ig_user_id?: string
-          last_attempt_at?: string | null
-          last_error?: string | null
-          last_error_at?: string | null
-          last_success_at?: string | null
-          next_sync_at?: string | null
-          permissions?: string[]
-          profile_id?: string
-          status?: string
-          token_expires_at?: string | null
-          token_obtained_at?: string | null
-          token_refreshed_at?: string | null
-          updated_at?: string
-          username?: string | null
-        }
-        Relationships: []
-      }
-      neosmm_ig_oauth_states: {
-        Row: {
-          created_at: string
-          expires_at: string
-          owner_id: string
-          profile_id: string
-          state_hash: string
-          used_at: string | null
-        }
-        Insert: {
-          created_at?: string
-          expires_at: string
-          owner_id: string
-          profile_id: string
-          state_hash: string
-          used_at?: string | null
-        }
-        Update: {
-          created_at?: string
-          expires_at?: string
-          owner_id?: string
-          profile_id?: string
-          state_hash?: string
-          used_at?: string | null
-        }
-        Relationships: []
-      }
-      neosmm_orders: {
-        Row: {
-          completed_at: string | null
-          error_kind: string | null
-          part_index: number | null
-          plan_id: string | null
-          profile_id: string | null
-          provider_error: string | null
-          queue_key: string | null
-          refill_checked_at: string | null
-          refill_error: string | null
-          refill_policy: Json | null
-          refill_requested_at: string | null
-          target_key: string | null
-          accepted_at: string | null
-          can_cancel: boolean
-          can_refill: boolean
-          cancel_requested_at: string | null
-          charge: string | null
-          checked_at: string | null
-          code: string | null
-          created_at: string
-          currency: string
-          error: string | null
-          estimate: string | null
-          id: string
-          item_category: string | null
-          item_id: number
-          item_name: string
-          item_type: string | null
-          kind: string
-          owner_id: string
-          params: Json
-          price: string
-          price_unit: number | null
-          provider: string
-          provider_order_id: number | null
-          quantity: number | null
-          refill_id: number | null
-          refill_status: string | null
-          remains: string | null
-          start_count: string | null
-          state: string
-          status: string | null
-          submitted_at: string | null
-          target: string
-          updated_at: string
-        }
-        Insert: {
-          completed_at?: string | null
-          error_kind?: string | null
-          part_index?: number | null
-          plan_id?: string | null
-          profile_id?: string | null
-          provider_error?: string | null
-          queue_key?: string | null
-          refill_checked_at?: string | null
-          refill_error?: string | null
-          refill_policy?: Json | null
-          refill_requested_at?: string | null
-          target_key?: string | null
-          accepted_at?: string | null
-          can_cancel?: boolean
-          can_refill?: boolean
-          cancel_requested_at?: string | null
-          charge?: string | null
-          checked_at?: string | null
-          code?: string | null
-          created_at?: string
-          currency?: string
-          error?: string | null
-          estimate?: string | null
-          id: string
-          item_category?: string | null
-          item_id: number
-          item_name: string
-          item_type?: string | null
-          kind: string
-          owner_id: string
-          params?: Json
-          price: string
-          price_unit?: number | null
-          provider?: string
-          provider_order_id?: number | null
-          quantity?: number | null
-          refill_id?: number | null
-          refill_status?: string | null
-          remains?: string | null
-          start_count?: string | null
-          state?: string
-          status?: string | null
-          submitted_at?: string | null
-          target: string
-          updated_at?: string
-        }
-        Update: {
-          completed_at?: string | null
-          error_kind?: string | null
-          part_index?: number | null
-          plan_id?: string | null
-          profile_id?: string | null
-          provider_error?: string | null
-          queue_key?: string | null
-          refill_checked_at?: string | null
-          refill_error?: string | null
-          refill_policy?: Json | null
-          refill_requested_at?: string | null
-          target_key?: string | null
-          accepted_at?: string | null
-          can_cancel?: boolean
-          can_refill?: boolean
-          cancel_requested_at?: string | null
-          charge?: string | null
-          checked_at?: string | null
-          code?: string | null
-          created_at?: string
-          currency?: string
-          error?: string | null
-          estimate?: string | null
-          id?: string
-          item_category?: string | null
-          item_id?: number
-          item_name?: string
-          item_type?: string | null
-          kind?: string
-          owner_id?: string
-          params?: Json
-          price?: string
-          price_unit?: number | null
-          provider?: string
-          provider_order_id?: number | null
-          quantity?: number | null
-          refill_id?: number | null
-          refill_status?: string | null
-          remains?: string | null
-          start_count?: string | null
-          state?: string
-          status?: string | null
-          submitted_at?: string | null
-          target?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "neosmm_orders_owner_id_fkey"
-            columns: ["owner_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      neosmm_plan_parts: {
-        Row: {
-          billed: number
-          dispatched_at: string | null
-          due_at: string
-          estimate: string
-          lease_until: string | null
-          note: string | null
-          retry_count: number
-          order_id: string
-          part_index: number
-          plan_id: string
-          planned_at: string
-          quantity: number
-          state: string
-          updated_at: string
-        }
-        Insert: {
-          billed: number
-          dispatched_at?: string | null
-          due_at: string
-          estimate: string
-          lease_until?: string | null
-          note?: string | null
-          retry_count?: number
-          order_id: string
-          part_index: number
-          plan_id: string
-          planned_at: string
-          quantity: number
-          state?: string
-          updated_at?: string
-        }
-        Update: {
-          billed?: number
-          dispatched_at?: string | null
-          due_at?: string
-          estimate?: string
-          lease_until?: string | null
-          note?: string | null
-          retry_count?: number
-          order_id?: string
-          part_index?: number
-          plan_id?: string
-          planned_at?: string
-          quantity?: number
-          state?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      neosmm_plans: {
-        Row: {
-          can_cancel: boolean
-          can_refill: boolean
-          created_at: string
-          currency: string
-          estimate: string
-          id: string
-          origin: string
-          owner_id: string
-          params: Json
-          part_count: number
-          pause_reason: string | null
-          paused_at: string | null
-          price: string
-          price_unit: number
-          profile_id: string | null
-          provider: string
-          queue_key: string
-          refill_policy: Json | null
-          service_category: string | null
-          service_id: number
-          service_name: string
-          service_type: string | null
-          spacing_seconds: number
-          start_at: string
-          status: string
-          target: string
-          target_key: string
-          total_quantity: number
-          updated_at: string
-          window_seconds: number
-        }
-        Insert: {
-          can_cancel?: boolean
-          can_refill?: boolean
-          created_at?: string
-          currency?: string
-          estimate: string
-          id: string
-          origin: string
-          owner_id: string
-          params?: Json
-          part_count: number
-          pause_reason?: string | null
-          paused_at?: string | null
-          price: string
-          price_unit: number
-          profile_id?: string | null
-          provider?: string
-          queue_key: string
-          refill_policy?: Json | null
-          service_category?: string | null
-          service_id: number
-          service_name: string
-          service_type?: string | null
-          spacing_seconds: number
-          start_at: string
-          status?: string
-          target: string
-          target_key: string
-          total_quantity: number
-          updated_at?: string
-          window_seconds: number
-        }
-        Update: {
-          can_cancel?: boolean
-          can_refill?: boolean
-          created_at?: string
-          currency?: string
-          estimate?: string
-          id?: string
-          origin?: string
-          owner_id?: string
-          params?: Json
-          part_count?: number
-          pause_reason?: string | null
-          paused_at?: string | null
-          price?: string
-          price_unit?: number
-          profile_id?: string | null
-          provider?: string
-          queue_key?: string
-          refill_policy?: Json | null
-          service_category?: string | null
-          service_id?: number
-          service_name?: string
-          service_type?: string | null
-          spacing_seconds?: number
-          start_at?: string
-          status?: string
-          target?: string
-          target_key?: string
-          total_quantity?: number
-          updated_at?: string
-          window_seconds?: number
-        }
-        Relationships: []
-      }
-      neosmm_profile_observations: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          display_name: string | null
-          followers: number | null
-          following: number | null
-          id: string
-          media_count: number | null
-          note: string | null
-          observed_at: string
-          origin: string
-          profile_id: string
-          source: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          display_name?: string | null
-          followers?: number | null
-          following?: number | null
-          id?: string
-          media_count?: number | null
-          note?: string | null
-          observed_at: string
-          origin: string
-          profile_id: string
-          source: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          display_name?: string | null
-          followers?: number | null
-          following?: number | null
-          id?: string
-          media_count?: number | null
-          note?: string | null
-          observed_at?: string
-          origin?: string
-          profile_id?: string
-          source?: string
-        }
-        Relationships: []
-      }
-      neosmm_profiles: {
-        Row: {
-          avatar_url: string | null
-          created_at: string
-          created_by: string
-          display_name: string | null
-          display_name_source: string | null
-          id: string
-          ig_user_id: string | null
-          platform: string
-          updated_at: string
-          username: string
-        }
-        Insert: {
-          avatar_url?: string | null
-          created_at?: string
-          created_by: string
-          display_name?: string | null
-          display_name_source?: string | null
-          id?: string
-          ig_user_id?: string | null
-          platform?: string
-          updated_at?: string
-          username: string
-        }
-        Update: {
-          avatar_url?: string | null
-          created_at?: string
-          created_by?: string
-          display_name?: string | null
-          display_name_source?: string | null
-          id?: string
-          ig_user_id?: string | null
-          platform?: string
-          updated_at?: string
-          username?: string
-        }
-        Relationships: []
-      }
-      neosmm_queue: {
-        Row: {
-          acquired_at: string
-          hold: string
-          order_id: string
-          part_index: number | null
-          plan_id: string | null
-          queue_key: string
-          updated_at: string
-        }
-        Insert: {
-          acquired_at?: string
-          hold: string
-          order_id: string
-          part_index?: number | null
-          plan_id?: string | null
-          queue_key: string
-          updated_at?: string
-        }
-        Update: {
-          acquired_at?: string
-          hold?: string
-          order_id?: string
-          part_index?: number | null
-          plan_id?: string | null
-          queue_key?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      neosmm_recent_targets: {
-        Row: {
-          hidden_at: string | null
-          kind: string
-          last_used_at: string
-          platform: string
-          profile_id: string | null
-          target: string
-          target_key: string
-          use_count: number
-          username: string | null
-        }
-        Insert: {
-          hidden_at?: string | null
-          kind: string
-          last_used_at?: string
-          platform: string
-          profile_id?: string | null
-          target: string
-          target_key: string
-          use_count?: number
-          username?: string | null
-        }
-        Update: {
-          hidden_at?: string | null
-          kind?: string
-          last_used_at?: string
-          platform?: string
-          profile_id?: string | null
-          target?: string
-          target_key?: string
-          use_count?: number
-          username?: string | null
-        }
-        Relationships: []
-      }
-      neosmm_service_health: {
-        Row: {
-          blocked_at: string | null
-          blocked_order: string | null
-          blocked_reason: string | null
-          cleared_at: string | null
-          cleared_by: string | null
-          disabled_at: string | null
-          disabled_by: string | null
-          last_accepted_at: string | null
-          last_accepted_order: string | null
-          last_completed_at: string | null
-          last_completed_order: string | null
-          last_seen_at: string | null
-          missing_since: string | null
-          provider: string
-          refill_basis: string | null
-          refill_days: number | null
-          refill_starts: string | null
-          refill_verified_at: string | null
-          refill_verified_by: string | null
-          service_category: string | null
-          service_id: number
-          service_name: string | null
-          updated_at: string
-        }
-        Insert: {
-          blocked_at?: string | null
-          blocked_order?: string | null
-          blocked_reason?: string | null
-          cleared_at?: string | null
-          cleared_by?: string | null
-          disabled_at?: string | null
-          disabled_by?: string | null
-          last_accepted_at?: string | null
-          last_accepted_order?: string | null
-          last_completed_at?: string | null
-          last_completed_order?: string | null
-          last_seen_at?: string | null
-          missing_since?: string | null
-          provider?: string
-          refill_basis?: string | null
-          refill_days?: number | null
-          refill_starts?: string | null
-          refill_verified_at?: string | null
-          refill_verified_by?: string | null
-          service_category?: string | null
-          service_id: number
-          service_name?: string | null
-          updated_at?: string
-        }
-        Update: {
-          blocked_at?: string | null
-          blocked_order?: string | null
-          blocked_reason?: string | null
-          cleared_at?: string | null
-          cleared_by?: string | null
-          disabled_at?: string | null
-          disabled_by?: string | null
-          last_accepted_at?: string | null
-          last_accepted_order?: string | null
-          last_completed_at?: string | null
-          last_completed_order?: string | null
-          last_seen_at?: string | null
-          missing_since?: string | null
-          provider?: string
-          refill_basis?: string | null
-          refill_days?: number | null
-          refill_starts?: string | null
-          refill_verified_at?: string | null
-          refill_verified_by?: string | null
-          service_category?: string | null
-          service_id?: number
-          service_name?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      neosmm_worker_tokens: {
-        Row: {
-          expires_at: string
-          token_hash: string
-        }
-        Insert: {
-          expires_at: string
-          token_hash: string
-        }
-        Update: {
-          expires_at?: string
-          token_hash?: string
-        }
-        Relationships: []
-      }
       meta_assets: {
         Row: {
           asset_type: Database["public"]["Enums"]["meta_asset_type"]
@@ -4760,6 +4865,799 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      neosmm_catalog_cache: {
+        Row: {
+          data: Json
+          fetched_at: string
+          kind: string
+          owner_id: string
+        }
+        Insert: {
+          data: Json
+          fetched_at?: string
+          kind: string
+          owner_id: string
+        }
+        Update: {
+          data?: Json
+          fetched_at?: string
+          kind?: string
+          owner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neosmm_catalog_cache_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neosmm_ig_connections: {
+        Row: {
+          account_type: string | null
+          app_scoped_id: string | null
+          connected_at: string | null
+          connected_by: string | null
+          disconnected_at: string | null
+          failures: number
+          id: string
+          ig_user_id: string
+          last_attempt_at: string | null
+          last_error: string | null
+          last_error_at: string | null
+          last_success_at: string | null
+          next_sync_at: string | null
+          permissions: string[]
+          profile_id: string
+          status: string
+          token_expires_at: string | null
+          token_obtained_at: string | null
+          token_refreshed_at: string | null
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          account_type?: string | null
+          app_scoped_id?: string | null
+          connected_at?: string | null
+          connected_by?: string | null
+          disconnected_at?: string | null
+          failures?: number
+          id?: string
+          ig_user_id: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          last_error_at?: string | null
+          last_success_at?: string | null
+          next_sync_at?: string | null
+          permissions?: string[]
+          profile_id: string
+          status?: string
+          token_expires_at?: string | null
+          token_obtained_at?: string | null
+          token_refreshed_at?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          account_type?: string | null
+          app_scoped_id?: string | null
+          connected_at?: string | null
+          connected_by?: string | null
+          disconnected_at?: string | null
+          failures?: number
+          id?: string
+          ig_user_id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          last_error_at?: string | null
+          last_success_at?: string | null
+          next_sync_at?: string | null
+          permissions?: string[]
+          profile_id?: string
+          status?: string
+          token_expires_at?: string | null
+          token_obtained_at?: string | null
+          token_refreshed_at?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neosmm_ig_connections_connected_by_fkey"
+            columns: ["connected_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neosmm_ig_connections_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "neosmm_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neosmm_ig_oauth_states: {
+        Row: {
+          created_at: string
+          expires_at: string
+          owner_id: string
+          profile_id: string
+          state_hash: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          owner_id: string
+          profile_id: string
+          state_hash: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          owner_id?: string
+          profile_id?: string
+          state_hash?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neosmm_ig_oauth_states_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neosmm_ig_oauth_states_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "neosmm_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neosmm_orders: {
+        Row: {
+          accepted_at: string | null
+          can_cancel: boolean
+          can_refill: boolean
+          cancel_requested_at: string | null
+          charge: string | null
+          checked_at: string | null
+          code: string | null
+          completed_at: string | null
+          created_at: string
+          currency: string
+          error: string | null
+          error_kind: string | null
+          estimate: string | null
+          id: string
+          item_category: string | null
+          item_id: number
+          item_name: string
+          item_type: string | null
+          kind: string
+          owner_id: string
+          params: Json
+          part_index: number | null
+          plan_id: string | null
+          price: string
+          price_unit: number | null
+          profile_id: string | null
+          provider: string
+          provider_error: string | null
+          provider_order_id: number | null
+          quantity: number | null
+          queue_key: string | null
+          refill_checked_at: string | null
+          refill_error: string | null
+          refill_id: number | null
+          refill_policy: Json | null
+          refill_requested_at: string | null
+          refill_status: string | null
+          remains: string | null
+          start_count: string | null
+          state: string
+          status: string | null
+          submitted_at: string | null
+          target: string
+          target_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          can_cancel?: boolean
+          can_refill?: boolean
+          cancel_requested_at?: string | null
+          charge?: string | null
+          checked_at?: string | null
+          code?: string | null
+          completed_at?: string | null
+          created_at?: string
+          currency?: string
+          error?: string | null
+          error_kind?: string | null
+          estimate?: string | null
+          id: string
+          item_category?: string | null
+          item_id: number
+          item_name: string
+          item_type?: string | null
+          kind: string
+          owner_id: string
+          params?: Json
+          part_index?: number | null
+          plan_id?: string | null
+          price: string
+          price_unit?: number | null
+          profile_id?: string | null
+          provider?: string
+          provider_error?: string | null
+          provider_order_id?: number | null
+          quantity?: number | null
+          queue_key?: string | null
+          refill_checked_at?: string | null
+          refill_error?: string | null
+          refill_id?: number | null
+          refill_policy?: Json | null
+          refill_requested_at?: string | null
+          refill_status?: string | null
+          remains?: string | null
+          start_count?: string | null
+          state?: string
+          status?: string | null
+          submitted_at?: string | null
+          target: string
+          target_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          can_cancel?: boolean
+          can_refill?: boolean
+          cancel_requested_at?: string | null
+          charge?: string | null
+          checked_at?: string | null
+          code?: string | null
+          completed_at?: string | null
+          created_at?: string
+          currency?: string
+          error?: string | null
+          error_kind?: string | null
+          estimate?: string | null
+          id?: string
+          item_category?: string | null
+          item_id?: number
+          item_name?: string
+          item_type?: string | null
+          kind?: string
+          owner_id?: string
+          params?: Json
+          part_index?: number | null
+          plan_id?: string | null
+          price?: string
+          price_unit?: number | null
+          profile_id?: string | null
+          provider?: string
+          provider_error?: string | null
+          provider_order_id?: number | null
+          quantity?: number | null
+          queue_key?: string | null
+          refill_checked_at?: string | null
+          refill_error?: string | null
+          refill_id?: number | null
+          refill_policy?: Json | null
+          refill_requested_at?: string | null
+          refill_status?: string | null
+          remains?: string | null
+          start_count?: string | null
+          state?: string
+          status?: string | null
+          submitted_at?: string | null
+          target?: string
+          target_key?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neosmm_orders_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neosmm_orders_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "neosmm_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neosmm_orders_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "neosmm_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neosmm_plan_parts: {
+        Row: {
+          billed: number
+          dispatched_at: string | null
+          due_at: string
+          estimate: string
+          lease_until: string | null
+          note: string | null
+          order_id: string
+          part_index: number
+          plan_id: string
+          planned_at: string
+          quantity: number
+          retry_count: number
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          billed: number
+          dispatched_at?: string | null
+          due_at: string
+          estimate: string
+          lease_until?: string | null
+          note?: string | null
+          order_id: string
+          part_index: number
+          plan_id: string
+          planned_at: string
+          quantity: number
+          retry_count?: number
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          billed?: number
+          dispatched_at?: string | null
+          due_at?: string
+          estimate?: string
+          lease_until?: string | null
+          note?: string | null
+          order_id?: string
+          part_index?: number
+          plan_id?: string
+          planned_at?: string
+          quantity?: number
+          retry_count?: number
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neosmm_plan_parts_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "neosmm_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neosmm_plans: {
+        Row: {
+          can_cancel: boolean
+          can_refill: boolean
+          created_at: string
+          currency: string
+          estimate: string
+          id: string
+          origin: string
+          owner_id: string
+          params: Json
+          part_count: number
+          pause_reason: string | null
+          paused_at: string | null
+          price: string
+          price_unit: number
+          profile_id: string | null
+          provider: string
+          queue_key: string
+          refill_policy: Json | null
+          service_category: string | null
+          service_id: number
+          service_name: string
+          service_type: string | null
+          spacing_seconds: number
+          start_at: string
+          status: string
+          target: string
+          target_key: string
+          total_quantity: number
+          updated_at: string
+          window_seconds: number
+        }
+        Insert: {
+          can_cancel?: boolean
+          can_refill?: boolean
+          created_at?: string
+          currency?: string
+          estimate: string
+          id: string
+          origin: string
+          owner_id: string
+          params?: Json
+          part_count: number
+          pause_reason?: string | null
+          paused_at?: string | null
+          price: string
+          price_unit: number
+          profile_id?: string | null
+          provider?: string
+          queue_key: string
+          refill_policy?: Json | null
+          service_category?: string | null
+          service_id: number
+          service_name: string
+          service_type?: string | null
+          spacing_seconds: number
+          start_at: string
+          status?: string
+          target: string
+          target_key: string
+          total_quantity: number
+          updated_at?: string
+          window_seconds: number
+        }
+        Update: {
+          can_cancel?: boolean
+          can_refill?: boolean
+          created_at?: string
+          currency?: string
+          estimate?: string
+          id?: string
+          origin?: string
+          owner_id?: string
+          params?: Json
+          part_count?: number
+          pause_reason?: string | null
+          paused_at?: string | null
+          price?: string
+          price_unit?: number
+          profile_id?: string | null
+          provider?: string
+          queue_key?: string
+          refill_policy?: Json | null
+          service_category?: string | null
+          service_id?: number
+          service_name?: string
+          service_type?: string | null
+          spacing_seconds?: number
+          start_at?: string
+          status?: string
+          target?: string
+          target_key?: string
+          total_quantity?: number
+          updated_at?: string
+          window_seconds?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neosmm_plans_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neosmm_plans_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "neosmm_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neosmm_profile_observations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          display_name: string | null
+          followers: number | null
+          following: number | null
+          id: string
+          media_count: number | null
+          note: string | null
+          observed_at: string
+          origin: string
+          profile_id: string
+          source: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          display_name?: string | null
+          followers?: number | null
+          following?: number | null
+          id?: string
+          media_count?: number | null
+          note?: string | null
+          observed_at: string
+          origin: string
+          profile_id: string
+          source: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          display_name?: string | null
+          followers?: number | null
+          following?: number | null
+          id?: string
+          media_count?: number | null
+          note?: string | null
+          observed_at?: string
+          origin?: string
+          profile_id?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neosmm_profile_observations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neosmm_profile_observations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "neosmm_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neosmm_profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          created_by: string
+          display_name: string | null
+          display_name_source: string | null
+          id: string
+          ig_user_id: string | null
+          platform: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          created_by: string
+          display_name?: string | null
+          display_name_source?: string | null
+          id?: string
+          ig_user_id?: string | null
+          platform?: string
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          created_by?: string
+          display_name?: string | null
+          display_name_source?: string | null
+          id?: string
+          ig_user_id?: string | null
+          platform?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neosmm_profiles_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neosmm_queue: {
+        Row: {
+          acquired_at: string
+          hold: string
+          order_id: string
+          part_index: number | null
+          plan_id: string | null
+          queue_key: string
+          updated_at: string
+        }
+        Insert: {
+          acquired_at?: string
+          hold: string
+          order_id: string
+          part_index?: number | null
+          plan_id?: string | null
+          queue_key: string
+          updated_at?: string
+        }
+        Update: {
+          acquired_at?: string
+          hold?: string
+          order_id?: string
+          part_index?: number | null
+          plan_id?: string | null
+          queue_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      neosmm_recent_targets: {
+        Row: {
+          hidden_at: string | null
+          kind: string
+          last_used_at: string
+          platform: string
+          profile_id: string | null
+          target: string
+          target_key: string
+          use_count: number
+          username: string | null
+        }
+        Insert: {
+          hidden_at?: string | null
+          kind: string
+          last_used_at?: string
+          platform: string
+          profile_id?: string | null
+          target: string
+          target_key: string
+          use_count?: number
+          username?: string | null
+        }
+        Update: {
+          hidden_at?: string | null
+          kind?: string
+          last_used_at?: string
+          platform?: string
+          profile_id?: string | null
+          target?: string
+          target_key?: string
+          use_count?: number
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neosmm_recent_targets_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "neosmm_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neosmm_service_health: {
+        Row: {
+          blocked_at: string | null
+          blocked_order: string | null
+          blocked_reason: string | null
+          cleared_at: string | null
+          cleared_by: string | null
+          disabled_at: string | null
+          disabled_by: string | null
+          last_accepted_at: string | null
+          last_accepted_order: string | null
+          last_completed_at: string | null
+          last_completed_order: string | null
+          last_seen_at: string | null
+          missing_since: string | null
+          provider: string
+          refill_basis: string | null
+          refill_days: number | null
+          refill_starts: string | null
+          refill_verified_at: string | null
+          refill_verified_by: string | null
+          service_category: string | null
+          service_id: number
+          service_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          blocked_at?: string | null
+          blocked_order?: string | null
+          blocked_reason?: string | null
+          cleared_at?: string | null
+          cleared_by?: string | null
+          disabled_at?: string | null
+          disabled_by?: string | null
+          last_accepted_at?: string | null
+          last_accepted_order?: string | null
+          last_completed_at?: string | null
+          last_completed_order?: string | null
+          last_seen_at?: string | null
+          missing_since?: string | null
+          provider?: string
+          refill_basis?: string | null
+          refill_days?: number | null
+          refill_starts?: string | null
+          refill_verified_at?: string | null
+          refill_verified_by?: string | null
+          service_category?: string | null
+          service_id: number
+          service_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          blocked_at?: string | null
+          blocked_order?: string | null
+          blocked_reason?: string | null
+          cleared_at?: string | null
+          cleared_by?: string | null
+          disabled_at?: string | null
+          disabled_by?: string | null
+          last_accepted_at?: string | null
+          last_accepted_order?: string | null
+          last_completed_at?: string | null
+          last_completed_order?: string | null
+          last_seen_at?: string | null
+          missing_since?: string | null
+          provider?: string
+          refill_basis?: string | null
+          refill_days?: number | null
+          refill_starts?: string | null
+          refill_verified_at?: string | null
+          refill_verified_by?: string | null
+          service_category?: string | null
+          service_id?: number
+          service_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "neosmm_service_health_cleared_by_fkey"
+            columns: ["cleared_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neosmm_service_health_disabled_by_fkey"
+            columns: ["disabled_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "neosmm_service_health_refill_verified_by_fkey"
+            columns: ["refill_verified_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      neosmm_worker_tokens: {
+        Row: {
+          expires_at: string
+          token_hash: string
+        }
+        Insert: {
+          expires_at: string
+          token_hash: string
+        }
+        Update: {
+          expires_at?: string
+          token_hash?: string
+        }
+        Relationships: []
       }
       notification_deliveries: {
         Row: {
@@ -8539,27 +9437,6 @@ export type Database = {
       }
     }
     Functions: {
-      neosmm_ig_state_consume: { Args: { p_hash: string; p_owner: string }; Returns: string }
-      neosmm_ig_states_sweep: { Args: never; Returns: undefined }
-      neosmm_ig_token_drop: { Args: { p_connection: string }; Returns: undefined }
-      neosmm_ig_token_read: { Args: { p_connection: string }; Returns: string }
-      neosmm_ig_token_save: { Args: { p_connection: string; p_token: string }; Returns: undefined }
-      neosmm_begin_send: { Args: { p_order: string; p_row: Json }; Returns: string }
-      neosmm_claim_parts: {
-        Args: { p_lease_seconds?: number; p_limit: number; p_plan?: string }
-        Returns: { order_id: string; part_index: number; plan_id: string }[]
-      }
-      neosmm_consume_worker_token: { Args: { p_hash: string }; Returns: boolean }
-      neosmm_create_plan: { Args: { p_parts: Json; p_plan: Json }; Returns: string }
-      neosmm_plan_control: { Args: { p_action: string; p_owner_ids: string[]; p_plan: string }; Returns: Json }
-      neosmm_queue_acquire: {
-        Args: { p_hold?: string; p_key: string; p_order: string; p_part?: number; p_plan?: string }
-        Returns: string
-      }
-      neosmm_queue_release: { Args: { p_order: string }; Returns: undefined }
-      neosmm_recover: { Args: never; Returns: number }
-      neosmm_store_services: { Args: { p_items: Json; p_owner: string }; Returns: undefined }
-      neosmm_unclaim_part: { Args: { p_due_at?: string; p_order: string; p_pause_reason?: string }; Returns: undefined }
       acknowledge_task: { Args: { p_task_id: string }; Returns: string }
       add_content_equipment: {
         Args: { p_content_id: string; p_name: string }
@@ -8585,6 +9462,25 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      agent_consume_worker_token: { Args: { p_hash: string }; Returns: boolean }
+      agent_ig_state_consume: {
+        Args: { p_hash: string; p_owner: string }
+        Returns: string
+      }
+      agent_ig_token_drop: {
+        Args: { p_connection: string }
+        Returns: undefined
+      }
+      agent_ig_token_read: { Args: { p_connection: string }; Returns: string }
+      agent_ig_token_save: {
+        Args: { p_connection: string; p_token: string }
+        Returns: undefined
+      }
+      agents_plan: {
+        Args: { p_days?: number; p_profile?: string }
+        Returns: number
+      }
+      agents_resume: { Args: { p_profile: string }; Returns: number }
       apply_billing_event: {
         Args: {
           p_event_id: string
@@ -8754,6 +9650,7 @@ export type Database = {
           uploaded_at: string | null
           uploaded_by: string | null
           visibility: Database["public"]["Enums"]["visibility_level"]
+          waveform: number[] | null
           width: number | null
         }
         SetofOptions: {
@@ -8836,6 +9733,7 @@ export type Database = {
           uploaded_at: string | null
           uploaded_by: string | null
           visibility: Database["public"]["Enums"]["visibility_level"]
+          waveform: number[] | null
           width: number | null
         }
         SetofOptions: {
@@ -9182,17 +10080,17 @@ export type Database = {
         Args: never
         Returns: {
           assigned_at: string
-          assigned_by_name: string | null
+          assigned_by_name: string
           assignees: Json
           checklist: Json
-          client_name: string | null
-          description: string | null
-          due_at: string | null
+          client_name: string
+          description: string
+          due_at: string
           files_count: number
-          instructions: string | null
+          instructions: string
           priority: Database["public"]["Enums"]["priority_level"]
-          stage: string | null
-          starts_at: string | null
+          stage: string
+          starts_at: string
           status: Database["public"]["Enums"]["task_status"]
           task_id: string
           task_type: Database["public"]["Enums"]["task_type"]
@@ -9360,6 +10258,64 @@ export type Database = {
         Args: { p_owner_id: string; p_owner_kind: string; p_token: string }
         Returns: undefined
       }
+      neosmm_begin_send: {
+        Args: { p_order: string; p_row: Json }
+        Returns: string
+      }
+      neosmm_claim_parts: {
+        Args: { p_lease_seconds?: number; p_limit: number; p_plan?: string }
+        Returns: {
+          order_id: string
+          part_index: number
+          plan_id: string
+        }[]
+      }
+      neosmm_consume_worker_token: {
+        Args: { p_hash: string }
+        Returns: boolean
+      }
+      neosmm_create_plan: {
+        Args: { p_parts: Json; p_plan: Json }
+        Returns: string
+      }
+      neosmm_ig_state_consume: {
+        Args: { p_hash: string; p_owner: string }
+        Returns: string
+      }
+      neosmm_ig_states_sweep: { Args: never; Returns: undefined }
+      neosmm_ig_token_drop: {
+        Args: { p_connection: string }
+        Returns: undefined
+      }
+      neosmm_ig_token_read: { Args: { p_connection: string }; Returns: string }
+      neosmm_ig_token_save: {
+        Args: { p_connection: string; p_token: string }
+        Returns: undefined
+      }
+      neosmm_plan_control: {
+        Args: { p_action: string; p_owner_ids: string[]; p_plan: string }
+        Returns: Json
+      }
+      neosmm_queue_acquire: {
+        Args: {
+          p_hold?: string
+          p_key: string
+          p_order: string
+          p_part?: number
+          p_plan?: string
+        }
+        Returns: string
+      }
+      neosmm_queue_release: { Args: { p_order: string }; Returns: undefined }
+      neosmm_recover: { Args: never; Returns: number }
+      neosmm_store_services: {
+        Args: { p_items: Json; p_owner: string }
+        Returns: undefined
+      }
+      neosmm_unclaim_part: {
+        Args: { p_due_at?: string; p_order: string; p_pause_reason?: string }
+        Returns: undefined
+      }
       open_direct_chat: { Args: { p_user_id: string }; Returns: string }
       open_notification: { Args: { p_id: string }; Returns: Json }
       preview_crm_report: {
@@ -9458,6 +10414,7 @@ export type Database = {
           uploaded_at: string | null
           uploaded_by: string | null
           visibility: Database["public"]["Enums"]["visibility_level"]
+          waveform: number[] | null
           width: number | null
         }
         SetofOptions: {
@@ -9787,6 +10744,7 @@ export type Database = {
       }
       site_apply: {
         Args: {
+          p_attribution?: Json
           p_brand: string
           p_budget_amount: number
           p_budget_label: string
@@ -9795,7 +10753,6 @@ export type Database = {
           p_instagram: string
           p_last_name: string
           p_phone: string
-          p_attribution?: Json
           p_source_path: string
           p_telegram: string
           p_user_agent: string

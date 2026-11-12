@@ -83,7 +83,7 @@ export function classify(status: number, body: unknown, headers: Headers): IgErr
 
 type Fetch = typeof fetch;
 
-async function call(fetchImpl: Fetch, url: string, init?: RequestInit): Promise<IgResult<Record<string, unknown>>> {
+export async function call(fetchImpl: Fetch, url: string, init?: RequestInit): Promise<IgResult<Record<string, unknown>>> {
   let res: Response;
   try {
     res = await fetchImpl(url, { ...init, cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(15_000) });

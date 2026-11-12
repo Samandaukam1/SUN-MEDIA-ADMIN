@@ -60,6 +60,19 @@ const SECTIONS: NavSection[] = [
     pages: [{ href: '/tahlil', label: 'Yangi mijozlar', permission: 'prospects.manage' }],
   },
   {
+    key: 'agents',
+    label: 'Agents',
+    icon: 'sparkles',
+    permission: 'agents.manage',
+    pages: [
+      { href: '/agents', label: 'Bosh', permission: 'agents.manage' },
+      { href: '/agents/profillar', label: 'Profillar', permission: 'agents.manage' },
+      { href: '/agents/tasdiqlash', label: 'Tasdiqlash', permission: 'agents.manage' },
+      { href: '/agents/taqvim', label: 'Taqvim', permission: 'agents.manage' },
+      { href: '/agents/sozlamalar', label: 'Sozlamalar', permission: 'agents.manage' },
+    ],
+  },
+  {
     key: 'team',
     label: 'Jamoa',
     icon: 'users',

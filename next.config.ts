@@ -61,6 +61,8 @@ const nextConfig: NextConfig = {
   // Logo uploads (≤ 2 MB) go through a server action.
   experimental: { serverActions: { bodySizeLimit: '3mb' } },
   images: { remotePatterns: storagePattern, formats: ['image/avif', 'image/webp'] },
+  // Agents rasm shablonlari shriftlarni diskdan o'qiydi (Vercel funksiyasiga qo'shilsin).
+  outputFileTracingIncludes: { '/agents/**': ['./lib/agents/fonts/**'], '/api/agents/**': ['./lib/agents/fonts/**'] },
   async headers() {
     return [
       { source: '/:path*', headers: securityHeaders },

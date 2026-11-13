@@ -1,13 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Mood } from '@/lib/assistant/voice-profile';
 
 import { firstSentence, speakable, speechChunks } from '@/lib/assistant/speech';
 
 export type VoiceLang = 'uz-UZ' | 'ru-RU' | 'en-US';
 /** Same voice, another manner: 'qitmir' is a little more playful (prosody only, see /api/assistant/tts). */
 /** How the same voice sounds: Qitmir, or Sunny's mood (bright, soft) and professional mode (steady). */
-export type VoiceStyle = 'qitmir' | 'bright' | 'soft' | 'steady';
+/** The voice's manner: an older widget style or (Sunny 3.0) the reply's mood — SSML prosody on the server. */
+export type VoiceStyle = 'qitmir' | 'bright' | 'soft' | 'steady' | Mood;
 
 /** Why the voice could not do what was asked. */
 export type VoiceIssue = 'mic-denied' | 'mic-missing' | 'stt-unavailable' | 'no-speech' | 'stt-failed' | 'voice-missing' | 'tap-to-play';
@@ -52,9 +54,13 @@ const appleWebKit = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (/Safari
 const canRecord = () => typeof window !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && !!(window.AudioContext ?? (window as unknown as { webkitAudioContext?: unknown }).webkitAudioContext);
 /** Compressed recording where the browser has one: Opus (Chrome, Firefox) or AAC (Safari), ~10× smaller than WAV. */
 const recorderMime = () => ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm'].find((m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported?.(m));
+/** How long each recording ran (ms): sent with it, so the server counts recognition minutes against the free quota. */
+const recordedMs = new WeakMap<Blob, number>();
 function startRecorder(stream: MediaStream): { stop: () => Promise<Blob | null> } | null {
   const mime = recorderMime();
   if (!mime) return null;
+  const t0 = performance.now();
+  const timed = (b: Blob | null) => (b && recordedMs.set(b, Math.round(performance.now() - t0)), b);
   try {
     const recorder = new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 24000 });
     const parts: Blob[] = [];
@@ -63,8 +69,8 @@ function startRecorder(stream: MediaStream): { stop: () => Promise<Blob | null> 
     return {
       stop: () =>
         new Promise((resolve) => {
-          if (recorder.state === 'inactive') return resolve(parts.length ? new Blob(parts, { type: mime.split(';')[0] }) : null);
-          recorder.onstop = () => resolve(parts.length ? new Blob(parts, { type: (recorder.mimeType || mime).split(';')[0] }) : null);
+          if (recorder.state === 'inactive') return resolve(timed(parts.length ? new Blob(parts, { type: mime.split(';')[0] }) : null));
+          recorder.onstop = () => resolve(timed(parts.length ? new Blob(parts, { type: (recorder.mimeType || mime).split(';')[0] }) : null));
           try {
             recorder.stop();
           } catch {
@@ -203,7 +209,8 @@ type Session = {
   noServer: boolean;
 };
 /** What the visitor's spoken reply sounds like, sentence by sentence, while it is still being written. */
-export type SpeechHandle = { update: (text: string) => void; finish: (text: string) => Promise<boolean>; cancel: () => void };
+/** `finish(text, mood)`: the rest of the reply is read in the reply's mood (the first sentence may already be playing). */
+export type SpeechHandle = { update: (text: string) => void; finish: (text: string, mood?: VoiceStyle) => Promise<boolean>; cancel: () => void };
 
 /**
  * Sunny's ears and voice.
@@ -506,7 +513,7 @@ export function useVoice() {
         u.voice = voice;
         u.lang = voice.lang;
         // The same system voice, its prosody following the style (Qitmir and a good mood brighter, a low mood softer).
-        const prosody = { qitmir: [1.12, 1.06], bright: [1.08, 1.04], soft: [0.94, 0.95], steady: [1, 1] }[s.style ?? 'steady'];
+        const prosody = ({ qitmir: [1.12, 1.06], mischievous: [1.12, 1.06], sarcastic: [1.06, 0.98], bright: [1.08, 1.04], happy: [1.08, 1.04], excited: [1.12, 1.08], proud: [1.05, 1], soft: [0.94, 0.95], sleepy: [0.92, 0.88], sad: [0.93, 0.92], thinking: [0.98, 0.94] } as Record<string, number[]>)[s.style ?? 'steady'] ?? [1, 1];
         if (s.style) {
           u.pitch = prosody[0];
           u.rate = prosody[1];
@@ -616,8 +623,9 @@ export function useVoice() {
             enqueue(s, first);
           }
         },
-        finish(text) {
+        finish(text, mood) {
           if (s.dead) return Promise.resolve(false);
+          if (mood) s.style = mood;
           const rest = !s.sentText ? text : text.startsWith(s.sentText) ? text.slice(s.sentText.length) : '';
           for (const chunk of speechChunks(rest)) enqueue(s, chunk);
           s.finished = true;
@@ -751,7 +759,7 @@ export function useVoice() {
       const ctl = new AbortController();
       stopListen.current = () => ctl.abort();
       try {
-        const res = await fetch(`/api/assistant/stt?lang=${lang}`, { method: 'POST', headers: { 'content-type': recording.type || 'audio/wav' }, body: recording, signal: ctl.signal });
+        const res = await fetch(`/api/assistant/stt?lang=${lang}`, { method: 'POST', headers: { 'content-type': recording.type || 'audio/wav', 'x-audio-ms': String(recordedMs.get(recording) ?? '') }, body: recording, signal: ctl.signal });
         if (token !== listenToken.current) return '';
         if (res.status === 204) {
           setIssue('stt-unavailable');

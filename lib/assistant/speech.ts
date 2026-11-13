@@ -108,7 +108,49 @@ const UZ_SAYS: [RegExp, string][] = [
   [/\bYouTube\b/gi, 'yutub'],
   [/\bva h\.k\./gi, 'va hokazo'],
   [/\bva b\./gi, 'va boshqalar'],
+  [/\bKPI\b/g, 'ka-pi-ay'],
+  [/\bSEO\b/g, 'es-i-o'],
+  [/\bSMS\b/g, 'es-em-es'],
+  [/\bPDF\b/g, 'pi-di-ef'],
+  [/\bZIP\b/g, 'zip'],
+  [/\bPNG\b/g, 'pi-en-ji'],
+  [/\bOK\b/g, 'okey'],
+  [/\bTikTok\b/gi, 'tik-tok'],
+  [/\bStories\b/g, 'storis'],
+  [/\b[Ss]tory\b/g, 'stori'],
+  [/№\s?/g, 'raqam '],
+  // Formal written phrasing → how people say it (speech only; the screen keeps the written form).
+  [/\bamalga oshirildi\b/gi, 'bajarildi'],
+  [/\bamalga oshiriladi\b/gi, 'bajariladi'],
+  [/\bmavjud emas\b/gi, 'yo‘q'],
 ];
+
+/** 2026-11-13 → 13.11.2026 (read as a date below). */
+const isoDates = (t: string) => t.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_, y, m, d) => `${Number(d)}.${Number(m)}.${y}`);
+/** sunmediagroup.uz → "sunmediagroup nuqta uz" (a bare domain is said, not spelled). */
+const domains = (t: string) => t.replace(/\b([a-z0-9-]{2,})\.(uz|com|ru|org|net|io)\b/gi, (_, name: string, tld: string) => `${name.replace(/-/g, ' ')} nuqta ${tld.toLowerCase()}`);
+
+export type Pronunciation = { word: string; say_as: string };
+
+/**
+ * The owner's pronunciation fixes, whole words, case-insensitive, longest first (so "SUN MEDIA GROUP" wins over
+ * "SUN MEDIA"). Applied to what the voice reads only.
+ */
+export function applyLexicon(text: string, lexicon: Pronunciation[]): string {
+  let t = text;
+  for (const { word, say_as } of [...lexicon].sort((a, b) => b.word.length - a.word.length)) {
+    const w = word.trim();
+    if (!w || !say_as.trim()) continue;
+    const re = new RegExp(`(?<![\\p{L}\\d])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\d])`, 'giu');
+    t = t.replace(re, say_as.trim());
+  }
+  return t;
+}
+
+/** What Sunny's Uzbek voice reads: the owner's fixes first, then dates, domains, numbers and terms (see speakable). */
+export function spokenText(text: string, lang: SpeechLang = 'uz-UZ', lexicon: Pronunciation[] = []): string {
+  return speakable(domains(isoDates(applyLexicon(text, lexicon))), lang);
+}
 
 /**
  * What the voice reads: links become their label, URLs and markdown disappear, emoji are dropped, and in Uzbek Latin

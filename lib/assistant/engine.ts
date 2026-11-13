@@ -3,6 +3,9 @@ import 'server-only';
 import { AiFailedError, AiNotConfiguredError } from '@/lib/ai';
 import { BUDGET_SPENT, budgetGate, recordReply, recordUsage, sunnySettings } from './budget';
 import { compactHistory, greetingReply, roughTokens, routeModel } from './sunny';
+import { isRepeat, replyMood } from './mood';
+import type { Mood } from './voice-profile';
+import { voiceConfig } from './voice-server';
 import { toolsFor } from './tools';
 import type { ModelUsage } from './gemini';
 import { memoryCandidate, suggestionLine } from './suggest';
@@ -108,7 +111,7 @@ function nextDays(): string {
 
 const REPLY_IN = { 'uz-UZ': 'o‘zbek tilida', 'ru-RU': 'rus tilida', 'en-US': 'ingliz tilida' } as const;
 
-async function systemPrompt(ctx: AssistantContext, name: string | null, lastQuestion: string, mode?: AssistantMode, feeling?: Feeling, page?: PageContext, earlier?: string[]): Promise<string> {
+async function systemPrompt(ctx: AssistantContext, name: string | null, lastQuestion: string, mode?: AssistantMode, feeling?: Feeling, page?: PageContext, earlier?: string[], qitmir: { intensity?: number; repeated?: boolean } = {}): Promise<string> {
   const reply = textLanguage(lastQuestion);
   const now = new Date().toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent', dateStyle: 'full', timeStyle: 'short' });
   const role = ctx.audience === 'public' ? SALES : ctx.audience === 'staff' ? STAFF : CLIENT;
@@ -127,7 +130,7 @@ async function systemPrompt(ctx: AssistantContext, name: string | null, lastQues
     style,
     memory,
     // The manner only (Qitmir mode): tools, permissions and confirmations above stay exactly the same.
-    modePrompt(mode),
+    modePrompt(mode, qitmir),
     // Professional mode is serious: no mood in the tone.
     feelingPrompt(mode === 'professional' ? null : feeling),
     pagePrompt(page, seen),
@@ -158,8 +161,15 @@ export async function assistantReply(
     page,
     earlier,
   }: { onText?: (delta: string) => void; onStep?: (e: StepEvent) => void; signal?: AbortSignal; mode?: AssistantMode; feeling?: Feeling; page?: PageContext; earlier?: string[] } = {},
-): Promise<{ reply: string; actions: AssistantAction[] }> {
+): Promise<{ reply: string; actions: AssistantAction[]; mood?: Mood }> {
   const t0 = Date.now();
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tashkent', hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
+  const repeated = isRepeat(history);
+  // The reply's mood from what really happened (no extra AI call): drives the face and the voice's prosody.
+  const moodFor = (reply: string, actions: AssistantAction[]): Mood => {
+    const did = actions.filter((a): a is Extract<AssistantAction, { type: 'did' }> => a.type === 'did');
+    return replyMood({ reply, ok: did.length ? did.every((d) => d.ok) : null, celebrate: did.some((d) => d.ok && d.celebrate), mode: mode ?? null, repeated, hour });
+  };
   let firstMs: number | null = null;
   const userOnText = onText;
   onText = (delta: string) => {
@@ -198,9 +208,9 @@ export async function assistantReply(
     if (!isWrite(tool)) deck = cardsFor(tool, result.content, taskHref, ctx.audience === 'public' ? undefined : actFor(tool, input)) ?? deck;
     return result;
   };
-  const local = async <T>(out: T): Promise<T> => {
+  const local = async (out: { reply: string; actions: AssistantAction[] }) => {
     await recordReply(ctx, { path: 'local', firstMs, totalMs: Date.now() - t0, toolMs: toolCalls ? toolMs : null, toolCalls });
-    return out;
+    return { ...out, mood: moodFor(out.reply, out.actions) };
   };
   // A bare greeting or wake word: Sunny answers at once, no AI call.
   const hello = greetingReply(history[history.length - 1]?.text ?? '', ctx.audience);
@@ -252,7 +262,8 @@ export async function assistantReply(
   const budgetChars = Math.round(cfg.maxInputTokens * 3.6);
   const compact = compactHistory(history, cfg.maxHistory, Math.round(budgetChars * 0.45));
   const thread = [...(earlier ?? []), ...compact.dropped].slice(-12);
-  const [system, saved] = await Promise.all([systemPrompt(ctx, name, lastText, mode, feeling, page, thread), savedNotes(ctx)]);
+  const intensity = mode === 'qitmir' ? (await voiceConfig()).intensity : 2;
+  const [system, saved] = await Promise.all([systemPrompt(ctx, name, lastText, mode, feeling, page, thread, { intensity, repeated }), savedNotes(ctx)]);
   // Still over the request cap with this person's tools: fewer old messages go along.
   const fixed = system.length + JSON.stringify(toolsFor(ctx)).length;
   const sent = roughTokens(fixed + compact.history.reduce((n, m) => n + m.text.length, 0)) > cfg.maxInputTokens ? compactHistory(compact.history, cfg.maxHistory, Math.max(1200, budgetChars - fixed)).history : compact.history;
@@ -303,10 +314,11 @@ export async function assistantReply(
       const card = offer ? proposal(ctx, 'remember', { text: offer.text, ...(offer.replaces ? { replaces: offer.replaces.id } : {}) }, offer.replaces ? `Eslatma yangilanadi: «${offer.text}».` : `Eslab qolinadi: «${offer.text}».`) : null;
       const extra = [ledger, card && offer ? suggestionLine(offer) : ''].filter(Boolean).join('\n\n');
       await record(false);
-      if (!extra) return out;
+      if (!extra) return { ...out, mood: moodFor(out.reply, out.actions) };
       const tail = `${out.reply.trim() ? '\n\n' : ''}${extra}`;
       onText?.(tail);
-      return { ...out, reply: out.reply + tail, actions: card ? [...out.actions, card] : out.actions };
+      const actions = card ? [...out.actions, card] : out.actions;
+      return { ...out, reply: out.reply + tail, actions, mood: moodFor(out.reply, actions) };
     } catch (error) {
       await record(!signal?.aborted);
       failure = error;

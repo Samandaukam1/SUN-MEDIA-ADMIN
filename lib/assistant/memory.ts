@@ -27,7 +27,7 @@ const styleData = unstable_cache(
     try {
       const db = createAdminClient();
       const [dials, examples] = await Promise.all([
-        db.from('assistant_personality').select('humor, mischief, formality, brevity, expressiveness, directness').eq('id', 1).maybeSingle(),
+        db.from('assistant_personality').select('*').eq('id', 1).maybeSingle(),
         db.from('assistant_style_examples').select('situation, answer').order('created_at', { ascending: false }).limit(60),
       ]);
       return { dials: (dials.data as Dials | null) ?? null, examples: examples.data ?? [] };
@@ -36,7 +36,7 @@ const styleData = unstable_cache(
       return { dials: null, examples: [] };
     }
   },
-  ['assistant-style-v2'],
+  ['assistant-style-v3'],
   { revalidate: 300, tags: ['assistant-style'] },
 );
 

@@ -43,5 +43,21 @@ export function feelingPrompt(feeling?: Feeling | null): string {
     : '';
 }
 
-/** The system prompt's mode section ('' for Sunny's usual manner). */
-export const modePrompt = (mode?: AssistantMode | null) => (mode === 'qitmir' ? QITMIR_PERSONA : mode === 'professional' ? PROFESSIONAL_PERSONA : '');
+const INTENSITY = [
+  '',
+  'Qitmirlik darajasi: YENGIL — hazil kamdan-kam va juda yumshoq.',
+  'Qitmirlik darajasi: O‘RTA — har javobda ko‘pi bilan bitta qisqa hazil.',
+  'Qitmirlik darajasi: KUCHLI — o‘ynoqi e’tiroz yoki "jahl qilgandek" qisqa ibora bilan boshlash mumkin, keyin albatta to‘liq va aniq javob.',
+];
+
+/**
+ * The system prompt's mode section ('' for Sunny's usual manner). In Qitmir mode: the owner's intensity (1–3) and,
+ * when the same question came again, one playful protest before the real, complete answer.
+ */
+export function modePrompt(mode?: AssistantMode | null, o: { intensity?: number; repeated?: boolean } = {}): string {
+  if (mode === 'professional') return PROFESSIONAL_PERSONA;
+  if (mode !== 'qitmir') return '';
+  const level = INTENSITY[Math.min(3, Math.max(1, o.intensity ?? 2))];
+  const again = o.repeated ? 'Bu savol hozirgina takrorlandi: boshida bitta qisqa o‘ynoqi e’tiroz ayt (masalan «Yana-ya? Mayli, yana bir bor…»), so‘ng xuddi birinchi marta kabi to‘liq va aniq javob ber.' : '';
+  return [QITMIR_PERSONA, level, again].filter(Boolean).join('\n');
+}

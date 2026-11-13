@@ -8,7 +8,19 @@ import { matches, searchTerms } from './recall';
 
 export type MemoryNote = { scope: 'personal' | 'company' | 'partner'; body: string };
 export type StyleExample = { situation: string; answer: string };
-export type Dials = { humor: number; mischief: number; formality: number; brevity: number; expressiveness: number; directness: number };
+export type Dials = {
+  humor: number;
+  mischief: number;
+  formality: number;
+  brevity: number;
+  expressiveness: number;
+  directness: number;
+  /** Sunny 3.0 (optional until migrated). */
+  sarcasm?: number;
+  phrases?: string;
+  avoid_phrases?: string;
+  reply_length?: 'short' | 'normal' | 'detailed';
+};
 
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 const clean = (s: string) => s.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -64,7 +76,15 @@ export function stylePrompt(dials: Dials | null, examples: StyleExample[]): stri
       word(dials.expressiveness, 'his-tuyg‘uni kam ko‘rsat', 'ifodaliroq gapir'),
       word(dials.directness, 'yumshoqroq ayt', 'to‘g‘ridan-to‘g‘ri ayt'),
     ].filter(Boolean);
+    if (dials.sarcasm !== undefined) {
+      const s = word(dials.sarcasm, 'kinoya qilma', 'yengil kinoya mumkin (faqat qitmir rejimda va hech qachon kamsitmasdan)');
+      if (s) traits.push(s);
+    }
+    if (dials.reply_length === 'detailed') traits.push('kerak bo‘lsa batafsilroq yoz');
+    if (dials.reply_length === 'short') traits.push('javoblar qisqa — 1–3 gap');
     if (traits.length) parts.push(`Egasining sozlamasi: ${traits.join('; ')}.`);
+    if (dials.phrases?.trim()) parts.push(`Egasi yoqtiradigan iboralar (o‘rinli bo‘lsa, ba’zan ishlat, har safar emas): ${clip(clean(dials.phrases), 400)}`);
+    if (dials.avoid_phrases?.trim()) parts.push(`Bu iboralarni ishlatma: ${clip(clean(dials.avoid_phrases), 300)}`);
   }
   if (examples.length) {
     parts.push(

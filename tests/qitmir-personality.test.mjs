@@ -55,7 +55,8 @@ test('nothing rude or scary in the lines', () => {
 test('the Qitmir prompt is added only in Qitmir mode, and keeps every rule about actions', () => {
   assert.equal(modePrompt(undefined), '');
   assert.equal(modePrompt(null), '');
-  assert.equal(modePrompt('qitmir'), QITMIR_PERSONA);
+  assert.ok(modePrompt('qitmir').startsWith(QITMIR_PERSONA), 'the persona, then the owner’s intensity');
+  assert.match(modePrompt('qitmir'), /O‘RTA/);
   // Tone only: actions, confirmations and facts are explicitly unchanged; no jokes on errors.
   assert.match(QITMIR_PERSONA, /tasdiq kerak bo‘lsa tasdiq so‘ra/);
   assert.match(QITMIR_PERSONA, /asbobsiz yoki natijasiz "bajardim" dema/);

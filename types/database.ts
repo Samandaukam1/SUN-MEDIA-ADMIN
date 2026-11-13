@@ -1501,6 +1501,12 @@ export type Database = {
           },
         ]
       }
+      assistant_pronunciations: {
+        Row: { id: string; word: string; say_as: string; note: string | null; created_by: string | null; created_at: string }
+        Insert: { id?: string; word: string; say_as: string; note?: string | null; created_by?: string | null; created_at?: string }
+        Update: { id?: string; word?: string; say_as?: string; note?: string | null; created_by?: string | null; created_at?: string }
+        Relationships: []
+      }
       assistant_personality: {
         Row: {
           brevity: number
@@ -1512,6 +1518,12 @@ export type Database = {
           mischief: number
           updated_at: string
           updated_by: string | null
+          sarcasm: number
+          qitmir_intensity: number
+          phrases: string
+          avoid_phrases: string
+          reply_length: string
+          learn_from_feedback: boolean
         }
         Insert: {
           brevity?: number
@@ -1523,6 +1535,12 @@ export type Database = {
           mischief?: number
           updated_at?: string
           updated_by?: string | null
+          sarcasm?: number
+          qitmir_intensity?: number
+          phrases?: string
+          avoid_phrases?: string
+          reply_length?: string
+          learn_from_feedback?: boolean
         }
         Update: {
           brevity?: number
@@ -1534,6 +1552,12 @@ export type Database = {
           mischief?: number
           updated_at?: string
           updated_by?: string | null
+          sarcasm?: number
+          qitmir_intensity?: number
+          phrases?: string
+          avoid_phrases?: string
+          reply_length?: string
+          learn_from_feedback?: boolean
         }
         Relationships: [
           {
@@ -10485,6 +10509,14 @@ export type Database = {
           p_failed?: boolean
           p_stopped?: boolean
         }
+        Returns: undefined
+      }
+      assistant_voice_month: {
+        Args: Record<PropertyKey, never>
+        Returns: { kind: string; provider: string; requests: number; chars: number; audio_ms: number; cached: number }[]
+      }
+      assistant_voice_record: {
+        Args: { p_kind: string; p_provider: string; p_chars?: number; p_audio_ms?: number; p_cached?: boolean }
         Returns: undefined
       }
       assistant_spend: {

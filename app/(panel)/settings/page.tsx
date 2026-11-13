@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { PageHeader } from '@/components/panel/PageHeader';
@@ -78,7 +79,12 @@ export default async function SettingsPage() {
       </section>
       {owner ? (
         <section className="mt-10 max-w-5xl">
-          <h2 className="text-lg font-semibold tracking-tight">Sunny AI</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold tracking-tight">Sunny AI</h2>
+            <Link href="/settings/sunny" className="text-sm font-medium text-accent hover:underline">
+              Ovoz va uslub studiyasi →
+            </Link>
+          </div>
           <p className="mt-1 mb-4 max-w-2xl text-sm text-muted">
             Sunny OpenAI orqali javob beradi. Faqat AI kerak bo‘lgan savollar hisoblanadi; salomlashish, aniq buyruqlar (vazifalarim, keldim, brifing) va robot harakatlari tekin. Tokenlar va vaqtlar — haqiqiy o‘lchov.
           </p>

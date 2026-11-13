@@ -78,6 +78,11 @@ export async function POST(request: NextRequest) {
   if (rateLimited(`chat:${ipKey}`, limit, 10 * 60_000)) {
     return NextResponse.json({ error: 'Juda ko‘p xabar yubordingiz. Bir necha daqiqadan so‘ng davom etamiz.' }, { status: 429, headers });
   }
+  // One conversation has a ceiling (SUNNY_SESSION_MAX questions): a very long one is cheaper and clearer when restarted.
+  const asked = parsed.data.messages.filter((m) => m.role === 'user').length;
+  if (asked > (Number(process.env.SUNNY_SESSION_MAX) || 120)) {
+    return NextResponse.json({ error: 'Suhbat juda uzun bo‘lib ketdi — yangi suhbat boshlang (eski xabarlar ekranda qoladi).' }, { status: 429, headers });
+  }
   const dup = `${ipKey}:${createHash('sha256').update(`${history.length}|${history[history.length - 1].text}`).digest('hex').slice(0, 24)}`;
   if (!claim(dup)) return NextResponse.json({ error: 'Bu savolga javob hozir tayyorlanmoqda.' }, { status: 409, headers });
   const release = () => inFlight.delete(dup);
@@ -85,7 +90,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.data.stream) {
     try {
       const result = await assistantReply(history, ctx, name, { signal: request.signal, mode: parsed.data.mode, feeling: parsed.data.feeling, page: parsed.data.page, earlier });
-      return NextResponse.json({ ...result, audience: ctx.audience }, { headers });
+      return NextResponse.json({ ...result, audience: ctx.audience, owner: ctx.owner }, { headers });
     } catch (error) {
       const { status, error: message } = failure(error);
       return NextResponse.json({ error: message }, { status, headers });
@@ -115,7 +120,7 @@ export async function POST(request: NextRequest) {
           page: parsed.data.page,
           earlier,
         });
-        send({ t: 'done', ...result, audience: ctx.audience });
+        send({ t: 'done', ...result, audience: ctx.audience, owner: ctx.owner });
       } catch (error) {
         send({ t: 'error', error: failure(error).error });
       } finally {

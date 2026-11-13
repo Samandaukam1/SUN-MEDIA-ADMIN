@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import type { Mood } from '@/lib/assistant/voice-profile';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
@@ -29,8 +30,10 @@ type Action =
   | { type: 'cards'; title: string; items: HoloCard[]; more: number };
 type HoloAct = { label: string; token: string; text: string };
 type HoloCard = { title: string; sub?: string | null; time?: string | null; status?: string | null; warn?: boolean; href?: string | null; act?: HoloAct | null };
+/** Moods that move the 3D face through the emotion engine (its own transitions keep it smooth). */
+const MOOD_FEEL: Partial<Record<Mood, FeelEvent>> = { sad: 'fail', mock_angry: 'angry', annoyed: 'angry', mischievous: 'qitmir', sarcastic: 'qitmir', sleepy: 'sleep', happy: 'happy', excited: 'happy', proud: 'success' };
 type Msg = { role: 'user' | 'assistant'; text: string; actions?: Action[]; error?: boolean; streaming?: boolean; retry?: string };
-type Done = { reply?: string; actions?: Action[] };
+type Done = { reply?: string; actions?: Action[]; mood?: Mood; owner?: boolean };
 type Step = { phase: 'start'; name: string; label: string } | { phase: 'end'; name: string; ok: boolean; write: boolean };
 /** How an action's result reads on its chip: done / not done. */
 const DID: Record<string, [string, string]> = {
@@ -335,6 +338,17 @@ export function SunBotChat({
   const proRef = useRef(professional);
   proRef.current = professional;
   const styleRef = useRef<VoiceStyle | undefined>(undefined);
+  // The system owner's "👍 Shunday gapir": the reply becomes a style example (server checks owner + opt-in).
+  const [owner, setOwner] = useState(false);
+  const [liked, setLiked] = useState<Set<number>>(() => new Set());
+  const likeStyle = useCallback(async (i: number, situation: string, answer: string) => {
+    const res = await fetch('/api/assistant/style', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ situation, answer }) }).catch(() => null);
+    if (res?.ok) setLiked((s) => new Set(s).add(i));
+    else {
+      const data = (await res?.json().catch(() => null)) as { error?: string } | null;
+      if (data?.error) window.alert(data.error);
+    }
+  }, []);
   styleRef.current = voiceStyle(qitmir, professional, feeling);
   const celebrateRef = useRef(onCelebrate);
   celebrateRef.current = onCelebrate;
@@ -520,6 +534,8 @@ export function SunBotChat({
       let streamed = '';
       let shown = false;
       let reply: Msg | null = null;
+      // The reply's mood, decided on the server from what really happened (no AI call): face and voice follow it.
+      let mood: Mood | undefined;
       const show = (t: string) => {
         if (!shown) {
           shown = true;
@@ -598,7 +614,11 @@ export function SunBotChat({
                   setWorking(null);
                   if (ev.write) report(!!ev.ok);
                 }
-              } else if (ev.t === 'done') done = ev;
+              } else if (ev.t === 'done') {
+                done = ev;
+                mood = ev.mood;
+                if (ev.owner) setOwner(true);
+              }
               else if (ev.t === 'error') error = ev.error ?? 'Xatolik yuz berdi.';
             }
           }
@@ -644,12 +664,15 @@ export function SunBotChat({
       if (final.actions?.some((a) => a.type === 'did' && a.ok)) router.refresh();
       // A real accomplishment, confirmed by the system (never before): Sunny celebrates.
       if (final.actions?.some((a) => a.type === 'did' && a.ok && a.celebrate)) celebrateRef.current?.();
+      // Only clear moods move the face (no jumping on every sentence): a refusal, Qitmir's mock frown, a sleepy night.
+      const felt = mood ? MOOD_FEEL[mood] : undefined;
+      if (felt) feelRef.current.onFeel?.(felt);
       if (!speech) return onReplied?.();
       if (!openRef.current && !voiceOnlyRef.current) return speech.cancel();
       // The reply is the streamed bubble already on screen, or the one just added after the last rendered message.
       setSpoken(shown ? msgsRef.current.length - 1 : msgsRef.current.length);
       spokenText.current = streamed || final.text;
-      const spoke = await speech.finish(streamed || final.text);
+      const spoke = await speech.finish(streamed || final.text, mood);
       if (live()) onReplied?.();
       // Conversation mode: a spoken question gets a spoken answer, then Sunny listens again (not after a silent reply:
       // the note about the missing voice stays readable).
@@ -1109,6 +1132,18 @@ export function SunBotChat({
                       </svg>
                     </button>
                   )
+                ) : null}
+                {owner && m.role === 'assistant' && !m.error && !m.streaming && i > 0 && msgs[i - 1]?.role === 'user' ? (
+                  <button
+                    type="button"
+                    className="sb-replay"
+                    disabled={liked.has(i)}
+                    onClick={() => void likeStyle(i, msgs[i - 1].text, m.text)}
+                    aria-label="Shunday gapir — uslubni eslab qol"
+                    title={liked.has(i) ? 'Eslab qolindi' : 'Shunday gapir (uslubni eslab qol)'}
+                  >
+                    {liked.has(i) ? '✓' : '👍'}
+                  </button>
                 ) : null}
                 {m.error && m.retry && online ? (
                   <div className="sb-actions">

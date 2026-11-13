@@ -1,62 +1,70 @@
 import 'server-only';
 
-import { agencyDayRange, agencyDateKey } from '@/lib/time';
+import { agencyDateKey } from '@/lib/time';
 
-import { aiRoutes, usageToday } from './ai';
+import { aiOnline } from './ai';
 import type { Frame } from './core';
-import { agentIgConfig } from './connect';
+import { imagesReady } from './images';
 import { db, loadSettings, signed } from './server';
 
-/** Sahifalar uchun ko'rinishlar: materiallar (profil nomi va kichik rasmlar bilan), holat sanoqlari, ulanishlar. */
+/** Read models for the panel pages: items with client and thumbnails (small JPEGs, signed), counters, jobs, usage. */
 
 export type ItemView = {
   id: string;
   profileId: string;
   profileName: string;
   username: string | null;
-  kind: 'story' | 'post';
+  kind: 'story' | 'carousel' | 'post';
+  slot: number;
   targetDate: string;
   scheduledAt: string;
   status: string;
   title: string;
+  objective: string;
   format: string;
-  provider: string | null;
+  versionNo: number | null;
   thumbs: string[];
+  slides: number;
   lastError: string | null;
   qaPassed: boolean | null;
 };
 
 const SELECT =
-  'id, profile_id, kind, target_date, scheduled_at, status, last_error, profile:agent_profiles!inner(name, instagram_username, status), version:agent_versions!agent_items_current_version_fk(idea, frames, qa, provider)';
+  'id, profile_id, kind, slot, target_date, scheduled_at, status, last_error, plan, profile:agent_profiles!inner(name, instagram_username, status), version:agent_versions!agent_items_current_version_fk(version_no, idea, frames, qa)';
 
 type Row = {
   id: string;
   profile_id: string;
   kind: string;
+  slot: number;
   target_date: string;
   scheduled_at: string;
   status: string;
   last_error: string | null;
+  plan: Record<string, unknown> | null;
   profile: { name: string; instagram_username: string | null; status: string };
-  version: { idea: Record<string, unknown>; frames: Frame[]; qa: { passed?: boolean }; provider: string } | null;
+  version: { version_no: number; idea: Record<string, unknown>; frames: Frame[]; qa: { passed?: boolean } } | null;
 };
 
-export async function toViews(rows: Row[], thumbs = 3): Promise<ItemView[]> {
-  const paths = rows.flatMap((r) => (r.version?.frames ?? []).slice(0, thumbs).map((f) => f.path));
+export async function toViews(rows: Row[], thumbs = 4): Promise<ItemView[]> {
+  const paths = rows.flatMap((r) => (r.version?.frames ?? []).slice(0, thumbs).map((f) => f.thumb ?? f.path));
   const urls = await signed(paths);
   return rows.map((r) => ({
     id: r.id,
     profileId: r.profile_id,
     profileName: r.profile.name,
     username: r.profile.instagram_username,
-    kind: r.kind as 'story' | 'post',
+    kind: r.kind as ItemView['kind'],
+    slot: r.slot,
     targetDate: r.target_date,
     scheduledAt: r.scheduled_at,
     status: r.status,
-    title: String(r.version?.idea?.title ?? ''),
-    format: String(r.version?.idea?.format ?? ''),
-    provider: r.version?.provider ?? null,
-    thumbs: (r.version?.frames ?? []).slice(0, thumbs).map((f) => urls[f.path]).filter(Boolean),
+    title: String(r.version?.idea?.title ?? r.plan?.concept ?? ''),
+    objective: String(r.version?.idea?.objective ?? r.plan?.objective ?? ''),
+    format: String(r.version?.idea?.format ?? r.plan?.format ?? ''),
+    versionNo: r.version?.version_no ?? null,
+    thumbs: (r.version?.frames ?? []).slice(0, thumbs).map((f) => urls[f.thumb ?? f.path]).filter(Boolean),
+    slides: r.version?.frames?.length ?? 0,
     lastError: r.last_error,
     qaPassed: r.version ? !!r.version.qa?.passed : null,
   }));
@@ -73,47 +81,83 @@ export async function itemsWhere(filter: { statuses?: string[]; profileId?: stri
   return toViews((data ?? []) as unknown as Row[]);
 }
 
-export async function overview() {
-  const today = agencyDateKey();
-  const { from, to } = agencyDayRange(today);
-  const [settings, profiles, pending, todayItems, upcoming, problems, publishedToday, usage, cost] = await Promise.all([
-    loadSettings(),
-    db().from('agent_profiles').select('id, name, instagram_username, status, auto_publish, approval_mode, stories_per_day, story_time, post_time').neq('status', 'archived').order('name'),
-    itemsWhere({ statuses: ['pending_approval'], limit: 12 }),
-    itemsWhere({ from: today, to: today, limit: 40 }),
-    itemsWhere({ statuses: ['approved', 'publishing', 'partially_published'], limit: 12 }),
-    itemsWhere({ statuses: ['failed', 'needs_reschedule', 'limit_reached', 'qa_failed'], limit: 12, order: 'desc' }),
-    db().from('agent_items').select('id', { count: 'exact', head: true }).in('status', ['published', 'simulated']).gte('published_at', from).lt('published_at', to),
-    usageToday(),
-    db().from('agent_usage').select('cost_usd').gte('created_at', from).lt('created_at', to),
-  ]);
-  const conns = await db().from('agent_ig_connections').select('profile_id, status, username');
-  const costToday = (cost.data ?? []).reduce((s, r) => s + (r.cost_usd === null ? 0 : Number(r.cost_usd)), 0);
-  const unknownCost = (cost.data ?? []).some((r) => r.cost_usd === null);
+const monthStart = () => {
+  const d = agencyDateKey().slice(0, 7);
+  return new Date(Date.parse(`${d}-01T00:00:00Z`) - 5 * 3600_000).toISOString();
+};
+
+export async function usageMonth() {
+  const { data } = await db().from('agent_usage').select('profile_id, kind, images, input_tokens, output_tokens, cost_usd, web_searches').gte('created_at', monthStart()).limit(20000);
+  const rows = data ?? [];
+  const cost = rows.some((r) => r.cost_usd !== null) ? rows.reduce((n, r) => n + Number(r.cost_usd ?? 0), 0) : null;
+  const byProfile = new Map<string, { images: number; calls: number; cost: number | null }>();
+  for (const r of rows) {
+    const k = r.profile_id ?? '—';
+    const cur = byProfile.get(k) ?? { images: 0, calls: 0, cost: null };
+    cur.images += r.images;
+    if (r.kind !== 'image' && r.kind !== 'image_edit') cur.calls++;
+    if (r.cost_usd !== null) cur.cost = (cur.cost ?? 0) + Number(r.cost_usd);
+    byProfile.set(k, cur);
+  }
   return {
-    today,
-    settings,
-    profiles: profiles.data ?? [],
-    connections: conns.data ?? [],
-    pending,
-    todayItems,
-    upcoming,
-    problems,
-    publishedToday: publishedToday.count ?? 0,
-    usage,
-    costToday,
-    unknownCost,
+    images: rows.reduce((n, r) => n + r.images, 0),
+    calls: rows.filter((r) => r.kind !== 'image' && r.kind !== 'image_edit').length,
+    tokens: rows.reduce((n, r) => n + r.input_tokens + r.output_tokens, 0),
+    searches: rows.reduce((n, r) => n + r.web_searches, 0),
+    cost,
+    byProfile,
   };
 }
 
-export function connectionsStatus() {
-  const r = aiRoutes();
-  const ig = agentIgConfig();
+export async function overview() {
+  const today = agencyDateKey();
+  const in3 = new Date(Date.parse(`${today}T00:00:00Z`) + 3 * 86_400_000).toISOString().slice(0, 10);
+  const since = new Date(Date.now() - 86_400_000).toISOString();
+  const [profiles, stories, carousels, pending, ready, failedJobs, running, usage, settings] = await Promise.all([
+    db().from('agent_profiles').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+    db().from('agent_items').select('status').eq('kind', 'story').eq('target_date', today),
+    db().from('agent_items').select('id', { count: 'exact', head: true }).eq('kind', 'carousel').gte('target_date', today).lte('target_date', in3),
+    db().from('agent_items').select('id', { count: 'exact', head: true }).in('status', ['pending_approval', 'qa_failed']),
+    db().from('agent_items').select('id', { count: 'exact', head: true }).in('status', ['approved', 'export_ready']),
+    db().from('agent_jobs').select('id', { count: 'exact', head: true }).eq('status', 'failed').gte('updated_at', since),
+    db().from('agent_jobs').select('id', { count: 'exact', head: true }).in('status', ['queued', 'running']),
+    usageMonth(),
+    loadSettings(),
+  ]);
+  const st = stories.data ?? [];
   return {
-    idea: r.idea,
-    write: r.write,
-    research: r.research,
-    instagramApp: ig.configured,
-    redirectUri: ig.redirectUri,
+    activeClients: profiles.count ?? 0,
+    storiesToday: st.length,
+    storiesReady: st.filter((x) => ['pending_approval', 'approved', 'export_ready', 'exported', 'published_manual'].includes(x.status)).length,
+    carouselsPlanned: carousels.count ?? 0,
+    pending: pending.count ?? 0,
+    ready: ready.count ?? 0,
+    failedJobs: failedJobs.count ?? 0,
+    activeJobs: running.count ?? 0,
+    usage,
+    settings,
+    ai: { text: aiOnline(), images: imagesReady() },
   };
+}
+
+export type JobView = { id: string; kind: string; status: string; progress: string | null; error: string | null; attempts: number; created_at: string; updated_at: string; item_id: string | null; profileName: string; itemKind: string | null; itemDate: string | null };
+
+export async function jobsList(statuses?: string[], limit = 100): Promise<JobView[]> {
+  let q = db().from('agent_jobs').select('id, kind, status, progress, error, attempts, created_at, updated_at, item_id, profile:agent_profiles(name), item:agent_items(kind, target_date)');
+  if (statuses?.length) q = q.in('status', statuses);
+  const { data } = await q.order('created_at', { ascending: false }).limit(limit);
+  return (data ?? []).map((j) => ({
+    id: j.id,
+    kind: j.kind,
+    status: j.status,
+    progress: j.progress,
+    error: j.error,
+    attempts: j.attempts,
+    created_at: j.created_at,
+    updated_at: j.updated_at,
+    item_id: j.item_id,
+    profileName: (j.profile as { name?: string } | null)?.name ?? '—',
+    itemKind: (j.item as { kind?: string } | null)?.kind ?? null,
+    itemDate: (j.item as { target_date?: string } | null)?.target_date ?? null,
+  }));
 }

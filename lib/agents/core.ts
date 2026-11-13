@@ -1,64 +1,112 @@
 /**
- * Agents — sof mantiq (server va testlar uchun): jadval, holatlar, hash, matn o'xshashligi, formatlar.
- * Bu faylda tarmoq yoki baza yo'q (node --test bilan tekshiriladi).
+ * Agents — pure logic (server and tests): statuses, hashes, text similarity, Uzbek text hygiene, file names, cadence.
+ * No network or database here (checked with node --test).
  */
 import { createHash } from 'node:crypto';
 
-export type AgentKind = 'story' | 'post';
+/** "post" is the previous step's single image; 1.0 plans carousels. */
+export type AgentKind = 'story' | 'carousel' | 'post';
 export type ItemStatus =
   | 'queued'
   | 'generating'
+  | 'regenerating'
   | 'qa_failed'
   | 'pending_approval'
-  | 'approved'
   | 'needs_fix'
+  | 'approved'
+  | 'export_ready'
+  | 'exported'
+  | 'published_manual'
   | 'rejected'
-  | 'publishing'
-  | 'published'
-  | 'simulated'
-  | 'partially_published'
   | 'failed'
   | 'needs_reschedule'
   | 'limit_reached'
-  | 'skipped';
+  | 'skipped'
+  | 'archived'
+  | 'publishing'
+  | 'published'
+  | 'simulated'
+  | 'partially_published';
 
-export const STATUS_LABEL: Record<ItemStatus, { label: string; tone: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info' | 'violet' }> = {
-  queued: { label: 'Navbatda', tone: 'neutral' },
-  generating: { label: 'Tayyorlanmoqda', tone: 'info' },
-  qa_failed: { label: 'Sifat xatosi', tone: 'danger' },
+type Tone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'info' | 'violet';
+export const STATUS_LABEL: Record<ItemStatus, { label: string; tone: Tone }> = {
+  queued: { label: 'Rejada', tone: 'neutral' },
+  generating: { label: 'Yaratilmoqda', tone: 'info' },
+  regenerating: { label: 'Qayta yaratilmoqda', tone: 'info' },
+  qa_failed: { label: 'Sifat tekshiruvidan o‘tmadi', tone: 'danger' },
   pending_approval: { label: 'Tasdiq kutmoqda', tone: 'warning' },
+  needs_fix: { label: 'Tahrir so‘ralgan', tone: 'warning' },
   approved: { label: 'Tasdiqlangan', tone: 'success' },
-  needs_fix: { label: 'Tuzatilmoqda', tone: 'warning' },
+  export_ready: { label: 'Yuklab olishga tayyor', tone: 'success' },
+  exported: { label: 'Yuklab olingan', tone: 'accent' },
+  published_manual: { label: 'Joylandi (qo‘lda)', tone: 'accent' },
   rejected: { label: 'Rad etilgan', tone: 'neutral' },
-  publishing: { label: 'Joylanmoqda', tone: 'info' },
-  published: { label: 'Joylandi', tone: 'success' },
-  simulated: { label: 'Sinov nashri', tone: 'violet' },
-  partially_published: { label: 'Qisman joylandi', tone: 'warning' },
   failed: { label: 'Xatolik', tone: 'danger' },
   needs_reschedule: { label: 'Qayta rejalashtiring', tone: 'danger' },
-  limit_reached: { label: 'Limit tugadi', tone: 'danger' },
+  limit_reached: { label: 'Budjet / limit tugadi', tone: 'danger' },
   skipped: { label: 'O‘tkazib yuborildi', tone: 'neutral' },
+  archived: { label: 'Arxivda', tone: 'neutral' },
+  publishing: { label: 'Joylanmoqda (eski)', tone: 'neutral' },
+  published: { label: 'Joylandi (eski)', tone: 'neutral' },
+  simulated: { label: 'Sinov nashri (eski)', tone: 'neutral' },
+  partially_published: { label: 'Qisman joylandi (eski)', tone: 'neutral' },
 };
 
-export const KIND_LABEL: Record<AgentKind, string> = { story: 'Story', post: 'Rasmli post' };
+export const KIND_LABEL: Record<AgentKind, string> = { story: 'Story', carousel: 'Karusel', post: 'Rasmli post' };
 
-/** Materialni hali o'zgartirish mumkinmi (chiqib ketgan yoki chiqayotganini emas). */
-export const EDITABLE: ItemStatus[] = ['queued', 'qa_failed', 'pending_approval', 'approved', 'needs_fix', 'rejected', 'failed', 'needs_reschedule', 'limit_reached', 'skipped'];
+/** Statuses in which the content may still be edited, regenerated or approved. */
+export const EDITABLE: ItemStatus[] = ['queued', 'qa_failed', 'pending_approval', 'needs_fix', 'approved', 'export_ready', 'exported', 'rejected', 'failed', 'needs_reschedule', 'limit_reached', 'skipped'];
 export const isEditable = (s: string) => (EDITABLE as string[]).includes(s);
+/** Approved and the files may be downloaded. */
+export const DOWNLOADABLE = ['approved', 'export_ready', 'exported', 'published_manual'];
+export const isDownloadable = (s: string) => DOWNLOADABLE.includes(s);
 
-/** Kunora post: boshlanish sanasidan har 2 kunda bir. Kalendar kunlari bilan hisoblanadi — oy chegarasi ta'sir qilmaydi. */
-export function isPostDay(dateKey: string, startKey: string): boolean {
+/** Carousel day: every `every` calendar days from the start date (month boundaries do not matter). */
+export function isCarouselDay(dateKey: string, startKey: string, every = 2): boolean {
   const d = Date.parse(`${dateKey}T00:00:00Z`);
   const s = Date.parse(`${startKey}T00:00:00Z`);
-  if (!Number.isFinite(d) || !Number.isFinite(s) || d < s) return false;
-  return Math.round((d - s) / 86_400_000) % 2 === 0;
+  if (!Number.isFinite(d) || !Number.isFinite(s) || d < s || every < 1) return false;
+  return Math.round((d - s) / 86_400_000) % every === 0;
 }
+/** @deprecated the previous step's name */
+export const isPostDay = (dateKey: string, startKey: string) => isCarouselDay(dateKey, startKey, 2);
 
 // ---------------------------------------------------------------------------------------------------------------
-// Tasdiq hash'i: rasm, matn, profil yoki vaqt o'zgarsa — hash o'zgaradi va eski tasdiq amal qilmaydi.
+// Frames: one Story = one frame; a carousel = its slides in order. Each frame is its own file (and its own AI
+// background); a version is an immutable set of frames, so slides of different versions are never mixed.
 // ---------------------------------------------------------------------------------------------------------------
 export type FrameText = { role: string; headline: string; body: string; cta: string };
-export type Frame = FrameText & { template: string; path: string; warnings: string[] };
+export type FrameLayout = {
+  /** Where the text block sits. */
+  textPos: 'top' | 'middle' | 'bottom';
+  /** Multipliers (deterministic edits; 1 = as designed). */
+  headlineScale: number;
+  logoScale: number;
+  productScale: number;
+  /** Background brightness (1 = as generated). */
+  bgBrightness: number;
+  logoPos: 'top-left' | 'top-right' | 'top-center' | 'bottom-right';
+  contactPos: 'top' | 'bottom' | 'hidden';
+};
+export const DEFAULT_LAYOUT: FrameLayout = { textPos: 'bottom', headlineScale: 1, logoScale: 1, productScale: 1, bgBrightness: 1, logoPos: 'top-left', contactPos: 'bottom' };
+
+export type Frame = FrameText & {
+  template: string;
+  /** Final PNG (exact size) and a small JPEG for galleries. */
+  path: string;
+  thumb?: string;
+  width?: number;
+  height?: number;
+  sha256?: string;
+  /** The AI background this frame was composed on (reused by layout and text edits — no new image cost). */
+  bg_path?: string | null;
+  bg_prompt?: string | null;
+  bg_model?: string | null;
+  product_asset_id?: string | null;
+  logo_asset_id?: string | null;
+  layout?: Partial<FrameLayout>;
+  warnings: string[];
+};
 
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
@@ -70,6 +118,7 @@ function stable(value: unknown): string {
   return JSON.stringify(value ?? null);
 }
 
+/** What an approval is bound to: the client, the slot, the texts and every file. Any change → a new hash. */
 export function contentHash(input: { profileId: string; igUsername: string | null; kind: string; scheduledAt: string; caption: string; hashtags: string; frames: Pick<Frame, 'headline' | 'body' | 'cta' | 'path'>[] }): string {
   const payload = {
     p: input.profileId,
@@ -84,7 +133,7 @@ export function contentHash(input: { profileId: string; igUsername: string | nul
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Takrorlanish: so'zlar bo'yicha o'xshashlik (o'zbekcha apostroflar bir xil ko'rinishga keltiriladi).
+// Similarity (Uzbek apostrophes normalised).
 // ---------------------------------------------------------------------------------------------------------------
 export function words(s: string): Set<string> {
   const norm = (s ?? '')
@@ -103,7 +152,20 @@ export function similarity(a: string, b: string): number {
   return inter / (A.size + B.size - inter);
 }
 
-/** "@brend", "instagram.com/brend/", "https://www.instagram.com/brend?igsh=…" → "brend" (yoki null). */
+/**
+ * Uzbek Latin text as it should be printed: o‘ / g‘ with U+2018 (present in every bundled font, unlike U+02BB), the
+ * tutuq belgisi as U+2019, no doubled spaces. Applied to every text placed on an image.
+ */
+export function uzText(s: string): string {
+  return (s ?? '')
+    .replace(/([OoGg])[ʻʼ'`’‘]/g, '$1‘')
+    .replace(/([A-Za-z])[ʼ'`ʻ](?=[A-Za-z])/g, '$1’')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/ ?\n ?/g, '\n')
+    .trim();
+}
+
+/** "@brend", "instagram.com/brend/", "https://www.instagram.com/brend?igsh=…" → "brend" (or null). */
 export function normalizeUsername(input: string | null | undefined): string | null {
   const v = (input ?? '')
     .trim()
@@ -127,17 +189,23 @@ export function normalizeColor(v: string | null | undefined): string | null {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Narx (taxminiy): Anthropic'ning e'lon qilingan stavkalari, $ / 1M token. Gemini bepul tarifda — taxmin yo'q (null).
+// Export file names: CLIENT_YYYY-MM-DD_STORY_01.png, CLIENT_YYYY-MM-DD_CAROUSEL_02.png, CLIENT_YYYY-MM-DD_CAROUSEL.zip
 // ---------------------------------------------------------------------------------------------------------------
-const PRICES: Record<string, [number, number]> = {
-  'claude-haiku-5-5': [0.1, 0.5],
-  'claude-sonnet-5-5': [2, 10],
-  'claude-opus-5-5': [4, 20],
-};
-export const WEB_SEARCH_USD = 0.01;
+export function clientSlug(name: string): string {
+  const s = (name ?? '')
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[‘’ʻʼ'`]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40);
+  return s || 'CLIENT';
+}
 
-export function estimateCost(model: string, input: number, output: number, searches = 0): number | null {
-  const p = PRICES[model];
-  if (!p) return searches ? searches * WEB_SEARCH_USD : null;
-  return Math.round(((input / 1e6) * p[0] + (output / 1e6) * p[1] + searches * WEB_SEARCH_USD) * 1e6) / 1e6;
+export function exportName(a: { client: string; date: string; kind: AgentKind; index?: number; slot?: number; zip?: boolean }): string {
+  const base = `${clientSlug(a.client)}_${a.date}_${a.kind === 'story' ? 'STORY' : 'CAROUSEL'}`;
+  if (a.zip) return `${base}.zip`;
+  const n = a.kind === 'story' ? (a.slot ?? 1) : (a.index ?? 0) + 1;
+  return `${base}_${String(n).padStart(2, '0')}.png`;
 }

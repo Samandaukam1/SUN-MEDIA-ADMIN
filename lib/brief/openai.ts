@@ -7,14 +7,14 @@ import 'server-only';
  * for a while and skipped — the interview then runs on the curated questions alone.
  */
 
-export type AiPurpose = 'question' | 'analysis';
+export type AiPurpose = 'question' | 'analysis' | 'content' | 'strategy';
 export type AiUsage = { input: number; output: number; costUsd: number | null };
 export type AiResult<T> =
   | { ok: true; data: T; model: string; usage: AiUsage }
   | { ok: false; kind: 'config' | 'model' | 'timeout' | 'rate' | 'server' | 'bad_request' | 'invalid_output' | 'incomplete' | 'refused'; message: string; usage?: AiUsage };
 
 const ENDPOINT = 'https://api.openai.com/v1';
-const DEFAULT_MODELS: Record<AiPurpose, string> = { question: 'gpt-6-luna', analysis: 'gpt-6.1-sol' };
+const DEFAULT_MODELS: Record<AiPurpose, string> = { question: 'gpt-6-luna', analysis: 'gpt-6.1-sol', content: 'gpt-6-luna', strategy: 'gpt-6.1-sol' };
 
 export function aiConfig() {
   const key = process.env.OPENAI_API_KEY?.trim() || null;
@@ -27,6 +27,9 @@ export function aiConfig() {
     models: {
       question: process.env.OPENAI_QUESTION_MODEL?.trim() || DEFAULT_MODELS.question,
       analysis: process.env.OPENAI_ANALYSIS_MODEL?.trim() || DEFAULT_MODELS.analysis,
+      // The content agent: captions and plans; deeper strategy and evaluation.
+      content: process.env.OPENAI_CONTENT_MODEL?.trim() || process.env.OPENAI_QUESTION_MODEL?.trim() || DEFAULT_MODELS.content,
+      strategy: process.env.OPENAI_STRATEGY_MODEL?.trim() || process.env.OPENAI_ANALYSIS_MODEL?.trim() || DEFAULT_MODELS.strategy,
     } as Record<AiPurpose, string>,
     // USD per 1M tokens, if the owner set them (cost is recorded only when known — never guessed).
     priceIn: price('OPENAI_PRICE_INPUT_PER_1M'),
@@ -100,8 +103,22 @@ export async function respond<T>({
   timeoutMs = 12_000,
   fetchImpl = fetch,
   sleep = (ms: number) => new Promise((r) => setTimeout(r, ms)),
+  model: modelOverride,
+  tools,
+  include,
+  format,
+  onBody,
 }: {
   purpose: AiPurpose;
+  /** A specific model instead of the purpose's configured one. */
+  model?: string;
+  /** Responses API tools (e.g. [{ type: 'web_search' }]) and extra output to include. */
+  tools?: unknown[];
+  include?: string[];
+  /** 'text': no response format; `parse` receives the text itself. Default: schema → json_schema, else json_object. */
+  format?: 'text';
+  /** The whole response body (e.g. to read citations and search sources). */
+  onBody?: (body: Record<string, unknown>) => void;
   instructions: string;
   /** Text, or Responses API input items (e.g. a user message with input_text and input_image parts). */
   input: string | unknown[];
@@ -115,7 +132,7 @@ export async function respond<T>({
   sleep?: (ms: number) => Promise<unknown>;
 }): Promise<AiResult<T>> {
   const { key, models } = aiConfig();
-  const model = models[purpose];
+  const model = modelOverride?.trim() || models[purpose];
   if (!key) return { ok: false, kind: 'config', message: 'OPENAI_API_KEY o‘rnatilmagan.' };
   if (modelBlocked(model)) return { ok: false, kind: 'model', message: `“${model}” modeli hozir mavjud emas.` };
 
@@ -129,7 +146,9 @@ export async function respond<T>({
       input,
       max_output_tokens: budget,
       store: false,
-      text: { format: schema ? { type: 'json_schema', name: schemaName, schema, strict: true } : { type: 'json_object' } },
+      ...(format === 'text' ? {} : { text: { format: schema ? { type: 'json_schema', name: schemaName, schema, strict: true } : { type: 'json_object' } } }),
+      ...(tools?.length ? { tools } : {}),
+      ...(include?.length ? { include } : {}),
     });
   let last: AiResult<T> = { ok: false, kind: 'server', message: 'AI javob bermadi.' };
   let total: AiUsage = { input: 0, output: 0, costUsd: null };
@@ -181,9 +200,15 @@ export async function respond<T>({
       }
       return last;
     }
+    onBody?.(json);
     const { text, refusal } = outputText(json);
     if (refusal) return { ok: false, kind: 'refused', message: 'AI bu so‘rovga javob bermadi.', usage };
     if (!text) return { ok: false, kind: 'invalid_output', message: 'AI javobi bo‘sh.', usage };
+    if (format === 'text') {
+      const parsedText = parse(text);
+      if (parsedText === null) return { ok: false, kind: 'invalid_output', message: 'AI javobi tekshiruvdan o‘tmadi.', usage };
+      return { ok: true, data: parsedText, model, usage };
+    }
     let data: unknown;
     try {
       data = JSON.parse(text);

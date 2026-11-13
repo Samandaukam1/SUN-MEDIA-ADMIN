@@ -82,6 +82,17 @@ export type Database = {
           profile_id: string
           storage_path: string
           width: number | null
+          title: string | null
+          product_name: string | null
+          version: number
+          source: string | null
+          usage_approved: boolean
+          has_alpha: boolean | null
+          tags: string[]
+          sha256: string | null
+          campaign_id: string | null
+          replaced_by: string | null
+          archived_at: string | null
         }
         Insert: {
           created_at?: string
@@ -94,6 +105,17 @@ export type Database = {
           profile_id: string
           storage_path: string
           width?: number | null
+          title?: string | null
+          product_name?: string | null
+          version?: number
+          source?: string | null
+          usage_approved?: boolean
+          has_alpha?: boolean | null
+          tags?: string[]
+          sha256?: string | null
+          campaign_id?: string | null
+          replaced_by?: string | null
+          archived_at?: string | null
         }
         Update: {
           created_at?: string
@@ -106,6 +128,17 @@ export type Database = {
           profile_id?: string
           storage_path?: string
           width?: number | null
+          title?: string | null
+          product_name?: string | null
+          version?: number
+          source?: string | null
+          usage_approved?: boolean
+          has_alpha?: boolean | null
+          tags?: string[]
+          sha256?: string | null
+          campaign_id?: string | null
+          replaced_by?: string | null
+          archived_at?: string | null
         }
         Relationships: [
           {
@@ -312,6 +345,14 @@ export type Database = {
           status: string
           target_date: string
           updated_at: string
+          slot: number
+          plan: Json
+          campaign_id: string | null
+          approved_version_id: string | null
+          exported_at: string | null
+          published_manually_at: string | null
+          published_by: string | null
+          publish_note: string | null
         }
         Insert: {
           attempts?: number
@@ -329,6 +370,14 @@ export type Database = {
           status?: string
           target_date: string
           updated_at?: string
+          slot?: number
+          plan?: Json
+          campaign_id?: string | null
+          approved_version_id?: string | null
+          exported_at?: string | null
+          published_manually_at?: string | null
+          published_by?: string | null
+          publish_note?: string | null
         }
         Update: {
           attempts?: number
@@ -346,6 +395,14 @@ export type Database = {
           status?: string
           target_date?: string
           updated_at?: string
+          slot?: number
+          plan?: Json
+          campaign_id?: string | null
+          approved_version_id?: string | null
+          exported_at?: string | null
+          published_manually_at?: string | null
+          published_by?: string | null
+          publish_note?: string | null
         }
         Relationships: [
           {
@@ -450,6 +507,18 @@ export type Database = {
           tone: string | null
           updated_at: string
           website: string | null
+          industry: string | null
+          brand_dna: Json
+          carousel_slides: number
+          carousel_every_days: number
+          active_weekdays: number[]
+          paused_until: string | null
+          emergency_pause: boolean
+          monthly_budget_usd: number | null
+          monthly_image_limit: number
+          image_quality: string
+          image_tier: string
+          brief_session_id: string | null
         }
         Insert: {
           address?: string | null
@@ -488,6 +557,18 @@ export type Database = {
           tone?: string | null
           updated_at?: string
           website?: string | null
+          industry?: string | null
+          brand_dna?: Json
+          carousel_slides?: number
+          carousel_every_days?: number
+          active_weekdays?: number[]
+          paused_until?: string | null
+          emergency_pause?: boolean
+          monthly_budget_usd?: number | null
+          monthly_image_limit?: number
+          image_quality?: string
+          image_tier?: string
+          brief_session_id?: string | null
         }
         Update: {
           address?: string | null
@@ -526,6 +607,18 @@ export type Database = {
           tone?: string | null
           updated_at?: string
           website?: string | null
+          industry?: string | null
+          brand_dna?: Json
+          carousel_slides?: number
+          carousel_every_days?: number
+          active_weekdays?: number[]
+          paused_until?: string | null
+          emergency_pause?: boolean
+          monthly_budget_usd?: number | null
+          monthly_image_limit?: number
+          image_quality?: string
+          image_tier?: string
+          brief_session_id?: string | null
         }
         Relationships: [
           {
@@ -620,6 +713,381 @@ export type Database = {
           },
         ]
       }
+      agent_campaigns: {
+        Row: {
+          id: string
+          profile_id: string
+          title: string
+          terms: string | null
+          starts_on: string | null
+          ends_on: string | null
+          priority: number
+          active: boolean
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          profile_id: string
+          title: string
+          terms?: string | null
+          starts_on?: string | null
+          ends_on?: string | null
+          priority?: number
+          active?: boolean
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          profile_id?: string
+          title?: string
+          terms?: string | null
+          starts_on?: string | null
+          ends_on?: string | null
+          priority?: number
+          active?: boolean
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_campaigns_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "agent_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_review_comments: {
+        Row: {
+          id: string
+          item_id: string
+          version_id: string | null
+          body: string
+          author: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          item_id: string
+          version_id?: string | null
+          body: string
+          author?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          item_id?: string
+          version_id?: string | null
+          body?: string
+          author?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_review_comments_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "agent_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_jobs: {
+        Row: {
+          id: string
+          item_id: string | null
+          profile_id: string | null
+          kind: string
+          payload: Json
+          status: string
+          priority: number
+          attempts: number
+          max_attempts: number
+          run_after: string
+          lease_until: string | null
+          progress: string | null
+          error: string | null
+          result: Json | null
+          idempotency_key: string
+          created_by: string | null
+          created_at: string
+          started_at: string | null
+          finished_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          item_id?: string | null
+          profile_id?: string | null
+          kind: string
+          payload?: Json
+          status?: string
+          priority?: number
+          attempts?: number
+          max_attempts?: number
+          run_after?: string
+          lease_until?: string | null
+          progress?: string | null
+          error?: string | null
+          result?: Json | null
+          idempotency_key: string
+          created_by?: string | null
+          created_at?: string
+          started_at?: string | null
+          finished_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          item_id?: string | null
+          profile_id?: string | null
+          kind?: string
+          payload?: Json
+          status?: string
+          priority?: number
+          attempts?: number
+          max_attempts?: number
+          run_after?: string
+          lease_until?: string | null
+          progress?: string | null
+          error?: string | null
+          result?: Json | null
+          idempotency_key?: string
+          created_by?: string | null
+          created_at?: string
+          started_at?: string | null
+          finished_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_jobs_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "agent_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_jobs_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "agent_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_trends: {
+        Row: {
+          id: string
+          profile_id: string
+          title: string
+          source_url: string | null
+          source_title: string | null
+          source_platform: string | null
+          industry: string | null
+          content_format: string | null
+          visual_direction: string | null
+          why: string | null
+          adaptation: string | null
+          freshness: string | null
+          confidence: number | null
+          origin: string
+          verified: boolean
+          status: string
+          used_count: number
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          profile_id: string
+          title: string
+          source_url?: string | null
+          source_title?: string | null
+          source_platform?: string | null
+          industry?: string | null
+          content_format?: string | null
+          visual_direction?: string | null
+          why?: string | null
+          adaptation?: string | null
+          freshness?: string | null
+          confidence?: number | null
+          origin?: string
+          verified?: boolean
+          status?: string
+          used_count?: number
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          profile_id?: string
+          title?: string
+          source_url?: string | null
+          source_title?: string | null
+          source_platform?: string | null
+          industry?: string | null
+          content_format?: string | null
+          visual_direction?: string | null
+          why?: string | null
+          adaptation?: string | null
+          freshness?: string | null
+          confidence?: number | null
+          origin?: string
+          verified?: boolean
+          status?: string
+          used_count?: number
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_trends_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "agent_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_metrics: {
+        Row: {
+          id: string
+          item_id: string
+          profile_id: string
+          period_start: string | null
+          period_end: string | null
+          reach: number | null
+          impressions: number | null
+          views: number | null
+          likes: number | null
+          comments: number | null
+          shares: number | null
+          saves: number | null
+          profile_visits: number | null
+          website_clicks: number | null
+          leads: number | null
+          sales: number | null
+          source: string
+          note: string | null
+          entered_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          item_id: string
+          profile_id: string
+          period_start?: string | null
+          period_end?: string | null
+          reach?: number | null
+          impressions?: number | null
+          views?: number | null
+          likes?: number | null
+          comments?: number | null
+          shares?: number | null
+          saves?: number | null
+          profile_visits?: number | null
+          website_clicks?: number | null
+          leads?: number | null
+          sales?: number | null
+          source?: string
+          note?: string | null
+          entered_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          item_id?: string
+          profile_id?: string
+          period_start?: string | null
+          period_end?: string | null
+          reach?: number | null
+          impressions?: number | null
+          views?: number | null
+          likes?: number | null
+          comments?: number | null
+          shares?: number | null
+          saves?: number | null
+          profile_visits?: number | null
+          website_clicks?: number | null
+          leads?: number | null
+          sales?: number | null
+          source?: string
+          note?: string | null
+          entered_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_metrics_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "agent_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_metrics_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "agent_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_exports: {
+        Row: {
+          id: string
+          item_id: string
+          version_id: string
+          kind: string
+          file_name: string
+          bytes: number | null
+          sha256: string | null
+          downloaded_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          item_id: string
+          version_id: string
+          kind: string
+          file_name: string
+          bytes?: number | null
+          sha256?: string | null
+          downloaded_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          item_id?: string
+          version_id?: string
+          kind?: string
+          file_name?: string
+          bytes?: number | null
+          sha256?: string | null
+          downloaded_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_exports_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "agent_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_exports_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "agent_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_settings: {
         Row: {
           daily_ai_limit: number
@@ -631,6 +1099,13 @@ export type Database = {
           research_weekday: number
           simulate: boolean
           updated_at: string
+          automation_enabled: boolean
+          monthly_budget_usd: number | null
+          monthly_image_limit: number
+          daily_image_limit: number
+          revision_warn: number
+          story_safe_top: number
+          story_safe_bottom: number
         }
         Insert: {
           daily_ai_limit?: number
@@ -642,6 +1117,13 @@ export type Database = {
           research_weekday?: number
           simulate?: boolean
           updated_at?: string
+          automation_enabled?: boolean
+          monthly_budget_usd?: number | null
+          monthly_image_limit?: number
+          daily_image_limit?: number
+          revision_warn?: number
+          story_safe_top?: number
+          story_safe_bottom?: number
         }
         Update: {
           daily_ai_limit?: number
@@ -653,6 +1135,13 @@ export type Database = {
           research_weekday?: number
           simulate?: boolean
           updated_at?: string
+          automation_enabled?: boolean
+          monthly_budget_usd?: number | null
+          monthly_image_limit?: number
+          daily_image_limit?: number
+          revision_warn?: number
+          story_safe_top?: number
+          story_safe_bottom?: number
         }
         Relationships: []
       }
@@ -668,6 +1157,9 @@ export type Database = {
           provider: string
           purpose: string
           web_searches: number
+          item_id: string | null
+          kind: string
+          images: number
         }
         Insert: {
           cost_usd?: number | null
@@ -680,6 +1172,9 @@ export type Database = {
           provider: string
           purpose: string
           web_searches?: number
+          item_id?: string | null
+          kind?: string
+          images?: number
         }
         Update: {
           cost_usd?: number | null
@@ -692,6 +1187,9 @@ export type Database = {
           provider?: string
           purpose?: string
           web_searches?: number
+          item_id?: string | null
+          kind?: string
+          images?: number
         }
         Relationships: [
           {
@@ -720,6 +1218,18 @@ export type Database = {
           provider: string
           qa: Json
           version_no: number
+          parent_id: string | null
+          change_kind: string
+          instruction: string | null
+          spec: Json
+          prompt_version: string | null
+          text_model: string | null
+          image_model: string | null
+          reference_asset_ids: string[]
+          caption_alt: string | null
+          cost_usd: number | null
+          images: number
+          archived_at: string | null
         }
         Insert: {
           caption?: string
@@ -737,6 +1247,18 @@ export type Database = {
           provider?: string
           qa?: Json
           version_no: number
+          parent_id?: string | null
+          change_kind?: string
+          instruction?: string | null
+          spec?: Json
+          prompt_version?: string | null
+          text_model?: string | null
+          image_model?: string | null
+          reference_asset_ids?: string[]
+          caption_alt?: string | null
+          cost_usd?: number | null
+          images?: number
+          archived_at?: string | null
         }
         Update: {
           caption?: string
@@ -754,6 +1276,18 @@ export type Database = {
           provider?: string
           qa?: Json
           version_no?: number
+          parent_id?: string | null
+          change_kind?: string
+          instruction?: string | null
+          spec?: Json
+          prompt_version?: string | null
+          text_model?: string | null
+          image_model?: string | null
+          reference_asset_ids?: string[]
+          caption_alt?: string | null
+          cost_usd?: number | null
+          images?: number
+          archived_at?: string | null
         }
         Relationships: [
           {
@@ -9797,6 +10331,21 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      agent_claim_job: {
+        Args: { p_lease_seconds?: number }
+        Returns: Database["public"]["Tables"]["agent_jobs"]["Row"][]
+      }
+      agent_finish_job: {
+        Args: { p_error?: string; p_job: string; p_ok: boolean; p_result?: Json; p_retry_seconds?: number }
+        Returns: string
+      }
+      agent_notify: {
+        Args: { p_body: string; p_entity?: string; p_priority?: string; p_route: string; p_title: string; p_type: string }
+        Returns: number
+      }
+      agent_recover: { Args: never; Returns: number }
+      agents_enqueue_due: { Args: never; Returns: number }
+      agents_kick: { Args: never; Returns: undefined }
       agent_consume_worker_token: { Args: { p_hash: string }; Returns: boolean }
       agent_ig_state_consume: {
         Args: { p_hash: string; p_owner: string }

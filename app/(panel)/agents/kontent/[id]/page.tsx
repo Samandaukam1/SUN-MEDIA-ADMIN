@@ -1,267 +1,334 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { z } from 'zod';
 
-import { ActionButton, FixForm, RejectButton, RescheduleForm } from '@/components/agents/controls';
-import { EditItemForm } from '@/components/agents/forms';
+import { AutoRefresh } from '@/components/agents/AutoRefresh';
+import { ApproveButton, CommentForm, EditPanel, ManualTextForm, PublishedForm, RegenerateForm, RejectButton, ReorderSlides, RescheduleForm, SlideViewer, VersionCompare, ActionButton } from '@/components/agents/controls';
+import { MetricsForm } from '@/components/agents/forms';
 import { StatusBadge } from '@/components/agents/ItemCards';
-import { PageHeader } from '@/components/panel/PageHeader';
-import { Badge } from '@/components/ui/Badge';
 import { Card, SectionTitle } from '@/components/ui/Card';
-import { CopyButton } from '@/components/ui/CopyButton';
 import { Notice } from '@/components/ui/Notice';
-import { isEditable, KIND_LABEL, type Frame } from '@/lib/agents/core';
+import { exportName, isDownloadable, isEditable, KIND_LABEL, type AgentKind, type Frame } from '@/lib/agents/core';
 import { FORMATS } from '@/lib/agents/creative';
-import { readiness } from '@/lib/agents/publisher';
-import { db, isApproved, signed } from '@/lib/agents/server';
-import { agencyDateKey, formatShortDateTime, formatTime } from '@/lib/time';
+import type { QaReport } from '@/lib/agents/qa';
+import { db, signed } from '@/lib/agents/server';
+import { FAMILIES, OBJECTIVES } from '@/lib/agents/strategy';
+import { formatShortDateTime } from '@/lib/time';
 
-export const metadata: Metadata = { title: 'Agents · Material' };
-export const dynamic = 'force-dynamic';
-export const maxDuration = 120;
+export const metadata: Metadata = { title: 'Kontent — AI agent' };
 
-type Qa = { passed?: boolean; issues?: { code: string; level: 'fail' | 'warn'; msg: string }[]; retried?: boolean };
-type IdeaJson = { title?: string; format?: string; hook?: string; angle?: string; why_now?: string; provider?: string; model?: string; candidates?: { title: string; format: string; score: number; similar: number }[] };
+const CHANGE: Record<string, string> = {
+  generate: 'Yaratildi',
+  regenerate: 'Qayta yaratildi',
+  text_edit: 'Matn tahriri',
+  layout_edit: 'Joylashuv tahriri',
+  image_edit: 'Rasm tahriri (AI)',
+  slide_regen: 'Slayd qayta yaratildi',
+  restore: 'Qaytarildi',
+  reorder: 'Tartib o‘zgardi',
+  manual: 'Qo‘lda tahrir',
+};
 
-export default async function AgentItemPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ContentReview({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
+  if (!z.uuid().safeParse(id).success) notFound();
   const { data: item } = await db().from('agent_items').select('*').eq('id', id).maybeSingle();
   if (!item) notFound();
-  const { data: p } = await db().from('agent_profiles').select('*').eq('id', item.profile_id).maybeSingle();
-  if (!p) notFound();
-  const [{ data: versions }, { data: approvals }, { data: attempts }, { data: insights }] = await Promise.all([
-    db().from('agent_versions').select('*').eq('item_id', id).order('version_no', { ascending: false }),
-    db().from('agent_approvals').select('decision, scope, comment, channel, created_at, version_id').eq('item_id', id).order('created_at', { ascending: false }),
-    db().from('agent_publish_attempts').select('frame_index, status, media_id, error, attempts, updated_at').eq('item_id', id).order('frame_index'),
-    db().from('agent_insights').select('metrics, fetched_at, media_id').eq('item_id', id).order('fetched_at', { ascending: false }),
+  const [{ data: profile }, { data: versions }, { data: jobs }, { data: comments }, { data: metrics }, { data: approvals }] = await Promise.all([
+    db().from('agent_profiles').select('id, name, instagram_username').eq('id', item.profile_id).maybeSingle(),
+    db().from('agent_versions').select('*').eq('item_id', id).order('version_no', { ascending: false }).limit(30),
+    db().from('agent_jobs').select('id, kind, status, progress, error, attempts, created_at, updated_at').eq('item_id', id).order('created_at', { ascending: false }).limit(10),
+    db().from('agent_review_comments').select('id, body, created_at, author:profiles(full_name)').eq('item_id', id).order('created_at', { ascending: false }).limit(30),
+    db().from('agent_metrics').select('*').eq('item_id', id).order('created_at', { ascending: false }),
+    db().from('agent_approvals').select('version_id, decision, created_at, by:profiles(full_name)').eq('item_id', id).order('created_at', { ascending: false }).limit(20),
   ]);
-  const v = (versions ?? []).find((x) => x.id === item.current_version_id) ?? null;
-  const frames = (v?.frames as unknown as Frame[]) ?? [];
-  const urls = await signed(frames.map((f) => f.path), 7200);
-  const qa = (v?.qa ?? {}) as Qa;
-  const idea = (v?.idea ?? {}) as IdeaJson;
-  const approved = await isApproved(item, p);
-  const ready = await readiness(item, p);
-  const editable = isEditable(item.status);
-  const fmt = FORMATS.find((f) => f.key === idea.format);
-  const vno = new Map((versions ?? []).map((x) => [x.id, x.version_no]));
+  if (!profile) notFound();
+  const current = (versions ?? []).find((v) => v.id === item.current_version_id) ?? null;
+  const frames = (current?.frames ?? []) as unknown as Frame[];
+  const allPaths = [...frames.map((f) => f.path), ...(versions ?? []).flatMap((v) => ((v.frames ?? []) as unknown as Frame[]).map((f) => f.thumb ?? f.path))];
+  const urls = await signed(allPaths, 3600);
+  const active = (jobs ?? []).some((j) => j.status === 'queued' || j.status === 'running');
+  const runningJob = (jobs ?? []).find((j) => j.status === 'queued' || j.status === 'running');
+  const qa = (current?.qa ?? null) as unknown as (QaReport & { ai?: { summary?: string; model?: string; error?: string } }) | null;
+  const plan = (item.plan ?? {}) as Record<string, string | string[] | null>;
+  const kind = item.kind as AgentKind;
+  const downloadable = isDownloadable(item.status) && item.approved_version_id === item.current_version_id;
+  const editable = isEditable(item.status) && !active && !!current;
+  const approveBlock = !current ? 'Hali versiya yo‘q' : active ? 'Ish navbatda' : qa?.passed === false ? 'Sifat tekshiruvidan o‘tmagan' : !['pending_approval', 'needs_fix'].includes(item.status) ? undefined : undefined;
+  const approved = ['export_ready', 'exported', 'published_manual', 'approved'].includes(item.status) && item.approved_version_id === item.current_version_id;
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title={`${KIND_LABEL[item.kind as 'story' | 'post']} · ${formatShortDateTime(item.scheduled_at)}`}
-        crumbs={[{ label: 'Agents', href: '/agents' }, { label: p.name, href: `/agents/profillar/${p.id}` }, { label: idea.title || 'Material' }]}
-        description={`${p.name}${p.instagram_username ? ` · @${p.instagram_username}` : ''}${v ? ` · v${v.version_no}` : ''}`}
-        actions={<StatusBadge status={item.status} />}
-      />
-      {item.last_error ? <Notice tone={['failed', 'qa_failed', 'needs_reschedule', 'limit_reached'].includes(item.status) ? 'danger' : 'warning'}>{item.last_error}</Notice> : null}
-      {v?.provider === 'local' ? (
-        <Notice tone="warning" title="Lokal rejim">
-          AI ulanmagan — bu matn brifdan oddiy shablon bilan tuzilgan. Kreativ matn uchun serverga GEMINI_API_KEY (bepul) yoki ANTHROPIC_API_KEY qo‘shing.
+      <AutoRefresh active={active} />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <Link href="/agents/tasdiqlash" className="text-[13px] text-muted hover:text-ink">
+            ← Tasdiqlash navbati
+          </Link>
+          <h2 className="mt-1 text-[20px] font-semibold">
+            <Link href={`/agents/profillar/${profile.id}`} className="hover:underline">
+              {profile.name}
+            </Link>{' '}
+            · {KIND_LABEL[kind]}
+            {kind === 'story' && item.slot > 1 ? ` #${item.slot}` : ''}
+          </h2>
+          <p className="text-[13px] text-muted">
+            {item.target_date} · joylash vaqti {formatShortDateTime(item.scheduled_at)}
+            {current ? ` · ${current.version_no}-versiya` : ''}
+            {profile.instagram_username ? ` · @${profile.instagram_username}` : ''}
+          </p>
+        </div>
+        <StatusBadge status={item.status} />
+      </div>
+
+      {runningJob ? (
+        <Notice tone="info" title={runningJob.status === 'running' ? 'Ishlanmoqda' : 'Navbatda'}>
+          {runningJob.progress ?? 'Server ishni bajaradi — sahifani yopsangiz ham davom etadi.'}
         </Notice>
       ) : null}
+      {item.last_error ? <Notice tone="danger" title="Oxirgi xato">{item.last_error}</Notice> : null}
 
-      {!v ? (
-        <Card>
-          <p className="text-sm text-muted">Hali tayyorlanmagan. Navbat bo‘yicha {formatShortDateTime(item.prepare_at)} dan keyin tayyorlanadi.</p>
-          {editable ? (
-            <div className="mt-3">
-              <ActionButton act={{ kind: 'regenerate', itemId: id }} variant="primary" busy="Agentlar ishlamoqda…">
-                Hozir tayyorlash
-              </ActionButton>
-            </div>
-          ) : null}
-        </Card>
-      ) : (
-        <>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="flex flex-col gap-6">
           <Card>
-            <div className="flex gap-3 overflow-x-auto pb-2">
-              {frames.map((f, i) =>
-                urls[f.path] ? (
-                  <a key={i} href={urls[f.path]} target="_blank" rel="noreferrer" className="shrink-0">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={urls[f.path]} alt={`${i + 1}-kadr`} className={`${item.kind === 'story' ? 'h-[420px] w-[236px]' : 'h-[420px] w-[336px]'} rounded-xl border border-line object-cover`} />
-                  </a>
-                ) : null,
-              )}
-            </div>
-            <div className="mt-4 flex flex-wrap items-start gap-2">
-              {item.status === 'pending_approval' ? (
-                <ActionButton act={{ kind: 'approve', itemId: id }} variant="primary">
-                  ✓ Tasdiqlash
-                </ActionButton>
-              ) : null}
-              {['approved', 'partially_published'].includes(item.status) ? (
-                <ActionButton
-                  act={{ kind: 'publish', itemId: id }}
-                  variant="primary"
-                  confirm={ready.simulate ? 'Sinov nashri: Instagram’ga yuborilmaydi. Davom etilsinmi?' : `HAQIQIY nashr: @${p.instagram_username ?? '?'} profiliga hozir joylansinmi?`}
-                  busy="Joylanmoqda…"
-                >
-                  {ready.simulate ? 'Sinov nashri' : 'Hozir joylash'}
-                </ActionButton>
-              ) : null}
-              {editable ? (
-                <>
-                  <ActionButton act={{ kind: 'regenerate', itemId: id }} confirm="Yangi g‘oya bilan qayta yaratilsinmi? (joriy versiya tarixda qoladi)" busy="Agentlar ishlamoqda…">
-                    Yangi g‘oya
-                  </ActionButton>
-                  <RejectButton itemId={id} />
-                </>
-              ) : null}
-              {frames.map((f, i) =>
-                urls[f.path] ? (
-                  <a key={`d${i}`} href={`${urls[f.path]}&download=${encodeURIComponent(`${p.instagram_username ?? 'agent'}_${item.target_date}_${item.kind}_${i + 1}.jpg`)}`} className="inline-flex h-10 items-center rounded-xl px-3 text-sm text-muted hover:bg-surface-2">
-                    ⬇ {frames.length > 1 ? `${i + 1}-kadr` : 'Rasm'}
-                  </a>
-                ) : null,
-              )}
-            </div>
-            <p className="mt-3 text-[13px] text-muted">
-              {approved ? <Badge tone="success">Joriy versiya tasdiqlangan</Badge> : <Badge>Joriy versiya tasdiqlanmagan</Badge>}{' '}
-              {['approved', 'partially_published'].includes(item.status) ? (ready.ok ? (ready.simulate ? 'Sinov rejimi — Instagram’ga yuborilmaydi.' : p.auto_publish ? `Avto-nashr: ${formatShortDateTime(item.scheduled_at)}.` : 'Avto-nashr o‘chiq — qo‘lda joylang.') : ready.reason) : null}
-            </p>
+            <SlideViewer kind={kind} slides={frames.map((f, i) => ({ src: urls[f.path] ?? '', alt: `${i + 1}: ${f.headline}` })).filter((s) => s.src)} />
           </Card>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <SectionTitle action={<CopyButton value={[v.caption, v.hashtags].filter(Boolean).join('\n\n')} label="Nusxa" variant="ghost" />}>{item.kind === 'post' ? 'Caption' : 'Ichki izoh'}</SectionTitle>
-              <p className="text-sm whitespace-pre-wrap">{v.caption || '—'}</p>
-              {v.hashtags ? <p className="mt-2 text-sm text-accent">{v.hashtags}</p> : null}
-              {v.manual_notes ? (
-                <div className="mt-3">
-                  <Notice tone="info" title="Qo‘lda qo‘shish (API qo‘llamaydi)">
-                    {v.manual_notes}
-                  </Notice>
-                </div>
-              ) : null}
-            </Card>
-            <Card>
-              <SectionTitle>Sifat tekshiruvi {qa.passed ? '✓' : '✕'}</SectionTitle>
+          {qa ? (
+            <Card className="flex flex-col gap-3">
+              <SectionTitle>Sifat tekshiruvi {qa.passed ? '— o‘tdi' : '— o‘tmadi'}</SectionTitle>
               {qa.issues?.length ? (
-                <ul className="flex flex-col gap-1.5 text-sm">
+                <ul className="flex flex-col gap-1 text-sm">
                   {qa.issues.map((x, i) => (
-                    <li key={i} className={`rounded-lg px-3 py-1.5 ${x.level === 'fail' ? 'bg-danger-soft' : 'bg-warning-soft'}`}>
-                      {x.msg}
+                    <li key={i} className={x.level === 'fail' ? 'text-danger' : 'text-warning'}>
+                      {x.level === 'fail' ? '✗' : '!'} {x.msg}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-muted">Muammo topilmadi.</p>
+                <p className="text-sm text-success">Muammo topilmadi.</p>
               )}
-              <p className="mt-2 text-[12px] text-subtle">Tekshirildi: taqiqlar, o‘ylab topilgan raqam/kafolat, boshqa profil ma’lumoti, 30 kunlik takror, rasmdagi matn, yozuv, tuzilma.{qa.retried ? ' Kopirayter bir marta qayta yozdi.' : ''}</p>
+              {qa.ai ? <p className="text-[13px] text-muted">AI ko‘rigi{qa.ai.model ? ` (${qa.ai.model})` : ''}: {qa.ai.summary ?? qa.ai.error}</p> : null}
+              <p className="text-[12px] text-subtle">Tekshirildi: {qa.checked?.join(', ')}. AI ko‘rigi va mashina tekshiruvi tasdiq o‘rnini bosmaydi.</p>
             </Card>
-            <Card>
-              <SectionTitle>G‘oya</SectionTitle>
-              <p className="font-semibold">{idea.title}</p>
-              <p className="mt-1 text-sm text-muted">
-                {fmt?.name ?? idea.format} · {idea.angle}
+          ) : null}
+
+          {Object.keys(plan).length ? (
+            <Card className="grid gap-2 text-sm sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <SectionTitle>Kontent rejasi</SectionTitle>
+              </div>
+              <p>
+                <span className="text-muted">Maqsad: </span>
+                {OBJECTIVES[plan.objective as keyof typeof OBJECTIVES] ?? plan.objective ?? '—'}
               </p>
-              {idea.why_now ? <p className="mt-1 text-sm text-subtle">Nega bugun: {idea.why_now}</p> : null}
-              <p className="mt-2 text-[12px] text-subtle">
-                {idea.provider} · {idea.model}
+              <p>
+                <span className="text-muted">Format: </span>
+                {FORMATS.find((f) => f.key === plan.format)?.name ?? plan.format ?? '—'} · {FAMILIES[plan.family as keyof typeof FAMILIES]?.name ?? ''}
               </p>
-              {idea.candidates?.length ? (
-                <details className="mt-3 text-sm">
-                  <summary className="cursor-pointer text-accent">Nomzod g‘oyalar va ballar ({idea.candidates.length})</summary>
-                  <ul className="mt-2 flex flex-col gap-1">
-                    {idea.candidates.map((c, i) => (
-                      <li key={i} className="flex justify-between gap-3">
-                        <span className={i === 0 ? 'font-medium' : 'text-muted'}>
-                          {c.title} <span className="text-subtle">[{c.format}]</span>
-                        </span>
-                        <span className="tabular shrink-0 text-subtle">{c.score}</span>
-                      </li>
-                    ))}
-                  </ul>
+              <p className="sm:col-span-2">
+                <span className="text-muted">G‘oya: </span>
+                {plan.concept}
+              </p>
+              <p>
+                <span className="text-muted">Auditoriya: </span>
+                {plan.audience}
+              </p>
+              <p>
+                <span className="text-muted">Hook: </span>
+                {plan.hook}
+              </p>
+              <p className="sm:col-span-2">
+                <span className="text-muted">Nega hozir: </span>
+                {plan.why}
+              </p>
+            </Card>
+          ) : null}
+
+          {current ? (
+            <Card className="flex flex-col gap-2 text-sm">
+              <SectionTitle>Caption</SectionTitle>
+              <p className="whitespace-pre-wrap">{current.caption || '—'}</p>
+              <p className="text-accent-on-soft">{current.hashtags}</p>
+              {current.caption_alt ? (
+                <details>
+                  <summary className="cursor-pointer text-muted">Muqobil caption</summary>
+                  <p className="mt-2 whitespace-pre-wrap">{current.caption_alt}</p>
                 </details>
               ) : null}
             </Card>
-            {editable ? (
-              <Card>
-                <SectionTitle>Tuzatish so‘rash</SectionTitle>
-                <FixForm itemId={id} />
-              </Card>
-            ) : null}
-          </div>
+          ) : null}
+
+          {current && editable ? (
+            <Card>
+              <details>
+                <summary className="cursor-pointer text-sm font-semibold">Matnni qo‘lda tahrirlash (rasm qayta chizilmaydi)</summary>
+                <div className="mt-4">
+                  <ManualTextForm itemId={id} frames={frames.map((f) => ({ headline: f.headline, body: f.body, cta: f.cta }))} caption={current.caption} hashtags={current.hashtags} />
+                </div>
+              </details>
+            </Card>
+          ) : null}
+
+          {current && kind !== 'story' && editable && frames.length > 1 ? (
+            <Card>
+              <details>
+                <summary className="cursor-pointer text-sm font-semibold">Slaydlar tartibi</summary>
+                <div className="mt-4">
+                  <ReorderSlides itemId={id} thumbs={frames.map((f) => urls[f.thumb ?? f.path] ?? '')} />
+                </div>
+              </details>
+            </Card>
+          ) : null}
+
+          <Card className="flex flex-col gap-3">
+            <SectionTitle>Versiyalar</SectionTitle>
+            <ul className="flex flex-col divide-y divide-line text-sm">
+              {(versions ?? []).map((v) => {
+                const wasApproved = (approvals ?? []).some((a) => a.version_id === v.id && a.decision === 'approved');
+                return (
+                  <li key={v.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                    <div className="min-w-0">
+                      <p>
+                        <b>v{v.version_no}</b> · {CHANGE[v.change_kind] ?? v.change_kind} · {formatShortDateTime(v.created_at)}
+                        {v.id === item.current_version_id ? <span className="ml-2 rounded-full bg-accent-soft px-2 py-0.5 text-[11px]">joriy</span> : null}
+                        {wasApproved ? <span className="ml-2 rounded-full bg-success-soft px-2 py-0.5 text-[11px] text-success">tasdiqlangan</span> : null}
+                      </p>
+                      <p className="text-[12px] text-subtle">
+                        {[v.instruction, v.text_model, v.image_model, v.images ? `${v.images} rasm` : null, v.cost_usd !== null ? `$${Number(v.cost_usd).toFixed(3)}` : null].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
+                    {v.id !== item.current_version_id && editable ? (
+                      <ActionButton act={{ kind: 'restore', itemId: id, versionId: v.id }} variant="ghost" confirm={`v${v.version_no} qaytarilsinmi? Yangi versiya bo‘lib, qayta tasdiqlanadi.`}>
+                        Qaytarish
+                      </ActionButton>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+            <VersionCompare kind={kind} versions={(versions ?? []).map((v) => ({ id: v.id, label: `v${v.version_no} · ${CHANGE[v.change_kind] ?? v.change_kind}`, thumbs: ((v.frames ?? []) as unknown as Frame[]).map((f) => urls[f.thumb ?? f.path]).filter(Boolean) }))} />
+          </Card>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <Card className="flex flex-col gap-3">
+            <SectionTitle>Qaror</SectionTitle>
+            {approved ? (
+              <Notice tone="success">Tasdiqlangan versiya: v{(versions ?? []).find((v) => v.id === item.approved_version_id)?.version_no}. Endi yuklab olib, Instagram’ga qo‘lda joylang.</Notice>
+            ) : (
+              <ApproveButton itemId={id} disabled={!!approveBlock || !['pending_approval', 'needs_fix'].includes(item.status)} reason={approveBlock ?? (['pending_approval', 'needs_fix'].includes(item.status) ? undefined : 'Bu holatda tasdiqlab bo‘lmaydi')} />
+            )}
+            {editable ? <RejectButton itemId={id} /> : null}
+          </Card>
+
+          {downloadable ? (
+            <Card className="flex flex-col gap-2">
+              <SectionTitle>Yuklab olish</SectionTitle>
+              {frames.map((_, i) => (
+                <a key={i} href={`/api/agents/files/${id}?f=${i}`} className="rounded-xl border border-line px-3 py-2 text-sm hover:border-accent" download>
+                  {exportName({ client: profile.name, date: item.target_date, kind, index: i, slot: item.slot })}
+                </a>
+              ))}
+              {kind !== 'story' ? (
+                <a href={`/api/agents/files/${id}?zip=1`} className="rounded-xl bg-accent px-3 py-2 text-center text-sm font-semibold text-accent-fg" download>
+                  Hammasi ZIP (slaydlar + caption)
+                </a>
+              ) : null}
+              <p className="text-[12px] text-subtle">Fayllar tasdiqlangan versiyaning o‘zi (PNG, {kind === 'story' ? '1080×1920' : '1080×1350'}).</p>
+              {item.status !== 'published_manual' ? <PublishedForm itemId={id} /> : <Notice tone="success">Qo‘lda joylangan: {formatShortDateTime(item.published_manually_at)}</Notice>}
+            </Card>
+          ) : null}
 
           {editable ? (
-            <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-              <Card>
-                <SectionTitle>Matnni qo‘lda tahrirlash</SectionTitle>
-                <EditItemForm itemId={id} frames={frames.map(({ role, headline, body, cta }) => ({ role, headline, body, cta }))} caption={v.caption} hashtags={v.hashtags} isPost={item.kind === 'post'} />
-              </Card>
-              <Card>
-                <SectionTitle>Qayta rejalashtirish</SectionTitle>
-                <RescheduleForm itemId={id} date={item.target_date < agencyDateKey() ? agencyDateKey() : item.target_date} time={formatTime(item.scheduled_at)} />
-                <p className="mt-2 text-[12px] text-subtle">Vaqt o‘zgarsa — tasdiq qayta kerak.</p>
-              </Card>
-            </div>
+            <Card className="flex flex-col gap-3">
+              <SectionTitle>Tahrirlash</SectionTitle>
+              <EditPanel itemId={id} slides={frames.length} />
+            </Card>
           ) : null}
-        </>
-      )}
+          {isEditable(item.status) && !active ? (
+            <Card className="flex flex-col gap-3">
+              <SectionTitle>Yangi variant</SectionTitle>
+              <RegenerateForm itemId={id} />
+            </Card>
+          ) : null}
+          {isEditable(item.status) ? (
+            <Card>
+              <RescheduleForm itemId={id} date={item.target_date} time={new Date(Date.parse(item.scheduled_at) + 5 * 3600_000).toISOString().slice(11, 16)} />
+            </Card>
+          ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <SectionTitle>Versiyalar va qarorlar</SectionTitle>
-          <ul className="flex flex-col gap-1.5 text-sm">
-            {(versions ?? []).map((x) => (
-              <li key={x.id} className="flex justify-between gap-3">
-                <span>
-                  v{x.version_no} · {x.provider === 'user' ? 'qo‘lda tahrir' : x.provider}
-                  {x.note ? <span className="text-subtle"> — {x.note.slice(0, 80)}</span> : null}
-                </span>
-                <span className="shrink-0 text-subtle">{formatShortDateTime(x.created_at)}</span>
-              </li>
-            ))}
-            {(approvals ?? []).map((a, i) => (
-              <li key={`a${i}`} className="flex justify-between gap-3">
-                <span>
-                  <Badge tone={a.decision === 'approved' ? 'success' : a.decision === 'fix' ? 'warning' : 'danger'}>
-                    {a.decision === 'approved' ? 'Tasdiq' : a.decision === 'fix' ? (a.scope === 'rule' ? 'Tuzatish (doimiy qoida)' : 'Tuzatish') : 'Rad'}
-                  </Badge>{' '}
-                  {a.version_id ? `v${vno.get(a.version_id) ?? '?'}` : ''} {a.channel === 'auto' ? '· avto' : ''} {a.comment ? <span className="text-subtle">— {a.comment.slice(0, 80)}</span> : null}
-                </span>
-                <span className="shrink-0 text-subtle">{formatShortDateTime(a.created_at)}</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-        <Card>
-          <SectionTitle>Nashr va natijalar</SectionTitle>
-          {attempts?.length ? (
-            <ul className="flex flex-col gap-1.5 text-sm">
-              {attempts.map((a) => (
-                <li key={a.frame_index} className="flex flex-wrap justify-between gap-2">
-                  <span>
-                    {a.frame_index + 1}-kadr · <Badge tone={a.status === 'published' ? 'success' : a.status === 'simulated' ? 'violet' : a.status === 'failed' ? 'danger' : 'warning'}>{a.status}</Badge>{' '}
-                    {a.media_id ? <span className="text-subtle">{a.media_id}</span> : null}
-                  </span>
-                  {a.error ? <span className="text-danger">{a.error}</span> : null}
+          <Card className="flex flex-col gap-3">
+            <SectionTitle>Izohlar</SectionTitle>
+            <CommentForm itemId={id} />
+            <ul className="flex flex-col gap-2 text-sm">
+              {(comments ?? []).map((c) => (
+                <li key={c.id}>
+                  <p className="text-[12px] text-subtle">
+                    {(c.author as { full_name?: string } | null)?.full_name ?? '—'} · {formatShortDateTime(c.created_at)}
+                  </p>
+                  <p className="whitespace-pre-wrap">{c.body}</p>
                 </li>
               ))}
             </ul>
-          ) : (
-            <p className="text-sm text-muted">Nashr urinishi yo‘q.</p>
-          )}
-          <div className="mt-3 text-sm">
-            {insights?.length ? (
-              insights.map((x, i) => (
-                <p key={i} className="text-muted">
-                  {formatShortDateTime(x.fetched_at)}:{' '}
-                  {Object.entries(x.metrics as Record<string, unknown>)
-                    .map(([k, val]) => (k === '_mavjud_emas' ? `Ma’lumot mavjud emas (${val})` : `${k} ${val}`))
-                    .join(' · ')}
-                </p>
-              ))
-            ) : (
-              <p className="text-subtle">
-                Natijalar: Ma’lumot mavjud emas{item.status === 'simulated' ? ' (sinov nashri)' : item.status === 'published' ? ' (Instagram 20–72 soatdan keyin beradi)' : ' (hali joylanmagan)'}.
-              </p>
-            )}
-          </div>
-        </Card>
+          </Card>
+
+          {(jobs ?? []).length ? (
+            <Card className="flex flex-col gap-2 text-sm">
+              <SectionTitle>Ishlar</SectionTitle>
+              {(jobs ?? []).map((j) => (
+                <div key={j.id} className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    {j.kind} · {j.status} · {formatShortDateTime(j.updated_at)}
+                    {j.error && j.status !== 'done' ? <span className="block text-[12px] text-danger">{j.error}</span> : null}
+                  </span>
+                  {j.status === 'failed' ? <ActionButton act={{ kind: 'retry', jobId: j.id }}>Qayta urinish</ActionButton> : j.status === 'queued' ? <ActionButton act={{ kind: 'cancel', jobId: j.id }} variant="ghost">Bekor</ActionButton> : null}
+                </div>
+              ))}
+            </Card>
+          ) : null}
+        </div>
       </div>
+
+      {['exported', 'published_manual', 'export_ready'].includes(item.status) ? (
+        <Card className="flex flex-col gap-3">
+          <SectionTitle>Natijalar (Instagram’dan tasdiqlangan raqamlar)</SectionTitle>
+          <MetricsForm itemId={id} />
+          {(metrics ?? []).length ? (
+            <table className="w-full text-sm">
+              <thead className="text-left text-[12px] text-muted">
+                <tr>
+                  <th>Kiritilgan</th>
+                  <th>Qamrov</th>
+                  <th>Ko‘rish</th>
+                  <th>Layk</th>
+                  <th>Izoh</th>
+                  <th>Ulashish</th>
+                  <th>Saqlash</th>
+                  <th>So‘rov</th>
+                  <th>Manba</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(metrics ?? []).map((m) => (
+                  <tr key={m.id} className="border-t border-line">
+                    <td className="py-1">{formatShortDateTime(m.created_at)}</td>
+                    <td>{m.reach ?? '—'}</td>
+                    <td>{m.views ?? '—'}</td>
+                    <td>{m.likes ?? '—'}</td>
+                    <td>{m.comments ?? '—'}</td>
+                    <td>{m.shares ?? '—'}</td>
+                    <td>{m.saves ?? '—'}</td>
+                    <td>{m.leads ?? '—'}</td>
+                    <td>{m.source}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+        </Card>
+      ) : null}
     </div>
   );
 }

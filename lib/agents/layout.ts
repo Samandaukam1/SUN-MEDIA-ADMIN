@@ -3,7 +3,10 @@
  * Satori matnni o'zi qatorlarga bo'ladi; bu yerda o'rtacha harf kengligi bo'yicha eng katta sig'adigan o'lcham tanlanadi.
  * Eng kichik o'lchamda ham sig'masa — "text_overflow" (sifat tekshiruvi materialni to'xtatadi).
  */
-export const SIZES = { story: { w: 1080, h: 1920 }, post: { w: 1080, h: 1350 } } as const;
+export const SIZES = { story: { w: 1080, h: 1920 }, carousel: { w: 1080, h: 1350 }, post: { w: 1080, h: 1350 } } as const;
+
+/** Instagram-safe zones: the Story's top bar and reply field cover these bands; essentials stay inside. */
+export const SAFE = { story: { top: 250, bottom: 340, side: 64 }, carousel: { top: 70, bottom: 80, side: 72 }, post: { top: 70, bottom: 80, side: 72 } } as const;
 
 export type Rgb = [number, number, number];
 

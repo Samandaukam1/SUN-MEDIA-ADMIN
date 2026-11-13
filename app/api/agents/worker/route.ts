@@ -8,7 +8,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 // Rejalashtiruvchi eshigi: pg_cron (private.request_agents_worker) ish bo'lganda chaqiradi, bir martalik token bilan
 // (hash'i bazada bir lahza oldin saqlangan). Tokensiz, ishlatilgan yoki muddati o'tgan token bilan — hech narsa ishlamaydi.
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+// A generation step (plan, package, images, composition) can take minutes; the worker stops new work in time.
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const token = request.headers.get('x-agents-worker') ?? '';

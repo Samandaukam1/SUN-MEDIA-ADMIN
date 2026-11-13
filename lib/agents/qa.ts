@@ -106,3 +106,48 @@ export function checkContent(i: QaInput): QaReport {
     checked: ['taqiqlar', 'raqamli da’volar', 'boshqa profil', 'takrorlanish', 'rasm ustidagi matn', 'yozuv', 'tuzilma'],
   };
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Image checks (machine-verifiable): exact size, client ownership of every file, the logo's aspect ratio, forbidden
+// colours, sharpness. Subjective judgements (spelling on the picture, clutter, artifacts) come from the AI review and
+// are reported separately — nothing here approves anything.
+// ---------------------------------------------------------------------------------------------------------------
+export type ImageCheckInput = {
+  index: number;
+  expected: { w: number; h: number };
+  actual: { w: number; h: number };
+  /** Every storage path used for this frame must sit under the client's own folder. */
+  paths: string[];
+  profileId: string;
+  logo: { w: number; h: number; origW: number; origH: number } | null;
+  logoRequired: boolean;
+  sharpness: number | null;
+  colors: { forbidden: { color: string; share: number }[]; offBrand: number };
+  warnings: string[];
+};
+
+export function checkImage(i: ImageCheckInput): QaIssue[] {
+  const out: QaIssue[] = [];
+  const n = i.index + 1;
+  if (i.actual.w !== i.expected.w || i.actual.h !== i.expected.h) out.push({ code: 'dimensions', level: 'fail', msg: `${n}-kadr o‘lchami ${i.actual.w}×${i.actual.h}, kerak ${i.expected.w}×${i.expected.h}` });
+  const foreign = i.paths.filter((p) => p && !p.startsWith(`${i.profileId}/`));
+  if (foreign.length) out.push({ code: 'cross_client_asset', level: 'fail', msg: `${n}-kadrda boshqa mijozning fayli ishlatilgan` });
+  if (i.logo) {
+    const want = i.logo.origW / i.logo.origH;
+    const got = i.logo.w / i.logo.h;
+    // Rounding to whole pixels: allow one pixel either way.
+    const tol = Math.max(0.01, 1 / Math.min(i.logo.w, i.logo.h));
+    if (Math.abs(got - want) / want > tol) out.push({ code: 'logo_ratio', level: 'fail', msg: `${n}-kadrda logo proporsiyasi o‘zgargan` });
+  } else if (i.logoRequired) out.push({ code: 'no_logo', level: 'warn', msg: `${n}-kadrda logo yo‘q (Brand DNA’ga logo yuklang)` });
+  for (const f of i.colors.forbidden) out.push({ code: 'forbidden_color', level: 'warn', msg: `${n}-kadrda taqiqlangan rang ${f.color} (~${Math.round(f.share * 100)}%)` });
+  if (i.colors.offBrand > 0.45) out.push({ code: 'off_brand_colors', level: 'warn', msg: `${n}-kadr ranglarining ~${Math.round(i.colors.offBrand * 100)}% brend palitrasidan uzoq` });
+  if (i.sharpness !== null && i.sharpness < 0.6) out.push({ code: 'soft_image', level: 'warn', msg: `${n}-kadr xira ko‘rinishi mumkin (aniqlik past)` });
+  if (i.warnings.includes('text_overflow')) out.push({ code: 'text_overflow', level: 'fail', msg: `${n}-kadrda matn sig‘madi — qisqartirish kerak` });
+  if (i.warnings.includes('logo_small_source')) out.push({ code: 'logo_small_source', level: 'warn', msg: 'Logo fayli kichik — kattaroq (yoki SVG→PNG) versiya yuklang' });
+  if (i.warnings.includes('product_no_room')) out.push({ code: 'product_no_room', level: 'warn', msg: `${n}-kadrda mahsulot uchun joy kam — matnni qisqartiring yoki “Matnni tepaga ko‘chir”` });
+  if (i.warnings.includes('product_small_source')) out.push({ code: 'product_small_source', level: 'warn', msg: `${n}-kadrdagi mahsulot fotosi kichik` });
+  if (i.warnings.includes('product_image_unreadable')) out.push({ code: 'product_unreadable', level: 'fail', msg: `${n}-kadrdagi mahsulot fotosini o‘qib bo‘lmadi` });
+  if (i.warnings.includes('logo_unreadable')) out.push({ code: 'logo_unreadable', level: 'fail', msg: 'Logo faylini o‘qib bo‘lmadi' });
+  if (i.warnings.includes('text_color_adjusted')) out.push({ code: 'text_color_adjusted', level: 'warn', msg: `${n}-kadr: brend matn rangi fonda o‘qilmasdi — kontrastli rang tanlandi` });
+  return out;
+}

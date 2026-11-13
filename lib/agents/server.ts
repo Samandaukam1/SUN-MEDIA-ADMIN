@@ -5,8 +5,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import type { Database, Json } from '@/types/database';
 import type { StaffContext } from '@/types/app';
 
+import { brandColors, contactsOf, parseDna, type BrandDna, type Contacts } from './brand';
 import { contentHash, type Frame } from './core';
 import type { MemoryLine, ProfileBrief, RecentItem } from './creative';
+import type { BudgetState } from './insights';
+import { palette, type Palette } from './layout';
 
 /**
  * Agents server qatlami. Jadvallar faqat service_role uchun ochiq (RLS: hech kim), shuning uchun HAR kirish nuqtasi
@@ -21,7 +24,9 @@ export type AgentProfile = T['agent_profiles']['Row'];
 export type AgentItem = T['agent_items']['Row'];
 export type AgentVersion = T['agent_versions']['Row'];
 export type AgentSettings = T['agent_settings']['Row'];
-export type AgentConnection = T['agent_ig_connections']['Row'];
+export type AgentAsset = T['agent_assets']['Row'];
+export type AgentJob = T['agent_jobs']['Row'];
+export type AgentCampaign = T['agent_campaigns']['Row'];
 
 export const requireAgents = (): Promise<StaffContext> => requirePermission(PERMISSION);
 export const canAgents = (c: StaffContext) => can(c, PERMISSION);
@@ -32,8 +37,15 @@ export async function loadSettings(): Promise<AgentSettings> {
   return (
     data ?? {
       id: 1,
-      publishing_enabled: true,
+      publishing_enabled: false,
       simulate: true,
+      automation_enabled: true,
+      monthly_budget_usd: null,
+      monthly_image_limit: 600,
+      daily_image_limit: 80,
+      revision_warn: 5,
+      story_safe_top: 250,
+      story_safe_bottom: 340,
       prepare_lead_hours: 20,
       late_grace_minutes: 90,
       daily_ai_limit: 150,
@@ -144,4 +156,79 @@ export async function isApproved(item: AgentItem, profile: AgentProfile): Promis
   const { data } = await db().from('agent_approvals').select('decision, content_hash').eq('item_id', item.id).eq('version_id', v.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
   if (!data || data.decision !== 'approved') return false;
   return data.content_hash === hashFor(profile, item, { caption: v.caption, hashtags: v.hashtags, frames: v.frames as unknown as Frame[] });
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Client context: everything one generation may use — and nothing of another client.
+// ---------------------------------------------------------------------------------------------------------------
+export type ClientContext = {
+  profile: AgentProfile;
+  dna: BrandDna;
+  contacts: Contacts;
+  palette: Palette;
+  colors: string[];
+  assets: AgentAsset[];
+  campaigns: AgentCampaign[];
+};
+
+export const LOGO_KINDS = ['logo', 'logo_light', 'logo_dark'] as const;
+export const PHOTO_KINDS = ['product', 'packaging', 'service', 'venue', 'people', 'illustration'];
+
+export async function clientContext(profileId: string): Promise<ClientContext | null> {
+  const [{ data: profile }, { data: assets }, { data: campaigns }] = await Promise.all([
+    db().from('agent_profiles').select('*').eq('id', profileId).maybeSingle(),
+    // Only this client's files, active and approved for use.
+    db().from('agent_assets').select('*').eq('profile_id', profileId).is('archived_at', null).eq('usage_approved', true).order('created_at', { ascending: false }),
+    db().from('agent_campaigns').select('*').eq('profile_id', profileId).eq('active', true).order('priority', { ascending: false }),
+  ]);
+  if (!profile) return null;
+  const dna = parseDna(profile.brand_dna);
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    profile,
+    dna,
+    contacts: contactsOf(profile, dna),
+    palette: palette(profile.colors as Record<string, unknown>),
+    colors: brandColors(profile.colors as Record<string, unknown>, dna),
+    assets: (assets ?? []).filter((a) => a.storage_path.startsWith(`${profileId}/`)),
+    campaigns: (campaigns ?? []).filter((c) => (!c.starts_on || c.starts_on <= today) && (!c.ends_on || c.ends_on >= today)),
+  };
+}
+
+/** Budget state from the recorded usage (this month in Tashkent time; images counted, costs summed where known). */
+export async function budgetState(profileId: string, settings: AgentSettings, profile: AgentProfile): Promise<BudgetState> {
+  const now = new Date();
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) - 5 * 3600_000).toISOString();
+  const dayStart = new Date(Date.parse(`${new Date(now.getTime() + 5 * 3600_000).toISOString().slice(0, 10)}T00:00:00Z`) - 5 * 3600_000).toISOString();
+  const { data: month } = await db().from('agent_usage').select('profile_id, images, cost_usd, created_at').gte('created_at', monthStart).limit(20000);
+  const rows = month ?? [];
+  const sumCost = (list: typeof rows) => (list.some((r) => r.cost_usd !== null) ? list.reduce((n, r) => n + Number(r.cost_usd ?? 0), 0) : null);
+  const mine = rows.filter((r) => r.profile_id === profileId);
+  return {
+    profile: {
+      monthImages: mine.reduce((n, r) => n + r.images, 0),
+      monthCost: sumCost(mine),
+      imageLimit: profile.monthly_image_limit,
+      budgetUsd: profile.monthly_budget_usd === null ? null : Number(profile.monthly_budget_usd),
+      emergency: profile.emergency_pause,
+    },
+    agency: {
+      todayImages: rows.filter((r) => r.created_at >= dayStart).reduce((n, r) => n + r.images, 0),
+      monthImages: rows.reduce((n, r) => n + r.images, 0),
+      monthCost: sumCost(rows),
+      dailyLimit: settings.daily_image_limit,
+      monthlyLimit: settings.monthly_image_limit,
+      budgetUsd: settings.monthly_budget_usd === null ? null : Number(settings.monthly_budget_usd),
+    },
+  };
+}
+
+/** A notification in the panel for everyone with agents.manage; opens the right page. */
+export async function notify(type: string, title: string, body: string, route: string, entity?: string | null, priority: 'low' | 'normal' | 'high' = 'normal') {
+  await db()
+    .rpc('agent_notify', { p_type: `agents.${type}`, p_title: title.slice(0, 200), p_body: body.slice(0, 1000), p_route: route, p_entity: entity ?? undefined, p_priority: priority })
+    .then(
+      () => undefined,
+      () => undefined,
+    );
 }

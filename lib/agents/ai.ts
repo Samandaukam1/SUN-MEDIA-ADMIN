@@ -1,74 +1,55 @@
 import 'server-only';
 
-import { geminiKey } from '@/lib/assistant/gemini';
+import { aiConfig, checkModel, respond, type AiResult, type AiUsage } from '@/lib/brief/openai';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { agencyDayRange, agencyDateKey } from '@/lib/time';
+import { agencyDateKey, agencyDayRange } from '@/lib/time';
 
-import { estimateCost } from './core';
+import { imageConfig, type ImageUsage } from './images';
 
 /**
- * Agents uchun AI: ikki bosqich, ikki narx.
- *   g'oyalar ("idea")  — ko'p variant, arzon: Gemini (AI Studio bepul tarifi) yoki Claude Haiku 5.5;
- *   yakuniy matn ("write") — sifat: Claude Sonnet 5.5 yoki (kalit bo'lmasa) Gemini.
- * AGENTS_AI = auto | anthropic | gemini. Modellarni AGENTS_IDEA_MODEL / AGENTS_WRITE_MODEL / AGENTS_GEMINI_MODEL bilan o'zgartirish mumkin.
- * Har chaqiruv agent_usage ga yoziladi (token, taxminiy narx); kunlik limitdan oshsa to'xtaydi.
- * Hech qanday kalit yo'q bo'lsa — AgentAiOffline: pipeline lokal (shablon) matnga o'tadi va buni ochiq belgilaydi.
+ * The agent's AI — OpenAI only (no Telegram, no other provider):
+ *   content  (OPENAI_CONTENT_MODEL,  default gpt-6-luna)  — plans, captions, edit classification, quick checks;
+ *   strategy (OPENAI_STRATEGY_MODEL, default gpt-6.1-sol) — the creative package, trend research, evaluation;
+ *   images   (OPENAI_IMAGE_MODEL / OPENAI_IMAGE_EDIT_MODEL) — see images.ts.
+ * Every call is recorded in agent_usage (tokens, images, cost when the price is configured); a daily cap on text calls
+ * and the image budgets (insights.ts → budgetCheck) stop runaway spending.
  */
 
 export class AgentAiOffline extends Error {
   constructor() {
-    super('AI ulanmagan');
+    super('OPENAI_API_KEY o‘rnatilmagan — AI ishlamaydi.');
   }
 }
 export class AgentLimitError extends Error {}
-export class AgentAiError extends Error {}
-
-type Stage = 'idea' | 'write' | 'research';
-export type Route = { provider: 'anthropic' | 'gemini'; model: string };
-
-const anthropicKey = () => process.env.ANTHROPIC_API_KEY?.trim() ?? '';
-const mode = () => (process.env.AGENTS_AI ?? 'auto').trim().toLowerCase();
-
-export function aiRoutes(): Record<Stage, Route | null> {
-  const a = !!anthropicKey();
-  const g = !!geminiKey();
-  const gemini: Route = { provider: 'gemini', model: process.env.AGENTS_GEMINI_MODEL?.trim() || 'gemini-3.8-flash' };
-  const haiku: Route = { provider: 'anthropic', model: process.env.AGENTS_IDEA_MODEL?.trim() || 'claude-haiku-5-5' };
-  const sonnet: Route = { provider: 'anthropic', model: process.env.AGENTS_WRITE_MODEL?.trim() || 'claude-sonnet-5-5' };
-  const m = mode();
-  if (m === 'anthropic') return { idea: a ? haiku : null, write: a ? sonnet : null, research: a ? sonnet : null };
-  if (m === 'gemini') return { idea: g ? gemini : null, write: g ? gemini : null, research: g ? gemini : null };
-  return {
-    idea: g ? gemini : a ? haiku : null,
-    write: a ? sonnet : g ? gemini : null,
-    research: a ? sonnet : g ? gemini : null,
-  };
+export class AgentAiError extends Error {
+  readonly retryable: boolean;
+  constructor(message: string, retryable = false) {
+    super(message);
+    this.retryable = retryable;
+  }
 }
 
-export async function usageToday(): Promise<number> {
-  const { from, to } = agencyDayRange(agencyDateKey());
-  const { count } = await createAdminClient().from('agent_usage').select('id', { count: 'exact', head: true }).gte('created_at', from).lt('created_at', to);
-  return count ?? 0;
-}
+export type Tier = 'content' | 'strategy';
+export const aiOnline = () => !!aiConfig().key;
+export const modelOf = (tier: Tier) => aiConfig().models[tier];
 
-async function checkLimit() {
-  const { data } = await createAdminClient().from('agent_settings').select('daily_ai_limit').eq('id', 1).maybeSingle();
-  const limit = data?.daily_ai_limit ?? 150;
-  if ((await usageToday()) >= limit) throw new AgentLimitError(`Kunlik AI chaqiruvlar limiti (${limit}) tugadi. Sozlamalarda oshirish mumkin.`);
-}
+const db = () => createAdminClient();
 
-async function record(profileId: string | null, purpose: string, route: Route, input: number, output: number, searches = 0) {
-  await createAdminClient()
+export async function recordUsage(a: { profileId: string | null; itemId?: string | null; purpose: string; kind: 'text' | 'image' | 'image_edit' | 'vision' | 'research'; model: string; usage?: AiUsage | ImageUsage; images?: number; searches?: number }) {
+  await db()
     .from('agent_usage')
     .insert({
-      profile_id: profileId,
-      purpose,
-      provider: route.provider,
-      model: route.model,
-      input_tokens: input,
-      output_tokens: output,
-      web_searches: searches,
-      cost_usd: route.provider === 'anthropic' ? estimateCost(route.model, input, output, searches) : null,
+      profile_id: a.profileId,
+      item_id: a.itemId ?? null,
+      purpose: a.purpose.slice(0, 40),
+      provider: 'openai',
+      model: a.model.slice(0, 80),
+      kind: a.kind,
+      input_tokens: a.usage?.input ?? 0,
+      output_tokens: a.usage?.output ?? 0,
+      images: a.images ?? 0,
+      web_searches: a.searches ?? 0,
+      cost_usd: a.usage?.costUsd ?? null,
     })
     .then(
       () => undefined,
@@ -76,207 +57,207 @@ async function record(profileId: string | null, purpose: string, route: Route, i
     );
 }
 
-/** JSON ob'ekt (matn ichida kod bloki bo'lsa ham). */
-function parseJson(text: string): unknown {
+export async function textCallsToday(): Promise<number> {
+  const { from, to } = agencyDayRange(agencyDateKey());
+  const { count } = await db().from('agent_usage').select('id', { count: 'exact', head: true }).neq('kind', 'image').neq('kind', 'image_edit').gte('created_at', from).lt('created_at', to);
+  return count ?? 0;
+}
+
+async function checkTextLimit() {
+  const { data } = await db().from('agent_settings').select('daily_ai_limit').eq('id', 1).maybeSingle();
+  const limit = data?.daily_ai_limit ?? 150;
+  if ((await textCallsToday()) >= limit) throw new AgentLimitError(`Kunlik AI matn chaqiruvlari limiti (${limit}) tugadi. Sozlamalarda oshirish mumkin.`);
+}
+
+const retryable = (r: AiResult<unknown>) => !r.ok && ['timeout', 'rate', 'server', 'incomplete'].includes(r.kind);
+
+/** One structured call; the result is validated by `parse` (AI output is untrusted until it passes). */
+export async function agentJson<T>(a: {
+  tier: Tier;
+  profileId: string | null;
+  itemId?: string | null;
+  purpose: string;
+  system: string;
+  user: string;
+  schemaName: string;
+  schema: Record<string, unknown>;
+  parse: (x: unknown) => T | null;
+  maxOutputTokens?: number;
+  timeoutMs?: number;
+}): Promise<{ data: T; model: string }> {
+  if (!aiOnline()) throw new AgentAiOffline();
+  await checkTextLimit();
+  const r = await respond<T>({
+    purpose: a.tier,
+    instructions: a.system,
+    input: a.user,
+    schemaName: a.schemaName,
+    schema: a.schema,
+    parse: a.parse,
+    maxOutputTokens: a.maxOutputTokens ?? 8000,
+    timeoutMs: a.timeoutMs ?? 120_000,
+  });
+  await recordUsage({ profileId: a.profileId, itemId: a.itemId, purpose: a.purpose, kind: 'text', model: modelOf(a.tier), usage: r.ok ? r.usage : r.usage });
+  if (!r.ok) throw new AgentAiError(`AI (${modelOf(a.tier)}): ${r.message}`, retryable(r));
+  return { data: r.data, model: r.model };
+}
+
+/** Looks at rendered images (small JPEGs) and answers in a schema — the AI half of the quality check. */
+export async function agentVision<T>(a: {
+  profileId: string;
+  itemId: string;
+  system: string;
+  user: string;
+  images: Buffer[];
+  schemaName: string;
+  schema: Record<string, unknown>;
+  parse: (x: unknown) => T | null;
+}): Promise<{ data: T; model: string }> {
+  if (!aiOnline()) throw new AgentAiOffline();
+  await checkTextLimit();
+  const content = [
+    { type: 'input_text', text: a.user },
+    ...a.images.map((b) => ({ type: 'input_image', image_url: `data:image/jpeg;base64,${b.toString('base64')}`, detail: 'high' })),
+  ];
+  const r = await respond<T>({
+    purpose: 'content',
+    instructions: a.system,
+    input: [{ role: 'user', content }],
+    schemaName: a.schemaName,
+    schema: a.schema,
+    parse: a.parse,
+    maxOutputTokens: 6000,
+    timeoutMs: 120_000,
+  });
+  await recordUsage({ profileId: a.profileId, itemId: a.itemId, purpose: 'qa_vision', kind: 'vision', model: modelOf('content'), usage: r.ok ? r.usage : r.usage });
+  if (!r.ok) throw new AgentAiError(`AI sifat tekshiruvi: ${r.message}`, retryable(r));
+  return { data: r.data, model: r.model };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Trend research: OpenAI web search. A finding is kept only with a source URL the search itself returned.
+// ---------------------------------------------------------------------------------------------------------------
+export type Finding = {
+  title: string;
+  source_url: string;
+  source_title: string;
+  platform: string;
+  format: string;
+  visual_direction: string;
+  why: string;
+  adaptation: string;
+  freshness: 'fresh' | 'recent' | 'evergreen' | 'unknown';
+  confidence: number;
+};
+
+/** Every URL the response cited or the search consulted. */
+export function sourcesOf(body: Record<string, unknown>): Set<string> {
+  const urls = new Set<string>();
+  for (const item of (body.output as Record<string, unknown>[] | undefined) ?? []) {
+    if (item.type === 'web_search_call') {
+      const action = (item.action ?? {}) as { sources?: { url?: string }[] };
+      for (const s of action.sources ?? []) if (s.url) urls.add(s.url);
+    }
+    if (item.type === 'message')
+      for (const c of (item.content as { annotations?: { type?: string; url?: string }[] }[] | undefined) ?? [])
+        for (const an of c.annotations ?? []) if (an.type === 'url_citation' && an.url) urls.add(an.url);
+  }
+  return urls;
+}
+
+/** A URL counts as verified when it matches a returned source (same host and path; query and tracking ignored). */
+export function verifiedUrl(url: string, sources: Set<string>): boolean {
+  const key = (u: string) => {
+    try {
+      const x = new URL(u);
+      return `${x.hostname.replace(/^www\./, '')}${x.pathname.replace(/\/+$/, '')}`.toLowerCase();
+    } catch {
+      return null;
+    }
+  };
+  const k = key(url);
+  if (!k) return false;
+  for (const s of sources) if (key(s) === k) return true;
+  return false;
+}
+
+export function parseFindings(input: unknown): Finding[] | null {
+  if (typeof input !== 'string') return null;
+  const text = input;
   const s = text.indexOf('{');
   const e = text.lastIndexOf('}');
-  if (s < 0 || e <= s) throw new AgentAiError('AI javobi JSON emas.');
+  if (s < 0 || e <= s) return null;
+  let raw: unknown;
   try {
-    return JSON.parse(text.slice(s, e + 1));
+    raw = JSON.parse(text.slice(s, e + 1));
   } catch {
-    throw new AgentAiError('AI javobi JSON emas.');
+    return null;
   }
+  const list = (raw as { findings?: unknown[] })?.findings;
+  if (!Array.isArray(list)) return null;
+  const str = (v: unknown, n: number) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
+  return list
+    .slice(0, 12)
+    .map((x) => {
+      const o = (x ?? {}) as Record<string, unknown>;
+      const fr = str(o.freshness, 20);
+      const conf = typeof o.confidence === 'number' ? Math.max(0, Math.min(1, o.confidence)) : 0.5;
+      return {
+        title: str(o.title, 200),
+        source_url: str(o.source_url, 1000),
+        source_title: str(o.source_title, 300),
+        platform: str(o.platform, 60),
+        format: str(o.format, 80),
+        visual_direction: str(o.visual_direction, 600),
+        why: str(o.why, 1000),
+        adaptation: str(o.adaptation, 1000),
+        freshness: (['fresh', 'recent', 'evergreen'].includes(fr) ? fr : 'unknown') as Finding['freshness'],
+        confidence: conf,
+      };
+    })
+    .filter((f) => f.title && /^https?:\/\//.test(f.source_url));
+}
+
+export async function agentResearch(a: { profileId: string; system: string; user: string; country?: string }): Promise<{ kept: (Finding & { verified: boolean })[]; dropped: number; model: string; sources: number }> {
+  if (!aiOnline()) throw new AgentAiOffline();
+  await checkTextLimit();
+  let body: Record<string, unknown> = {};
+  const r = await respond<Finding[]>({
+    purpose: 'strategy',
+    instructions: a.system,
+    input: a.user,
+    schemaName: 'trends',
+    schema: null,
+    format: 'text',
+    parse: parseFindings,
+    tools: [{ type: 'web_search', user_location: { type: 'approximate', country: a.country ?? 'UZ' } }],
+    include: ['web_search_call.action.sources'],
+    onBody: (b) => (body = b),
+    maxOutputTokens: 12_000,
+    timeoutMs: 200_000,
+  });
+  const searches = ((body.output as { type?: string }[] | undefined) ?? []).filter((o) => o.type === 'web_search_call').length;
+  await recordUsage({ profileId: a.profileId, purpose: 'trend_research', kind: 'research', model: modelOf('strategy'), usage: r.ok ? r.usage : r.usage, searches });
+  if (!r.ok) throw new AgentAiError(`Trend tadqiqoti: ${r.message}`, retryable(r));
+  const sources = sourcesOf(body);
+  const kept = r.data.map((f) => ({ ...f, verified: verifiedUrl(f.source_url, sources) }));
+  // Unverified sources are not stored as facts: dropped (and counted, so the report says how many).
+  return { kept: kept.filter((f) => f.verified), dropped: kept.filter((f) => !f.verified).length, model: r.model, sources: sources.size };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Claude (Messages API, server tomonida; loyihadagi boshqa chaqiruvlar kabi to'g'ridan-to'g'ri HTTP)
+// Model availability (settings page): nothing generated.
 // ---------------------------------------------------------------------------------------------------------------
-type ClaudeBlock = { type: string; text?: string; citations?: { url?: string; title?: string }[] | null; [k: string]: unknown };
-type ClaudeResponse = {
-  content: ClaudeBlock[];
-  stop_reason: string;
-  usage?: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number; server_tool_use?: { web_search_requests?: number } };
-};
-
-async function claude(route: Route, body: Record<string, unknown>, timeoutMs: number): Promise<ClaudeResponse> {
-  const sonnetLine = /^claude-(sonnet|opus|fable)-5/.test(route.model);
-  const send = async (withFallback: boolean) =>
-    fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': anthropicKey(),
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-        // Xavfsizlik filtri rad etsa, server o'zi mos modelga o'tadi (refusal fallback).
-        ...(withFallback ? { 'anthropic-beta': 'server-side-fallback-2026-07-01' } : {}),
-      },
-      body: JSON.stringify({ model: route.model, ...body, ...(withFallback ? { fallbacks: 'default' } : {}) }),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  let res: Response;
-  try {
-    res = await send(sonnetLine);
-    if (res.status === 400 && sonnetLine) {
-      const detail = await res.clone().text();
-      if (/fallback/i.test(detail)) res = await send(false);
-    }
-  } catch {
-    throw new AgentAiError('Claude bilan ulanib bo‘lmadi (tarmoq yoki vaqt tugadi).');
-  }
-  if (!res.ok) {
-    const detail = (await res.text().catch(() => '')).slice(0, 300);
-    console.error('[agents] Claude', res.status, detail);
-    if (res.status === 401 || res.status === 403) throw new AgentAiError('Claude API kaliti noto‘g‘ri yoki ruxsat yo‘q.');
-    if (res.status === 429) throw new AgentAiError('Claude limiti (429) — keyinroq qayta uriniladi.');
-    if (res.status >= 500) throw new AgentAiError('Claude xizmati vaqtincha band — keyinroq qayta uriniladi.');
-    throw new AgentAiError(`Claude so‘rovni qabul qilmadi (${res.status}).`);
-  }
-  const data = (await res.json()) as ClaudeResponse;
-  if (data.stop_reason === 'refusal') throw new AgentAiError('Claude bu so‘rovni rad etdi (xavfsizlik filtri). Profil ma’lumotlarini tekshiring.');
-  if (data.stop_reason === 'max_tokens') throw new AgentAiError('AI javobi uzilib qoldi — qayta urinib ko‘ring.');
-  return data;
-}
-
-const claudeUsage = (d: ClaudeResponse) => ({
-  input: (d.usage?.input_tokens ?? 0) + (d.usage?.cache_read_input_tokens ?? 0) + (d.usage?.cache_creation_input_tokens ?? 0),
-  output: d.usage?.output_tokens ?? 0,
-  searches: d.usage?.server_tool_use?.web_search_requests ?? 0,
-});
-
-// ---------------------------------------------------------------------------------------------------------------
-// Gemini (generateContent, JSON javob)
-// ---------------------------------------------------------------------------------------------------------------
-const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
-type GeminiResponse = {
-  candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] }; finishReason?: string; groundingMetadata?: { groundingChunks?: { web?: { uri?: string; title?: string } }[] } }[];
-  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number };
-};
-
-async function gemini(route: Route, body: Record<string, unknown>, timeoutMs: number): Promise<GeminiResponse> {
-  const models = [route.model, 'gemini-3.6-flash', 'gemini-3.8-flash-lite'].filter((m, i, all) => all.indexOf(m) === i);
-  let last = '';
-  for (const model of models) {
-    let res: Response;
-    try {
-      res = await fetch(`${GEMINI}/models/${model}:generateContent`, {
-        method: 'POST',
-        headers: { 'x-goog-api-key': geminiKey(), 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-    } catch {
-      throw new AgentAiError('Gemini bilan ulanib bo‘lmadi (tarmoq yoki vaqt tugadi).');
-    }
-    if (res.ok) {
-      route.model = model;
-      return (await res.json()) as GeminiResponse;
-    }
-    last = `${res.status} ${(await res.text().catch(() => '')).slice(0, 200)}`;
-    // Model yo'q yoki bepul kvota tugagan — keyingisi.
-    if (res.status === 404 || res.status === 429 || res.status >= 500) continue;
-    if (res.status === 400 || res.status === 403) break;
-  }
-  console.error('[agents] Gemini', last);
-  if (/^429/.test(last)) throw new AgentAiError('Gemini bepul kvotasi hozircha tugagan — keyinroq qayta uriniladi.');
-  if (/^(400|403)/.test(last) && /API key/i.test(last)) throw new AgentAiError('Gemini API kaliti noto‘g‘ri.');
-  throw new AgentAiError('Gemini so‘rovni bajara olmadi.');
-}
-
-const geminiText = (d: GeminiResponse) => (d.candidates?.[0]?.content?.parts ?? []).filter((p) => !p.thought).map((p) => p.text ?? '').join('');
-const geminiUsage = (d: GeminiResponse) => ({ input: d.usageMetadata?.promptTokenCount ?? 0, output: (d.usageMetadata?.candidatesTokenCount ?? 0) + (d.usageMetadata?.thoughtsTokenCount ?? 0) });
-
-// ---------------------------------------------------------------------------------------------------------------
-// Ommaviy funksiyalar
-// ---------------------------------------------------------------------------------------------------------------
-export type JsonResult = { data: unknown; provider: string; model: string };
-
-/** Tuzilgan JSON javob (Claude'da structured outputs, Gemini'da application/json). */
-export async function agentJson(a: { stage: 'idea' | 'write'; profileId: string; purpose: string; system: string; user: string; schema: Record<string, unknown> }): Promise<JsonResult> {
-  const route = aiRoutes()[a.stage];
-  if (!route) throw new AgentAiOffline();
-  await checkLimit();
-  const r = { ...route };
-  if (r.provider === 'anthropic') {
-    const d = await claude(
-      r,
-      {
-        max_tokens: a.stage === 'idea' ? 6000 : 12000,
-        system: [{ type: 'text', text: a.system, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: a.user }],
-        // G'oyada ko'proq "o'ylash" ijodkorlikni oshiradi, matnda — o'rtacha (narx/sifat muvozanati).
-        output_config: { effort: a.stage === 'idea' ? 'low' : 'medium', format: { type: 'json_schema', schema: a.schema } },
-      },
-      110_000,
-    );
-    const u = claudeUsage(d);
-    await record(a.profileId, a.purpose, r, u.input, u.output);
-    const text = d.content.filter((b) => b.type === 'text').map((b) => b.text ?? '').join('');
-    return { data: parseJson(text), provider: 'anthropic', model: r.model };
-  }
-  const d = await gemini(
-    r,
-    {
-      systemInstruction: { parts: [{ text: a.system }] },
-      contents: [{ role: 'user', parts: [{ text: `${a.user}\n\nJavob faqat shu JSON sxemaga mos ob’ekt bo‘lsin:\n${JSON.stringify(a.schema)}` }] }],
-      generationConfig: { responseMimeType: 'application/json', temperature: a.stage === 'idea' ? 1.15 : 0.9, maxOutputTokens: 8192 },
-    },
-    90_000,
-  );
-  const u = geminiUsage(d);
-  await record(a.profileId, a.purpose, r, u.input, u.output);
-  return { data: parseJson(geminiText(d)), provider: 'gemini', model: r.model };
-}
-
-export type Research = { text: string; sources: { url: string; title: string }[]; provider: string; model: string };
-
-/** Soha kuzatuvi: internetdan qidirib, manbalari bilan qisqa xulosa (haftada bir marta). */
-export async function agentResearch(a: { profileId: string; system: string; user: string }): Promise<Research> {
-  const route = aiRoutes().research;
-  if (!route) throw new AgentAiOffline();
-  await checkLimit();
-  const r = { ...route };
-  if (r.provider === 'anthropic') {
-    const messages: { role: 'user' | 'assistant'; content: unknown }[] = [{ role: 'user', content: a.user }];
-    let d: ClaudeResponse | null = null;
-    let input = 0;
-    let output = 0;
-    let searches = 0;
-    // Server vositasi uzoq ishlasa "pause_turn" qaytaradi — javobni qaytarib davom ettiramiz (ko'pi bilan 3 marta).
-    for (let i = 0; i < 3; i++) {
-      d = await claude(
-        r,
-        {
-          max_tokens: 6000,
-          system: a.system,
-          messages,
-          tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4, user_location: { type: 'approximate', country: 'UZ', city: 'Tashkent', timezone: 'Asia/Tashkent' } }],
-          output_config: { effort: 'low' },
-        },
-        120_000,
-      );
-      const u = claudeUsage(d);
-      input += u.input;
-      output += u.output;
-      searches += u.searches;
-      if (d.stop_reason !== 'pause_turn') break;
-      messages.push({ role: 'assistant', content: d.content });
-    }
-    await record(a.profileId, 'research', r, input, output, searches);
-    const texts = (d?.content ?? []).filter((b) => b.type === 'text');
-    const sources = new Map<string, string>();
-    for (const b of texts) for (const c of b.citations ?? []) if (c.url && /^https?:\/\//.test(c.url)) sources.set(c.url, c.title ?? c.url);
-    return { text: texts.map((b) => b.text ?? '').join('').trim(), sources: [...sources].map(([url, title]) => ({ url, title })).slice(0, 12), provider: 'anthropic', model: r.model };
-  }
-  const d = await gemini(
-    r,
-    { systemInstruction: { parts: [{ text: a.system }] }, contents: [{ role: 'user', parts: [{ text: a.user }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.6 } },
-    90_000,
-  );
-  const u = geminiUsage(d);
-  await record(a.profileId, 'research', r, u.input, u.output);
-  const sources = (d.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [])
-    .map((c) => ({ url: c.web?.uri ?? '', title: c.web?.title ?? '' }))
-    .filter((s) => /^https?:\/\//.test(s.url))
-    .slice(0, 12);
-  return { text: geminiText(d).trim(), sources, provider: 'gemini', model: r.model };
+export async function modelsStatus() {
+  const cfg = aiConfig();
+  const img = imageConfig();
+  if (!cfg.key) return { configured: false, models: [] as { role: string; model: string; ok: boolean; message: string }[] };
+  const list = [
+    { role: 'Kontent (matn, reja)', model: cfg.models.content },
+    { role: 'Strategiya (kreativ paket, tadqiqot)', model: cfg.models.strategy },
+    { role: 'Rasm (premium)', model: img.premium },
+    { role: 'Rasm (tez / tahrir)', model: img.fast },
+  ];
+  const models = await Promise.all(list.map(async (m) => ({ ...m, ...(await checkModel(m.model)) })));
+  return { configured: true, models: models.map((m) => ({ role: m.role, model: m.model, ok: m.ok, message: m.message })) };
 }

@@ -11,6 +11,7 @@ const strat = await import('../lib/agents/strategy.ts');
 const qa = await import('../lib/agents/qa.ts');
 const images = await import('../lib/agents/images.ts');
 const ai = await import('../lib/agents/ai.ts');
+const layout = await import('../lib/agents/layout.ts');
 
 const A = '11111111-1111-1111-1111-111111111111';
 const B = '22222222-2222-2222-2222-222222222222';
@@ -278,4 +279,51 @@ test('image generation: documented endpoint and parameters; base64 decoded; fail
   delete process.env.OPENAI_API_KEY;
   const off = await images.generateImage({ prompt: 'x', tier: 'premium', quality: 'low' }, { fetchImpl: async () => assert.fail('no call without a key') });
   assert.equal(off.kind, 'config');
+});
+
+test('body lists: one item per line, never one run-on paragraph; inline ☐ items split; a glued closing sentence split off', () => {
+  const L = (b) => layout.bodyLines(b).map((l) => `${l.marker}:${l.text}`);
+  assert.deepEqual(L('Tekshiring: □ Maqsad aniqmi? □ Auditoriya belgilanganmi?'), ['none:Tekshiring:', 'box:Maqsad aniqmi?', 'box:Auditoriya belgilanganmi?']);
+  assert.deepEqual(L('Boshlashdan oldin:\nMaqsad\nAuditoriya\nByudjet'), ['none:Boshlashdan oldin:', 'dot:Maqsad', 'dot:Auditoriya', 'dot:Byudjet']);
+  assert.deepEqual(L('- SMM\n- Target'), ['dot:SMM', 'dot:Target']);
+  // Two long sentences on separate lines stay paragraphs.
+  const para = 'Bu juda uzun birinchi jumla bo‘lib, u ro‘yxat bandi emas va oddiy matn sifatida chiqishi kerak, chunki u uzun.\nIkkinchi jumla ham shunday.';
+  assert.ok(L(para).every((x) => x.startsWith('none:')));
+  const blocks = layout.bodyBlocks(layout.bodyLines('□ SMM □ Target reklama □ Video kontent □ Brending □ Veb-sayt Yo‘nalishlarni biznes ehtiyojiga qarab birgalikda ko‘rib chiqing.'));
+  assert.equal(blocks.length, 2);
+  assert.equal(blocks[0].kind, 'list');
+  assert.equal(blocks[0].inline, true, 'short items flow in rows');
+  assert.deepEqual(blocks[0].items.map((i) => i.text), ['SMM', 'Target reklama', 'Video kontent', 'Brending', 'Veb-sayt']);
+  assert.deepEqual(blocks[1], { kind: 'p', text: 'Yo‘nalishlarni biznes ehtiyojiga qarab birgalikda ko‘rib chiqing.' });
+  // A conjunction before the capital is not a sentence start.
+  const keep = layout.bodyBlocks(layout.bodyLines('□ Reklama □ Kontent □ Kanal Instagram va Telegram uchun tayyor.'));
+  assert.equal(keep.at(-1).kind, 'list');
+  // Rows never exceed the width estimate; fitting reports overflow instead of cutting.
+  const rows = layout.packRows(blocks[0].items, 34, 936);
+  assert.ok(rows.length >= 2 && rows.flat().length === 5);
+  const f = layout.fitBody(blocks, { width: 936, height: 40 }, 38, 26, 1.32);
+  assert.equal(f.overflow, true);
+});
+
+test('scrim: opacity rises until the text clears 4.5:1 over the brightest patch behind it', () => {
+  const white = [244, 244, 245];
+  const dark = [15, 15, 16];
+  const calm = layout.scrimAlpha(white, dark, [40, 40, 40], 0.78);
+  assert.deepEqual(calm, { alpha: 0.78, ok: true });
+  // A dark scrim already clears a white patch at the base opacity; a lighter scrim over a white patch must rise.
+  assert.equal(layout.scrimAlpha(white, dark, [250, 250, 250], 0.78).alpha, 0.78);
+  const grey = [90, 90, 90];
+  const busy = layout.scrimAlpha(white, grey, [255, 255, 255], 0.78);
+  assert.ok(busy.alpha > 0.78 && busy.ok, JSON.stringify(busy));
+  assert.ok(layout.contrast(white, layout.mix([255, 255, 255], grey, busy.alpha)) >= 4.5);
+  assert.equal(layout.scrimAlpha(white, [200, 200, 200], [255, 255, 255], 0.78).ok, false, 'reported, not hidden');
+});
+
+test('image prompt: layout words never reach the image model (no fake cards or checkboxes to draw)', () => {
+  for (const [key, f] of Object.entries(strat.FAMILIES)) {
+    const p = strat.imagePrompt({ kind: 'carousel', visual: { subject: 's', scene: 'x', composition: 'c', lighting: 'l', camera: 'k', palette: 'p', text_zone: 'middle', mood: 'm' }, family: key, brandColors: [], forbiddenColors: [], forbiddenDesign: '', style: '', productPlaced: false, productZone: null, industry: null });
+    assert.ok(!p.includes(f.how), key);
+    assert.ok(p.includes(f.scene), key);
+    assert.match(p, /Do not draw empty cards, panels/);
+  }
 });

@@ -8,7 +8,7 @@ import { ImageResponse } from 'next/og';
 import sharp, { type OverlayOptions } from 'sharp';
 
 import { DEFAULT_LAYOUT, uzText, type FrameLayout } from './core';
-import { contrast, fit, mix, readableOn, rgb, SAFE, SIZES, type Palette, type Rgb } from './layout';
+import { BODY_GAP, BODY_INDENT, BODY_ITEM_GAP, bodyBlocks, bodyLines, contrast, fit, fitBody, mix, packRows, readableOn, rgb, SAFE, scrimAlpha, SIZES, type Palette, type Rgb } from './layout';
 
 /**
  * The Brand Composer. The AI picture is only the background; everything that must be exact is placed here,
@@ -133,9 +133,52 @@ export async function compose(input: ComposeInput): Promise<ComposeOutput> {
   const label = input.label ? uzText(input.label).toUpperCase().slice(0, 28) : '';
   const labelH = label ? 70 : 0;
   const headMax = Math.round((story ? 92 : 80) * L.headlineScale);
-  const head = fit(headline, { width: inner, height: (textAreaH - labelH - ctaH - 40) * (body ? 0.58 : 0.92) }, 'display', headMax, 36, 1.1);
-  const bodyFit = body ? fit(body, { width: inner, height: textAreaH - labelH - ctaH - 70 - head.lines * head.size * 1.1 }, 'body', story ? 44 : 38, 26, 1.32) : { size: 0, lines: 0, overflow: false };
+  const blocks = body ? bodyBlocks(bodyLines(body)) : [];
+  const fitAt = (max: number) => {
+    const h = fit(headline, { width: inner, height: (textAreaH - labelH - ctaH - 40) * (body ? 0.58 : 0.92) }, 'display', max, 36, 1.1);
+    const b = blocks.length ? fitBody(blocks, { width: inner, height: textAreaH - labelH - ctaH - 70 - h.lines * h.size * 1.1 }, story ? 44 : 38, 26, 1.32) : { size: 0, lines: 0, height: 0, overflow: false };
+    return { h, b };
+  };
+  // Headline and body are sized together: the headline gives way (not below 56px) before the body drops under 30px.
+  let sized = fitAt(headMax);
+  for (let max = headMax - 4; blocks.length && (sized.b.overflow || sized.b.size < 30) && max >= Math.min(headMax, 56); max -= 4) {
+    const next = fitAt(max);
+    if (next.b.size > sized.b.size || (sized.b.overflow && !next.b.overflow)) sized = next;
+  }
+  const head = sized.h;
+  const bodyFit = sized.b;
   if (head.overflow || bodyFit.overflow) warnings.push('text_overflow');
+
+  // 5) Scrim over where the copy actually sits, strong enough for the brightest patch behind it.
+  const contentH = Math.min(textAreaH, Math.round(labelH + head.lines * head.size * 1.1 + (blocks.length ? 60 + bodyFit.height : 0) + (cta ? 34 + ctaH : 0)));
+  const contentTop = L.textPos === 'top' ? textY : L.textPos === 'middle' ? Math.round(textY + (textAreaH - contentH) / 2) : textY + textAreaH - contentH;
+  const contentBottom = contentTop + contentH;
+  const region = await sharp(bg)
+    .extract({ left: side, top: Math.max(0, contentTop), width: inner, height: Math.max(1, Math.min(H, contentBottom) - Math.max(0, contentTop)) })
+    .stats();
+  const spread = (k: number): Rgb => [0, 1, 2].map((c) => Math.max(0, Math.min(255, Math.round(region.channels[c].mean + k * region.channels[c].stdev)))) as Rgb;
+  const scrim = scrimAlpha(ink, scrimRgb, darkInk ? spread(-1.8) : spread(1.8), L.textPos === 'middle' ? 0.78 : 0.82);
+  if (!scrim.ok) warnings.push('busy_background');
+  const pad = 40;
+  const fade = story ? 260 : 220;
+  const sTop = L.textPos === 'top' ? 0 : Math.max(0, contentTop - pad - fade);
+  const sBottom = L.textPos === 'bottom' ? H : Math.min(H, contentBottom + pad + fade);
+  const sH = Math.max(1, sBottom - sTop);
+  const pct = (y: number) => `${Math.max(0, Math.min(100, Math.round(((y - sTop) / sH) * 1000) / 10))}%`;
+  const A = rgb(scrimRgb, scrim.alpha);
+  const Z = rgb(scrimRgb, 0);
+  const scrimImage =
+    L.textPos === 'top'
+      ? `linear-gradient(to bottom, ${A} 0%, ${A} ${pct(contentBottom + pad)}, ${Z} 100%)`
+      : L.textPos === 'bottom'
+        ? `linear-gradient(to bottom, ${Z} 0%, ${A} ${pct(contentTop - pad)}, ${A} 100%)`
+        : `linear-gradient(to bottom, ${Z} 0%, ${A} ${pct(contentTop - pad)}, ${A} ${pct(contentBottom + pad)}, ${Z} 100%)`;
+  const marker = (m: 'box' | 'dot', size: number) =>
+    m === 'box' ? (
+      <div style={{ display: 'flex', width: Math.round(size * 0.62), height: Math.round(size * 0.62), marginTop: Math.round(size * 0.35), borderRadius: Math.round(size * 0.16), border: `${Math.max(3, Math.round(size * 0.09))}px solid ${rgb(pal.primary)}` }} />
+    ) : (
+      <div style={{ display: 'flex', width: Math.round(size * 0.36), height: Math.round(size * 0.36), marginTop: Math.round(size * 0.48), borderRadius: 999, backgroundColor: rgb(pal.primary) }} />
+    );
 
   const fonts = await builtinFonts();
   const extra: FontSpec[] = [];
@@ -146,9 +189,6 @@ export async function compose(input: ComposeInput): Promise<ComposeOutput> {
   const headFamily = hf ? 'BrandHeading' : 'Heading';
   const bodyFamily = bf ? 'BrandBody' : 'Body';
 
-  const scrimFrom = L.textPos === 'top' ? 'to bottom' : L.textPos === 'bottom' ? 'to top' : 'to top';
-  const scrimY = L.textPos === 'top' ? 0 : L.textPos === 'middle' ? textY - 120 : textY - 220;
-  const scrimH = L.textPos === 'top' ? textY + textAreaH + 220 : L.textPos === 'middle' ? textAreaH + 240 : H - scrimY;
   const contactY = L.contactPos === 'top' ? S.top - 70 : bottom - contactH + 8;
 
   const overlay = (
@@ -157,14 +197,11 @@ export async function compose(input: ComposeInput): Promise<ComposeOutput> {
         style={{
           position: 'absolute',
           left: 0,
-          top: Math.max(0, scrimY),
+          top: sTop,
           width: W,
-          height: Math.min(H, scrimH),
+          height: sH,
           display: 'flex',
-          backgroundImage:
-            L.textPos === 'middle'
-              ? `linear-gradient(to bottom, ${rgb(scrimRgb, 0)} 0%, ${rgb(scrimRgb, 0.78)} 30%, ${rgb(scrimRgb, 0.78)} 70%, ${rgb(scrimRgb, 0)} 100%)`
-              : `linear-gradient(${scrimFrom}, ${rgb(scrimRgb, 0.9)} 0%, ${rgb(scrimRgb, 0.7)} 45%, ${rgb(scrimRgb, 0)} 100%)`,
+          backgroundImage: scrimImage,
         }}
       />
       <div style={{ position: 'absolute', left: side, top: textY, width: inner, height: textAreaH, display: 'flex', flexDirection: 'column', justifyContent: L.textPos === 'top' ? 'flex-start' : L.textPos === 'middle' ? 'center' : 'flex-end', color: rgb(ink) }}>
@@ -174,10 +211,36 @@ export async function compose(input: ComposeInput): Promise<ComposeOutput> {
           </div>
         ) : null}
         <div style={{ display: 'flex', fontFamily: headFamily, fontWeight: hf ? 700 : 800, fontSize: head.size, lineHeight: 1.1, letterSpacing: -0.5 }}>{headline}</div>
-        {body ? (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {blocks.length ? (
+          <div style={{ display: 'flex', flexDirection: 'column', fontSize: bodyFit.size, lineHeight: 1.32, fontWeight: 500 }}>
             <div style={{ display: 'flex', width: 120, height: 8, borderRadius: 6, backgroundColor: rgb(pal.primary), marginTop: 26, marginBottom: 26 }} />
-            <div style={{ display: 'flex', fontSize: bodyFit.size, lineHeight: 1.32, fontWeight: 500 }}>{body}</div>
+            {blocks
+              .flatMap((b) =>
+                b.kind === 'p'
+                  ? [<div key="p" style={{ display: 'flex' }}>{b.text}</div>]
+                  : b.inline
+                    ? packRows(b.items, bodyFit.size, inner).map((row, r) => (
+                        <div key={r} style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap' }}>
+                          {row.map((it, k) => (
+                            <div key={k} style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', marginLeft: k ? Math.round(bodyFit.size * BODY_ITEM_GAP) : 0 }}>
+                              <div style={{ display: 'flex', width: Math.round(bodyFit.size * BODY_INDENT), flexShrink: 0 }}>{marker(it.marker, bodyFit.size)}</div>
+                              <div style={{ display: 'flex' }}>{it.text}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ))
+                    : b.items.map((it, k) => (
+                        <div key={k} style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start' }}>
+                          <div style={{ display: 'flex', width: Math.round(bodyFit.size * BODY_INDENT), flexShrink: 0 }}>{marker(it.marker, bodyFit.size)}</div>
+                          <div style={{ display: 'flex', flex: 1 }}>{it.text}</div>
+                        </div>
+                      )),
+              )
+              .map((el, i) => (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', marginTop: i ? Math.round(bodyFit.size * BODY_GAP) : 0 }}>
+                  {el}
+                </div>
+              ))}
           </div>
         ) : null}
         {cta ? (
@@ -210,7 +273,7 @@ export async function compose(input: ComposeInput): Promise<ComposeOutput> {
 
   const layers: OverlayOptions[] = [];
 
-  // 5) The real product photo, opposite the text.
+  // 6) The real product photo, opposite the text.
   let productBox: ComposeOutput['product'] = null;
   if (input.product) {
     try {
@@ -250,7 +313,7 @@ export async function compose(input: ComposeInput): Promise<ComposeOutput> {
 
   layers.push({ input: overlayPng, left: 0, top: 0 });
 
-  // 6) The original logo: resized inside its box, aspect ratio kept, never altered otherwise.
+  // 7) The original logo: resized inside its box, aspect ratio kept, never altered otherwise.
   let logoBox: ComposeOutput['logo'] = null;
   if (input.logo) {
     try {

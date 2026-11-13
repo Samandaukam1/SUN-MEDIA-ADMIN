@@ -148,6 +148,7 @@ export function checkImage(i: ImageCheckInput): QaIssue[] {
   if (i.warnings.includes('product_small_source')) out.push({ code: 'product_small_source', level: 'warn', msg: `${n}-kadrdagi mahsulot fotosi kichik` });
   if (i.warnings.includes('product_image_unreadable')) out.push({ code: 'product_unreadable', level: 'fail', msg: `${n}-kadrdagi mahsulot fotosini o‘qib bo‘lmadi` });
   if (i.warnings.includes('logo_unreadable')) out.push({ code: 'logo_unreadable', level: 'fail', msg: 'Logo faylini o‘qib bo‘lmadi' });
+  if (i.warnings.includes('busy_background')) out.push({ code: 'busy_background', level: 'warn', msg: `${n}-kadr: matn ortidagi fon juda chipor — matnni boshqa joyga ko‘chiring yoki fonni soddalashtiring` });
   if (i.warnings.includes('text_color_adjusted')) out.push({ code: 'text_color_adjusted', level: 'warn', msg: `${n}-kadr: brend matn rangi fonda o‘qilmasdi — kontrastli rang tanlandi` });
   return out;
 }

@@ -26,20 +26,23 @@ export const OBJECTIVES = {
 } as const;
 export type Objective = keyof typeof OBJECTIVES;
 
-/** Composition families: each is a different layout logic, not a recoloured template. */
+/**
+ * Composition families: each is a different layout logic, not a recoloured template. `how` guides the copy and the
+ * layout; `scene` is the only part the image model sees (layout words like “blocks” made it draw fake cards).
+ */
 export const FAMILIES = {
-  product_hero: { name: 'Mahsulot qahramon', how: 'Bitta mahsulot katta, toza sahnada; kuchli yorug‘lik; matn kam.', textPos: 'top' as const },
-  editorial: { name: 'Editorial tipografiya', how: 'Katta, nafis sarlavha; ko‘p bo‘sh joy; jurnal muqovasi kabi.', textPos: 'middle' as const },
-  promo_poster: { name: 'Toza promo poster', how: 'Bitta asosiy taklif; aniq ierarxiya; CTA ko‘zga tashlanadi.', textPos: 'bottom' as const },
-  minimal_luxury: { name: 'Minimal premium', how: 'Kam element, chuqur fon, nozik yorug‘lik, premium his.', textPos: 'bottom' as const },
-  feature_breakdown: { name: 'Xususiyatlar tahlili', how: 'Mahsulot yoki xizmatning 1 ta xususiyati har slaydda.', textPos: 'bottom' as const },
-  infographic: { name: 'Foydali infografika', how: 'Qadamlar yoki faktlar; o‘qilishi oson bloklar.', textPos: 'middle' as const },
-  seasonal: { name: 'Mavsumiy kampaniya', how: 'Fasl yoki bayram muhiti, brend ranglari bilan.', textPos: 'bottom' as const },
-  comparison: { name: 'Taqqoslash', how: 'Ikki holat yonma-yon (brend nomlarisiz); aniq xulosa.', textPos: 'top' as const },
-  storytelling: { name: 'Brend hikoyasi', how: 'Muammo → burilish → natija, kinematografik kadrlar.', textPos: 'bottom' as const },
-  service_benefits: { name: 'Xizmat foydalari', how: 'Mijoz oladigan foyda; odamlar va jarayon sahnasi.', textPos: 'bottom' as const },
-  b2b_lead: { name: 'B2B lid', how: 'Ishonchlilik, hajm, hamkorlik; ishlab chiqarish yoki ombor muhiti.', textPos: 'bottom' as const },
-  trust: { name: 'Ishonch / guvohlik', how: 'Mutaxassis, jarayon, sertifikat — faqat tasdiqlangan faktlar.', textPos: 'bottom' as const },
+  product_hero: { name: 'Mahsulot qahramon', how: 'Bitta mahsulot katta, toza sahnada; kuchli yorug‘lik; matn kam.', scene: 'One clean hero set (podium, surface or real environment) with strong directional light and generous empty space.', textPos: 'top' as const },
+  editorial: { name: 'Editorial tipografiya', how: 'Katta, nafis sarlavha; ko‘p bo‘sh joy; jurnal muqovasi kabi.', scene: 'Magazine-cover mood: a calm, refined backdrop with large empty negative space and one subtle visual accent.', textPos: 'middle' as const },
+  promo_poster: { name: 'Toza promo poster', how: 'Bitta asosiy taklif; aniq ierarxiya; CTA ko‘zga tashlanadi.', scene: 'Bold but simple poster backdrop: one strong focal element, clean gradient or environment, lots of empty space.', textPos: 'bottom' as const },
+  minimal_luxury: { name: 'Minimal premium', how: 'Kam element, chuqur fon, nozik yorug‘lik, premium his.', scene: 'Few elements, deep background, soft refined light, premium materials, very quiet negative space.', textPos: 'bottom' as const },
+  feature_breakdown: { name: 'Xususiyatlar tahlili', how: 'Mahsulot yoki xizmatning 1 ta xususiyati har slaydda.', scene: 'One clear close-up of the service or product context per slide, simple background, shallow depth of field.', textPos: 'bottom' as const },
+  infographic: { name: 'Foydali infografika', how: 'Qadamlar yoki faktlar; o‘qilishi oson bloklar.', scene: 'A calm, low-detail backdrop (soft abstract depth or a quiet real environment). The information is added later as text: do NOT draw cards, panels, boxes, checkboxes, icons, charts or diagrams.', textPos: 'middle' as const },
+  seasonal: { name: 'Mavsumiy kampaniya', how: 'Fasl yoki bayram muhiti, brend ranglari bilan.', scene: 'Seasonal or holiday atmosphere in the brand colours, realistic and tasteful, with a calm area for text.', textPos: 'bottom' as const },
+  comparison: { name: 'Taqqoslash', how: 'Ikki holat yonma-yon (brend nomlarisiz); aniq xulosa.', scene: 'Two clearly separated halves showing a before / after or two situations, without any brand names.', textPos: 'top' as const },
+  storytelling: { name: 'Brend hikoyasi', how: 'Muammo → burilish → natija, kinematografik kadrlar.', scene: 'A cinematic moment from the story (problem → turn → result), natural light, real people or places.', textPos: 'bottom' as const },
+  service_benefits: { name: 'Xizmat foydalari', how: 'Mijoz oladigan foyda; odamlar va jarayon sahnasi.', scene: 'Real people and the service process, natural and believable, the client’s benefit visible.', textPos: 'bottom' as const },
+  b2b_lead: { name: 'B2B lid', how: 'Ishonchlilik, hajm, hamkorlik; ishlab chiqarish yoki ombor muhiti.', scene: 'Reliability and scale: production, warehouse or office environment, orderly and professional.', textPos: 'bottom' as const },
+  trust: { name: 'Ishonch / guvohlik', how: 'Mutaxassis, jarayon, sertifikat — faqat tasdiqlangan faktlar.', scene: 'Specialist at work, real process, documents or certificates only as blurred background shapes.', textPos: 'bottom' as const },
 } as const;
 export type Family = keyof typeof FAMILIES;
 
@@ -193,6 +196,17 @@ export type Plan = {
 };
 
 const clip = (s: unknown, n: number) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim().slice(0, n) : '');
+/** Like clip, but keeps line breaks (one list item per line), at most 5 non-empty lines. */
+const clipLines = (s: unknown, n: number) =>
+  typeof s === 'string'
+    ? s
+        .split(/\r?\n/)
+        .map((l) => l.replace(/\s+/g, ' ').trim())
+        .filter(Boolean)
+        .slice(0, 5)
+        .join('\n')
+        .slice(0, n)
+    : '';
 
 export function parsePlans(raw: unknown, allowed: { assets: Set<string>; trends: Set<string>; campaigns: Set<string> }): Plan[] | null {
   const list = (raw as { concepts?: unknown[] })?.concepts;
@@ -248,6 +262,7 @@ export function packagePrompt(a: { brief: string; dna: string; industry: { name:
     a.kind === 'story'
       ? 'Bitta Story kadri (9:16). Sarlavha ≤ 60 belgi, matn ≤ 140 belgi, CTA ≤ 30 belgi.'
       : `Karusel: aniq ${a.slides} ta slayd (4:5), bitta yaxlit hikoya (masalan: hook → muammo/ma’lumot → yechim → ishonch/CTA, lekin biznesga mos). Sarlavha ≤ 60, matn ≤ 170 belgi; CTA faqat oxirgi slaydda.`,
+    'Ro‘yxat (qadamlar, bandlar) bo‘lsa: har bandni yangi qatorga yozing (\\n), 2–4 band, ☐ □ • kabi belgilarsiz — belgini dizayn o‘zi qo‘yadi; kirish jumlasi bo‘lsa, birinchi qatorda.',
     'Har kadr uchun vizual spetsifikatsiya: asosiy obyekt, sahna, kompozitsiya, yorug‘lik, kamera burchagi, rang izohi (brend ranglari), bo‘sh joy (matn uchun: top/middle/bottom), kayfiyat. Agar kadrda mahsulot fotosi ishlatilsa — uning id’sini yozing va sahnada mahsulot uchun bo‘sh joy qoldiring (mahsulotni AI chizmaydi).',
     'Caption (≤ 900 belgi), muqobil caption, 5–12 ta heshteg.',
     a.previous ? `Avvalgi variant (undan farqli bo‘lsin): ${a.previous}` : '',
@@ -312,7 +327,7 @@ export function parsePackage(raw: unknown, slides: number, allowedAssets: Set<st
     return {
       role: clip(f.role, 40) || 'slide',
       headline: clip(f.headline, 90),
-      body: clip(f.body, 260),
+      body: clipLines(f.body, 260),
       cta: clip(f.cta, 48),
       product_asset_id: typeof f.product_asset_id === 'string' && allowedAssets.has(f.product_asset_id) ? f.product_asset_id : null,
       visual: {
@@ -345,13 +360,14 @@ export function parsePackage(raw: unknown, slides: number, allowedAssets: Set<st
 export function imagePrompt(a: { kind: AgentKind; visual: Visual; family: Family; brandColors: string[]; forbiddenColors: string[]; forbiddenDesign: string; style: string; productPlaced: boolean; productZone: 'top' | 'middle' | 'bottom' | null; industry: string | null }): string {
   const frame = a.kind === 'story' ? 'tall vertical 9:16 Instagram Story' : 'vertical 4:5 Instagram carousel slide';
   return [
-    `Premium advertising photograph / art direction for a ${frame}. ${FAMILIES[a.family].how}`,
+    `Premium advertising photograph / art direction for a ${frame}. ${FAMILIES[a.family].scene}`,
     `Subject: ${a.visual.subject}. Scene: ${a.visual.scene}. Composition: ${a.visual.composition}. Lighting: ${a.visual.lighting}. Camera: ${a.visual.camera}. Mood: ${a.visual.mood}.`,
     a.brandColors.length ? `Colour palette built around the brand colours ${a.brandColors.join(', ')} (${a.visual.palette}).` : `Palette: ${a.visual.palette}.`,
     a.forbiddenColors.length ? `Avoid these colours: ${a.forbiddenColors.join(', ')}.` : '',
     a.style ? `Brand visual style: ${a.style}.` : '',
     a.forbiddenDesign ? `Never include: ${a.forbiddenDesign}.` : '',
-    `Keep the ${a.visual.text_zone} third of the image calm and uncluttered (soft, low-detail area) — text is added there later.`,
+    `Keep the ${a.visual.text_zone} part of the image (about half of its height) as empty, calm, low-detail background — text is added there later. No objects or shapes in that area.`,
+    'Do not draw empty cards, panels, frames, boxes, checkboxes, buttons, charts, icons or other placeholder shapes for text.',
     a.productPlaced && a.productZone ? `Leave an empty, well-lit surface or podium in the ${a.productZone} area where a real product photo will be placed later; do NOT draw any product, bottle, package or label yourself.` : '',
     a.industry ? `Industry: ${a.industry}. Realistic, professional, believable.` : 'Realistic, professional, believable.',
     'Absolutely no text, letters, numbers, logos, brand marks, watermarks, signs or UI elements anywhere in the image. No distorted hands or faces. High detail, clean, agency-quality.',

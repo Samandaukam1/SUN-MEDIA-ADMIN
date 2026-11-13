@@ -2,7 +2,8 @@ import 'server-only';
 
 import { agencyDateKey } from '@/lib/time';
 
-import { agentResearch, AgentAiOffline, AgentLimitError, aiOnline } from './ai';
+import { sunnyConfig } from '@/lib/assistant/sunny';
+import { agentResearch, AgentAiOffline, AgentLimitError, aiOnline, modelsStatus } from './ai';
 import { briefText } from './creative';
 import { runEdit, runGenerate, type StepResult } from './pipeline';
 import { briefOf, clientContext, db, loadSettings, memoryOf, notify, type AgentJob } from './server';
@@ -28,6 +29,17 @@ export async function runAgentsWorker(budgetMs = 265_000) {
 
   await guard('recover', async () => {
     report.recovered = ((await db().rpc('agent_recover')).data as number | null) ?? 0;
+  });
+  // Every 6 hours: which OpenAI models this key can really use (GET /models — nothing is generated or billed). The
+  // panels (Sozlamalar → Sunny AI, AI agent → Sozlamalar) show it.
+  await guard('models', async () => {
+    const { data } = await db().from('app_settings').select('key, value').in('key', ['ai.models_status', 'assistant.config']);
+    const status = data?.find((r) => r.key === 'ai.models_status')?.value as { checked_at?: string } | undefined;
+    if (status?.checked_at && Date.now() - Date.parse(status.checked_at) < 6 * 3600_000) return;
+    const sunny = sunnyConfig(process.env, data?.find((r) => r.key === 'assistant.config')?.value ?? null);
+    const r = await modelsStatus({ primary: sunny.primary, complex: sunny.complex });
+    if (!r.configured) return;
+    await db().from('app_settings').update({ value: { checked_at: new Date().toISOString(), models: r.models } }).eq('key', 'ai.models_status');
   });
   await guard('plan', async () => {
     report.planned = ((await db().rpc('agents_plan', { p_profile: undefined, p_days: 3 })).data as number | null) ?? 0;

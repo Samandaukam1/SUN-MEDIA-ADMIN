@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { ModelUsage } from './gemini';
+import { sunnyConfig, type SunnyConfig } from './sunny';
 import type { AssistantContext } from './tools';
 
 type Who = Pick<AssistantContext, 'userId' | 'visitorKey' | 'audience'>;
@@ -53,3 +54,56 @@ export const BUDGET_SPENT = {
   money: 'Bu oy uchun belgilangan AI xarajati chegarasiga yetildi (egasi sozlamada oshirishi mumkin). Aniq buyruqlar ishlayveradi: "vazifalarim", "keldim", "bugun qanday ishlarim bor?".',
   moneyPublic: 'Hozir suhbat imkonim cheklangan. Ariza qoldiring — menejerimiz o‘zi bog‘lanadi.',
 } as const;
+
+/** One reply's real timings (Sozlamalar → Sunny AI shows P50 / P95). Bookkeeping never fails a reply. */
+export type ReplyTiming = {
+  path: 'local' | 'primary' | 'complex';
+  provider?: string;
+  model?: string;
+  firstMs: number | null;
+  totalMs: number;
+  prepMs?: number | null;
+  apiMs?: number | null;
+  toolMs?: number | null;
+  toolCalls?: number;
+  rounds?: number;
+  failed?: boolean;
+  stopped?: boolean;
+};
+export async function recordReply(ctx: Pick<AssistantContext, 'audience'>, t: ReplyTiming): Promise<void> {
+  try {
+    await createAdminClient().rpc('assistant_reply_record', {
+      p_audience: ctx.audience,
+      p_path: t.path,
+      p_provider: t.provider ?? '',
+      p_model: t.model ?? '',
+      p_first_ms: t.firstMs ?? -1,
+      p_total_ms: Math.max(0, Math.round(t.totalMs)),
+      p_prep_ms: t.prepMs ?? -1,
+      p_api_ms: t.apiMs ?? -1,
+      p_tool_ms: t.toolMs ?? -1,
+      p_tool_calls: t.toolCalls ?? 0,
+      p_rounds: t.rounds ?? 0,
+      p_failed: !!t.failed,
+      p_stopped: !!t.stopped,
+    });
+  } catch {
+    // not migrated yet or the database busy
+  }
+}
+
+let settingsCache: { at: number; cfg: SunnyConfig } | null = null;
+/** Sunny's model settings: SUNNY_* env, overridden by the owner's saved ones (read at most every 30 s). */
+export async function sunnySettings(): Promise<SunnyConfig> {
+  if (settingsCache && Date.now() - settingsCache.at < 30_000) return settingsCache.cfg;
+  let stored: unknown = null;
+  try {
+    const { data } = await createAdminClient().from('app_settings').select('value').eq('key', 'assistant.config').maybeSingle();
+    stored = data?.value ?? null;
+  } catch {
+    // unavailable: the environment's settings apply
+  }
+  const cfg = sunnyConfig(process.env, stored);
+  settingsCache = { at: Date.now(), cfg };
+  return cfg;
+}

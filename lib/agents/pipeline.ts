@@ -10,7 +10,9 @@ import { DEFAULT_LAYOUT, uzText, type Frame, type FrameLayout } from './core';
 import { briefText, dateContext, FORMATS } from './creative';
 import { applyOps, classifyInstruction, EDIT_SCHEMA, parseEditPlan, type EditPlan } from './edit';
 import { editImage, generateImage, imageConfig, imagesReady, type ImageResult } from './images';
-import { budgetCheck, buildInsights, type MetricRow } from './insights';
+import { budgetCheck, buildInsights, type JobGuard, type MetricRow } from './insights';
+import { aiFrames, qualityFor, renderPlan, type BgSource, type CostMode } from './cost';
+import { brandBackdrop, reuseBackdrop } from './backdrop';
 import { SAFE, SIZES } from './layout';
 import { checkContent, checkImage, type QaIssue, type QaReport } from './qa';
 import { compose, imageFacts, regionColor } from './render';
@@ -28,6 +30,8 @@ import {
   upload,
   type AgentItem,
   type AgentJob,
+  type AgentProfile,
+  type AgentSettings,
   type AgentVersion,
   type ClientContext,
 } from './server';
@@ -78,6 +82,8 @@ type Payload = {
   cost?: number | null;
   images?: number;
   textModel?: string;
+  /** Where each frame's background comes from (cost.ts): decided once, after the creative package. */
+  render?: BgSource[];
 };
 
 const MAX_FAILURES = 3;
@@ -315,18 +321,37 @@ function imageFailure(r: Extract<ImageResult, { ok: false }>): StepResult {
   return { state: 'failed', error: r.message, retry: r.kind === 'rate' || r.kind === 'server' || r.kind === 'timeout' };
 }
 
-async function makeBackgrounds(job: AgentJob, p: Payload, ctx: ClientContext, item: AgentItem, indexes: number[], promptOf: (i: number) => string, opts: { edit?: (i: number) => Promise<Buffer | null>; deadline: number }): Promise<StepResult | null> {
+const costModeOf = (profile: AgentProfile): CostMode => (profile.cost_mode === 'economy' || profile.cost_mode === 'premium' ? profile.cost_mode : 'balanced');
+const seedOf = (id: string) => parseInt(id.replace(/-/g, '').slice(0, 8), 16) || 1;
+
+/**
+ * Backgrounds for the frames still missing: new AI pictures only where the render plan says so (paid, at the mode's
+ * model and quality), then the free ones — brand compositions and re-framed variants of the post's own picture.
+ */
+async function makeBackgrounds(
+  job: AgentJob,
+  p: Payload,
+  ctx: ClientContext,
+  item: AgentItem,
+  indexes: number[],
+  promptOf: (i: number) => string,
+  opts: { edit?: (i: number) => Promise<Buffer | null>; deadline: number; render?: BgSource[] },
+): Promise<StepResult | null> {
+  const mode = costModeOf(ctx.profile);
+  const cfg = imageConfig();
+  const quality = qualityFor(mode, cfg, ctx.profile.image_quality as 'low' | 'medium' | 'high');
+  const tier = mode === 'premium' ? (ctx.profile.image_tier as 'premium' | 'fast') : 'economy';
+  const source = (i: number): BgSource => opts.render?.[i] ?? { kind: 'ai' };
   const todo = indexes.filter((i) => !p.bgs?.[i]);
-  const quality = ctx.profile.image_quality as 'low' | 'medium' | 'high';
+  const paid = todo.filter((i) => source(i).kind === 'ai');
   let failure: StepResult | null = null;
-  await pool(todo, 2, async (i) => {
+  await pool(paid, 2, async (i) => {
     if (failure || Date.now() > opts.deadline - 100_000) return;
     const prompt = promptOf(i);
-    const source = opts.edit ? await opts.edit(i) : null;
-    const r = source
-      ? await editImage({ prompt, images: [source], quality })
-      : await generateImage({ prompt, tier: ctx.profile.image_tier as 'premium' | 'fast', quality });
-    await recordUsage({ profileId: ctx.profile.id, itemId: item.id, purpose: source ? 'image_edit' : 'image', kind: source ? 'image_edit' : 'image', model: r.ok ? r.model : source ? imageConfig().fast : imageConfig().premium, usage: r.ok ? r.usage : undefined, images: r.ok ? 1 : 0 });
+    const original = opts.edit ? await opts.edit(i) : null;
+    const r = original ? await editImage({ prompt, images: [original], quality }) : await generateImage({ prompt, tier, quality });
+    const tried = original ? cfg.fast : tier === 'economy' ? cfg.economy : tier === 'fast' ? cfg.fast : cfg.premium;
+    await recordUsage({ profileId: ctx.profile.id, itemId: item.id, purpose: original ? 'image_edit' : 'image', kind: original ? 'image_edit' : 'image', model: r.ok ? r.model : tried, usage: r.ok ? r.usage : undefined, images: r.ok ? 1 : 0 });
     if (!r.ok) {
       failure = imageFailure(r);
       return;
@@ -340,8 +365,63 @@ async function makeBackgrounds(job: AgentJob, p: Payload, ctx: ClientContext, it
     await saveJob(job, p, `Rasmlar: ${Object.keys(p.bgs).length}/${indexes.length}`);
   });
   if (failure) return failure;
-  if (indexes.some((i) => !p.bgs?.[i])) return { state: 'continue', note: 'Rasmlar davom etadi' };
+  if (paid.some((i) => !p.bgs?.[i])) return { state: 'continue', note: 'Rasmlar davom etadi' };
+
+  // Free backgrounds (no API call): after the paid ones, since a re-framed slide needs the post's picture.
+  for (const i of todo.filter((x) => source(x).kind !== 'ai')) {
+    const s = source(i);
+    let png: Buffer | null = null;
+    if (s.kind === 'reuse') {
+      const from = p.bgs?.[s.from];
+      const buf = from ? await download(from) : null;
+      if (buf) png = await reuseBackdrop(buf, s.variant);
+    }
+    const kind = png ? 'reuse' : 'template';
+    png ??= await brandBackdrop({ colors: ctx.profile.colors as Record<string, unknown> | null, variant: s.kind === 'template' ? s.variant : i, seed: seedOf(item.id) });
+    const path = `${ctx.profile.id}/${item.id}/bg/${rand()}-${i + 1}.png`;
+    await upload(path, png, 'image/png');
+    p.bgs = { ...(p.bgs ?? {}), [i]: path };
+    p.bgModels = { ...(p.bgModels ?? {}), [i]: kind === 'reuse' && s.kind === 'reuse' ? `reuse:${s.from + 1}` : 'template' };
+    p.bgPrompts = { ...(p.bgPrompts ?? {}), [i]: kind === 'reuse' && s.kind === 'reuse' ? `${s.from + 1}-kadr rasmining qayta kadrlangan varianti (AI so‘rovisiz)` : 'Brend kompozitsiyasi (AI so‘rovisiz)' };
+  }
+  if (todo.length) await saveJob(job, p, `Fonlar tayyor: ${Object.keys(p.bgs ?? {}).length}/${indexes.length}`);
   return null;
+}
+
+/**
+ * This job's own guards before anything paid: pictures this post already used, the estimated cost of the ones still
+ * to make (from what this model really cost per picture recently — null when unknown), and today's agency spend.
+ */
+async function jobGuard(ctx: ClientContext, item: AgentItem, settings: AgentSettings, need: number): Promise<JobGuard> {
+  const mode = costModeOf(ctx.profile);
+  const cfg = imageConfig();
+  const model = mode === 'premium' ? (ctx.profile.image_tier === 'fast' ? cfg.fast : cfg.premium) : cfg.economy;
+  const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const dayStart = new Date(Date.parse(`${new Date(Date.now() + 5 * 3600_000).toISOString().slice(0, 10)}T00:00:00Z`) - 5 * 3600_000).toISOString();
+  const [mine, recent, today] = await Promise.all([
+    db().from('agent_usage').select('images').eq('item_id', item.id).limit(1000),
+    db().from('agent_usage').select('images, cost_usd').in('kind', ['image', 'image_edit']).eq('model', model).not('cost_usd', 'is', null).gt('images', 0).gte('created_at', since).limit(500),
+    db().from('agent_usage').select('cost_usd').gte('created_at', dayStart).not('cost_usd', 'is', null).limit(5000),
+  ]);
+  const rows = recent.data ?? [];
+  const pics = rows.reduce((n, r) => n + r.images, 0);
+  const perImage = pics ? rows.reduce((n, r) => n + Number(r.cost_usd ?? 0), 0) / pics : null;
+  return {
+    itemImages: (mine.data ?? []).reduce((n, r) => n + r.images, 0),
+    itemLimit: settings.max_images_per_item,
+    estimate: perImage === null ? null : Number((need * perImage).toFixed(4)),
+    maxJobCost: settings.max_job_cost_usd === null ? null : Number(settings.max_job_cost_usd),
+    todayCost: today.data ? today.data.reduce((n, r) => n + Number(r.cost_usd ?? 0), 0) : null,
+    dailyBudget: settings.daily_budget_usd === null ? null : Number(settings.daily_budget_usd),
+    allowOver: item.allow_over_budget,
+  };
+}
+
+/** A paid step stopped by a limit: the post waits for the admin (with the reason and estimate), nothing is billed. */
+async function stopForBudget(ctx: ClientContext, item: AgentItem, reason: string, overridable: boolean): Promise<StepResult> {
+  await db().from('agent_items').update({ status: 'limit_reached', last_error: reason, lease_until: null }).eq('id', item.id);
+  await notify('budget', overridable ? 'Ruxsat kerak: limitdan oshadi' : 'Budjet yoki limit tugadi', `${ctx.profile.name}: ${reason}`, `/agents/kontent/${item.id}`, item.id, 'high');
+  return { state: 'failed', error: reason, retry: false };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -358,15 +438,13 @@ export async function runGenerate(job: AgentJob, deadline: number, by: string | 
   const slides = item.kind === 'story' ? 1 : ctx.profile.carousel_slides;
   const settings = await loadSettings();
 
-  // Budget before anything paid (only the images still missing count).
-  const need = [...Array(slides).keys()].filter((i) => !p.bgs?.[i]).length;
+  // Budget before anything paid. Before the plan the exact count is unknown: the most this mode may use (one picture
+  // per post in Balanced / Economy, one per frame in Premium); the exact check follows before the pictures.
+  const missing = [...Array(slides).keys()].filter((i) => !p.bgs?.[i]).length;
+  const need = p.render ? aiFrames(p.render.filter((_, i) => !p.bgs?.[i])) : costModeOf(ctx.profile) === 'premium' ? missing : Math.min(1, missing);
   if (need) {
     const b = budgetCheck(await budgetState(ctx.profile.id, settings, ctx.profile), need);
-    if (!b.ok) {
-      await db().from('agent_items').update({ status: 'limit_reached', last_error: b.reason, lease_until: null }).eq('id', item.id);
-      await notify('budget', 'Budjet yoki limit tugadi', `${ctx.profile.name}: ${b.reason}`, `/agents/kontent/${item.id}`, item.id, 'high');
-      return { state: 'failed', error: b.reason, retry: false };
-    }
+    if (!b.ok) return stopForBudget(ctx, item, b.reason, false);
     if (b.warnings.length) await notify('budget_warning', 'Budjet ogohlantirishi', `${ctx.profile.name}: ${b.warnings.join(' ')}`, `/agents/sozlamalar`, null, 'normal');
   }
   await db().from('agent_items').update({ status: regenerate ? 'regenerating' : 'generating', lease_until: new Date(deadline + 60_000).toISOString(), attempts: item.attempts + 1 }).eq('id', item.id);
@@ -455,9 +533,18 @@ export async function runGenerate(job: AgentJob, deadline: number, by: string | 
       await saveJob(job, p, 'Matn va vizual brif tayyor');
     }
 
-    // 3) Backgrounds.
+    // 3) Backgrounds: where each comes from (template / re-framed / new AI picture), then this job's own guards.
     const pkg = p.pkg;
     const family = p.plan.family;
+    if (!p.render) {
+      p.render = renderPlan({ kind: item.kind === 'story' ? 'story' : 'carousel', frames: pkg.frames.length, mode: costModeOf(ctx.profile), family, productFrames: pkg.frames.map((f) => !!f.product_asset_id), seed: seedOf(item.id) });
+      await saveJob(job, p, `Fonlar rejasi: ${aiFrames(p.render)} ta AI rasm, ${pkg.frames.length - aiFrames(p.render)} ta AI’siz`);
+    }
+    const paidLeft = aiFrames(p.render.filter((_, i) => !p.bgs?.[i]));
+    if (paidLeft) {
+      const b = budgetCheck(await budgetState(ctx.profile.id, settings, ctx.profile), paidLeft, await jobGuard(ctx, item, settings, paidLeft));
+      if (!b.ok) return stopForBudget(ctx, item, b.reason, !!b.overridable);
+    }
     const imgStep = await makeBackgrounds(
       job,
       p,
@@ -477,7 +564,7 @@ export async function runGenerate(job: AgentJob, deadline: number, by: string | 
           productZone: pkg.frames[i].product_asset_id ? (pkg.frames[i].visual.text_zone === 'top' ? 'bottom' : 'top') : null,
           industry: industry?.name ?? ctx.profile.industry ?? null,
         }),
-      { deadline },
+      { deadline, render: p.render },
     );
     if (imgStep) return imgStep;
     if (Date.now() > deadline - 60_000) return { state: 'continue', note: 'Kompozitsiya keyingi navbatda' };
@@ -512,7 +599,7 @@ export async function runGenerate(job: AgentJob, deadline: number, by: string | 
       parent: regenerate ? item.current_version_id : null,
       spec: { plan: p.plan, family: FAMILIES[family].name, frames: pkg.frames.map((f, i) => ({ visual: f.visual, product_asset_id: f.product_asset_id, prompt: p.bgPrompts?.[i] ?? null })) },
       textModel: p.textModel ?? modelOf('content'),
-      imageModel: Object.values(p.bgModels ?? {})[0] ?? imageConfig().premium,
+      imageModel: Object.values(p.bgModels ?? {}).find((m) => m !== 'template' && !m.startsWith('reuse')) ?? Object.values(p.bgModels ?? {})[0] ?? imageConfig().premium,
       refs,
       cost: p.cost ?? null,
       images: p.images ?? 0,
@@ -520,6 +607,8 @@ export async function runGenerate(job: AgentJob, deadline: number, by: string | 
       by,
     });
     if (regenerate) await db().from('agent_items').update({ regen_count: item.regen_count + 1 }).eq('id', item.id);
+    // The admin's "make it anyway" covered this one run: the next paid step asks again.
+    if (item.allow_over_budget) await db().from('agent_items').update({ allow_over_budget: false }).eq('id', item.id);
     if (p.plan.trend_id) {
       const { data: t } = await db().from('agent_trends').select('used_count').eq('id', p.plan.trend_id).maybeSingle();
       await db().from('agent_trends').update({ status: 'used', used_count: (t?.used_count ?? 0) + 1 }).eq('id', p.plan.trend_id).eq('profile_id', ctx.profile.id);
@@ -595,8 +684,8 @@ export async function runEdit(job: AgentJob, deadline: number, by: string | null
     const settings = await loadSettings();
     const needImages = plan.mode === 'image_edit' || plan.mode === 'slide_regen' ? plan.slides.filter((i) => !p.bgs?.[i]).length : 0;
     if (needImages) {
-      const b = budgetCheck(await budgetState(ctx.profile.id, settings, ctx.profile), needImages);
-      if (!b.ok) return { state: 'failed', error: b.reason, retry: false };
+      const b = budgetCheck(await budgetState(ctx.profile.id, settings, ctx.profile), needImages, await jobGuard(ctx, item, settings, needImages));
+      if (!b.ok) return stopForBudget(ctx, item, b.reason, !!b.overridable);
     }
     await db().from('agent_items').update({ status: 'regenerating', lease_until: new Date(deadline + 60_000).toISOString() }).eq('id', item.id);
 

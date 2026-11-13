@@ -2,21 +2,75 @@
 
 import { useActionState } from 'react';
 
-import { TextInput } from '@/components/ui/Inputs';
+import { Checkbox, TextInput } from '@/components/ui/Inputs';
 import { Notice } from '@/components/ui/Notice';
 import { SubmitButton } from '@/components/ui/SubmitButton';
 import { saveAssistantSettings } from '@/lib/actions/assistant';
 import { idle, type ActionState } from '@/lib/actions/state';
+import type { SunnyConfig } from '@/lib/assistant/sunny';
 
 export type ModelUse = { model: string; requests: number; input: number; output: number; cached: number; thoughts: number; cost: number | null; unpriced: number };
 type Price = { input?: number; output?: number; cached?: number };
+/** P50 / P95 of real replies over 7 days, per path (local = no AI call) and model; milliseconds. */
+export type Speed = { path: string; model: string; replies: number; failed: number; stopped: number; firstP50: number | null; firstP95: number | null; totalP50: number | null; totalP95: number | null; prepP50: number | null; toolP50: number | null };
+type ModelState = { role: string; model: string; ok: boolean; message: string };
 type Props = {
   limits: { member: number; public: number };
   budget: number;
   pricing: Record<string, Price>;
   today: ModelUse[];
   month: ModelUse[];
+  config: SunnyConfig;
+  speed: Speed[];
+  models: ModelState[];
+  checkedAt: string | null;
 };
+
+const sec = (ms: number | null) => (ms === null ? '—' : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
+const PATH: Record<string, string> = { local: 'AI’siz (salom, aniq buyruq)', primary: 'Kundalik model', complex: 'Murakkab so‘rov' };
+
+function SpeedTable({ rows }: { rows: Speed[] }) {
+  if (!rows.length) return <p className="text-sm text-muted">Hali o‘lchov yo‘q — birinchi suhbatlardan keyin shu yerda chiqadi.</p>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[36rem] text-left text-[13px]">
+        <thead className="text-muted">
+          <tr>
+            <th className="py-1.5 pr-3 font-medium">Yo‘l / model</th>
+            <th className="py-1.5 pr-3 font-medium">Javoblar</th>
+            <th className="py-1.5 pr-3 font-medium">Birinchi so‘z P50 / P95</th>
+            <th className="py-1.5 pr-3 font-medium">To‘liq javob P50 / P95</th>
+            <th className="py-1.5 pr-3 font-medium">Tayyorlov / asboblar P50</th>
+            <th className="py-1.5 font-medium">Xato / to‘xtatilgan</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={`${r.path}:${r.model}`} className="border-t border-line">
+              <td className="py-1.5 pr-3">
+                <span className="font-medium text-ink">{PATH[r.path] ?? r.path}</span>
+                {r.model !== '—' ? <span className="text-muted"> · {r.model}</span> : null}
+              </td>
+              <td className="py-1.5 pr-3">{n(r.replies)}</td>
+              <td className="py-1.5 pr-3">
+                {sec(r.firstP50)} / {sec(r.firstP95)}
+              </td>
+              <td className="py-1.5 pr-3">
+                {sec(r.totalP50)} / {sec(r.totalP95)}
+              </td>
+              <td className="py-1.5 pr-3">
+                {sec(r.prepP50)} / {sec(r.toolP50)}
+              </td>
+              <td className="py-1.5">
+                {n(r.failed)} / {n(r.stopped)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 // The same on the server and in the browser (locale formatting differs between them and breaks hydration).
 const n = (v: number) => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
@@ -46,7 +100,7 @@ function Usage({ title, rows }: { title: string; rows: ModelUse[] }) {
 }
 
 /** Sozlamalar → Sunny AI: real token use as the provider reported it, the limits, the monthly cap and model prices. */
-export function AssistantAiSettings({ limits, budget, pricing, today, month }: Props) {
+export function AssistantAiSettings({ limits, budget, pricing, today, month, config, speed, models: status, checkedAt }: Props) {
   const [state, action] = useActionState<ActionState, FormData>(saveAssistantSettings, idle);
   const errors = state.status === 'error' ? (state.fieldErrors ?? {}) : {};
   const models = [...new Set([...month.map((m) => m.model), ...Object.keys(pricing)])].sort();
@@ -58,6 +112,39 @@ export function AssistantAiSettings({ limits, budget, pricing, today, month }: P
         <Usage title="Bugun" rows={today} />
         <Usage title="Bu oy" rows={month} />
       </div>
+      <section className="rounded-2xl border border-line p-4">
+        <p className="mb-2 text-sm font-semibold">Tezlik (oxirgi 7 kun, haqiqiy o‘lchov)</p>
+        <SpeedTable rows={speed} />
+      </section>
+      <section className="space-y-4">
+        <h3 className="text-sm font-semibold">Modellar (OpenAI)</h3>
+        <div className="flex flex-wrap gap-6">
+          <Checkbox name="enabled" label="AI javoblari yoqilgan" description="O‘chirilsa ham salomlashish va aniq buyruqlar ishlaydi." defaultChecked={config.enabled} />
+          <Checkbox name="escalation" label="Murakkab so‘rovlarga kuchli model" description="Tahlil, solishtirish, reja tuzish — faqat shularda." defaultChecked={config.escalation} />
+        </div>
+        <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
+          <TextInput label="Kundalik model" name="primary" defaultValue={config.primary} error={errors.primary} hint="Salom, vazifalar, davomat, oddiy savollar" />
+          <TextInput label="Murakkab so‘rovlar modeli" name="complex" defaultValue={config.complex} error={errors.complex} hint="Mavjud bo‘lmasa, kundalik model javob beradi" />
+        </div>
+        <div className="grid max-w-3xl gap-4 sm:grid-cols-4">
+          <TextInput label="Javob, token" name="max_output" type="number" min={64} max={4000} defaultValue={config.maxOutput} error={errors.max_output} />
+          <TextInput label="Ma’lumotli javob, token" name="max_output_data" type="number" min={64} max={4000} defaultValue={config.maxOutputData} error={errors.max_output_data} />
+          <TextInput label="Suhbat tarixi, xabar" name="max_history" type="number" min={2} max={40} defaultValue={config.maxHistory} error={errors.max_history} />
+          <TextInput label="So‘rov chegarasi, token" name="max_input_tokens" type="number" min={2000} max={200000} defaultValue={config.maxInputTokens} error={errors.max_input_tokens} />
+        </div>
+        {status.length ? (
+          <ul className="space-y-1 text-[13px]">
+            {status.map((m) => (
+              <li key={`${m.role}:${m.model}`} className={m.ok ? 'text-muted' : 'text-danger'}>
+                {m.ok ? '✓' : '✕'} {m.role}: <span className="font-medium text-ink">{m.model}</span> — {m.message}
+              </li>
+            ))}
+            {checkedAt ? <li className="text-muted">Tekshirildi: {checkedAt.replace('T', ' ').slice(0, 16)} (UTC)</li> : null}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted">Modellar mavjudligini server har 6 soatda tekshiradi — natija shu yerda chiqadi.</p>
+        )}
+      </section>
       <section className="grid max-w-2xl gap-4 sm:grid-cols-3">
         <TextInput label="Xodim/hamkor: kunlik savol" name="daily_limit_member" type="number" min={0} max={10000} defaultValue={limits.member} error={errors.daily_limit_member} />
         <TextInput label="Sayt mehmoni: kunlik savol" name="daily_limit_public" type="number" min={0} max={10000} defaultValue={limits.public} error={errors.daily_limit_public} />

@@ -3,6 +3,7 @@ import 'server-only';
 import { agencyDateKey } from '@/lib/time';
 
 import { aiOnline } from './ai';
+import { costReport, type FrameRow, type UsageRow } from './cost';
 import type { Frame } from './core';
 import { imagesReady } from './images';
 import { db, loadSettings, signed } from './server';
@@ -160,4 +161,22 @@ export async function jobsList(statuses?: string[], limit = 100): Promise<JobVie
     itemKind: (j.item as { kind?: string } | null)?.kind ?? null,
     itemDate: (j.item as { target_date?: string } | null)?.target_date ?? null,
   }));
+}
+
+/** Sozlamalar → the month's cost per client (agent_usage as OpenAI reported it, priced from the list prices). */
+export async function costMonth() {
+  const since = monthStart();
+  const [usage, versions, profiles] = await Promise.all([
+    db().from('agent_usage').select('profile_id, item_id, kind, model, images, cost_usd, input_tokens, output_tokens').gte('created_at', since).limit(20000),
+    db().from('agent_versions').select('change_kind, frames, item:agent_items!inner(profile_id)').gte('created_at', since).limit(5000),
+    db().from('agent_profiles').select('id, name, monthly_budget_usd, monthly_image_limit, cost_mode'),
+  ]);
+  const frames: FrameRow[] = (versions.data ?? []).map((v) => ({
+    profile_id: (v.item as unknown as { profile_id: string }).profile_id,
+    change_kind: v.change_kind,
+    bg_models: ((v.frames as unknown as { bg_model?: string | null }[]) ?? []).map((f) => f.bg_model ?? ''),
+  }));
+  const report = costReport((usage.data ?? []) as UsageRow[], frames, profiles.data ?? []);
+  const names = new Map((profiles.data ?? []).map((p) => [p.id, p]));
+  return { ...report, names };
 }

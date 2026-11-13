@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { textCost } from '@/lib/openai-prices';
+
 /**
  * OpenAI Responses API, server-side only. OPENAI_API_KEY never leaves the server; models come from
  * OPENAI_QUESTION_MODEL / OPENAI_ANALYSIS_MODEL. Every call has a timeout, at most one retry on a passing failure, a
@@ -63,12 +65,16 @@ export async function checkModel(model: string, fetchImpl: Fetch = fetch): Promi
   }
 }
 
-const usageOf = (body: Record<string, unknown>): AiUsage => {
-  const u = (body.usage ?? {}) as { input_tokens?: number; output_tokens?: number };
+/** Tokens as OpenAI reported them; cost from OpenAI's list prices per model (lib/openai-prices.ts) or the env override. */
+const usageOf = (body: Record<string, unknown>, model: string): AiUsage => {
+  const u = (body.usage ?? {}) as { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number } };
   const input = Number.isFinite(u.input_tokens) ? Number(u.input_tokens) : 0;
   const output = Number.isFinite(u.output_tokens) ? Number(u.output_tokens) : 0;
   const { priceIn, priceOut } = aiConfig();
-  const costUsd = priceIn !== null && priceOut !== null ? Number(((input * priceIn + output * priceOut) / 1e6).toFixed(6)) : null;
+  const costUsd =
+    priceIn !== null && priceOut !== null
+      ? Number(((input * priceIn + output * priceOut) / 1e6).toFixed(6))
+      : textCost(model, { input, output, cached: Number(u.input_tokens_details?.cached_tokens ?? 0) || 0 });
   return { input, output, costUsd };
 };
 
@@ -188,7 +194,7 @@ export async function respond<T>({
       if (attempt === 0) await sleep(res.status === 429 ? 1200 : 600);
       continue;
     }
-    const one = usageOf(json);
+    const one = usageOf(json, model);
     total = { input: total.input + one.input, output: total.output + one.output, costUsd: one.costUsd === null ? total.costUsd : (total.costUsd ?? 0) + one.costUsd };
     const usage = total;
     const reason = ((json.incomplete_details ?? {}) as { reason?: string }).reason;

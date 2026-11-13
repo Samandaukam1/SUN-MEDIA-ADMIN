@@ -13,11 +13,17 @@ const schema = z.object({
   daily_limit_member: z.coerce.number().int().min(0, 'Manfiy bo‘lmaydi').max(10000),
   daily_limit_public: z.coerce.number().int().min(0, 'Manfiy bo‘lmaydi').max(10000),
   monthly_budget_usd: z.coerce.number().min(0, 'Manfiy bo‘lmaydi').max(100000),
+  primary: z.string().trim().regex(/^[\w.:-]{2,80}$/, 'Model nomi noto‘g‘ri'),
+  complex: z.string().trim().regex(/^[\w.:-]{2,80}$/, 'Model nomi noto‘g‘ri'),
+  max_output: z.coerce.number().int().min(64, 'Kamida 64').max(4000),
+  max_output_data: z.coerce.number().int().min(64, 'Kamida 64').max(4000),
+  max_history: z.coerce.number().int().min(2, 'Kamida 2').max(40),
+  max_input_tokens: z.coerce.number().int().min(2000, 'Kamida 2000').max(200000),
 });
 
 /**
- * Sozlamalar → Sunny AI (system owner only): the daily question limits, the monthly money cap and the price of each
- * model per million tokens. Prices are whatever the owner enters from the provider's own price list — Sunny never
+ * Sozlamalar → Sunny AI (system owner only): AI on/off, the everyday and advanced OpenAI models, output and history
+ * limits, the daily question limits, the monthly money cap and the price of each model per million tokens. Prices are whatever the owner enters from the provider's own price list — Sunny never
  * assumes one; a model without a price is counted in tokens only.
  */
 export async function saveAssistantSettings(_: ActionState, formData: FormData): Promise<ActionState> {
@@ -26,6 +32,12 @@ export async function saveAssistantSettings(_: ActionState, formData: FormData):
     daily_limit_member: formData.get('daily_limit_member'),
     daily_limit_public: formData.get('daily_limit_public'),
     monthly_budget_usd: formData.get('monthly_budget_usd'),
+    primary: formData.get('primary'),
+    complex: formData.get('complex'),
+    max_output: formData.get('max_output'),
+    max_output_data: formData.get('max_output_data'),
+    max_history: formData.get('max_history'),
+    max_input_tokens: formData.get('max_input_tokens'),
   });
   if (!parsed.success) return { status: 'error', message: 'Formadagi xatolarni tuzating.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
 
@@ -45,6 +57,19 @@ export async function saveAssistantSettings(_: ActionState, formData: FormData):
     { key: 'assistant.daily_limit_public', value: v.daily_limit_public },
     { key: 'assistant.monthly_budget_usd', value: v.monthly_budget_usd },
     { key: 'assistant.pricing', value: pricing },
+    {
+      key: 'assistant.config',
+      value: {
+        enabled: formData.get('enabled') === 'on',
+        escalation: formData.get('escalation') === 'on',
+        primary: v.primary,
+        complex: v.complex,
+        max_output: v.max_output,
+        max_output_data: v.max_output_data,
+        max_history: v.max_history,
+        max_input_tokens: v.max_input_tokens,
+      },
+    },
   ];
   for (const row of rows) {
     const { data, error } = await supabase.from('app_settings').update({ value: row.value }).eq('key', row.key).select('key');

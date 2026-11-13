@@ -88,6 +88,13 @@ export default async function ContentReview({ params }: { params: Promise<{ id: 
         </Notice>
       ) : null}
       {item.last_error ? <Notice tone="danger" title="Oxirgi xato">{item.last_error}</Notice> : null}
+      {item.status === 'limit_reached' && /admin ruxsat berishi kerak/.test(item.last_error ?? '') ? (
+        <div>
+          <ActionButton act={{ kind: 'allowOver', itemId: item.id }} variant="primary" confirm="Bu material uchun limitdan oshib, bitta ishni bajarishga ruxsat berasizmi? Oylik va kunlik budjetlar baribir amal qiladi.">
+            Limitdan oshirib yaratishga ruxsat
+          </ActionButton>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex flex-col gap-6">

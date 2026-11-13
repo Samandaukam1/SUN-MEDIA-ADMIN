@@ -2,15 +2,16 @@ import 'server-only';
 
 import { AiFailedError } from '@/lib/ai';
 import { geminiChat, geminiKey, type ModelUsage } from './gemini';
+import { openaiChat, openaiKey, type RoundTiming } from './openai';
+import type { Effort } from './sunny';
 import { toolsFor, type AssistantAction, type AssistantContext, type runTool } from './tools';
 
 /**
  * Sunny's AI providers behind one interface, so the assistant (tools, permissions, confirmations, personality, voice,
- * the 3D robot) never depends on which model answers. Gemini is the primary provider; Claude joins as a fallback only
- * when ANTHROPIC_API_KEY is set. ASSISTANT_PROVIDERS (e.g. "gemini,anthropic") sets the order.
- *
- * OpenAI is not connected yet. To add it later: implement an AiProvider with id 'openai' (ready when OPENAI_API_KEY is
- * set) that runs the same tool loop, list it in ALL and in ASSISTANT_PROVIDERS. Nothing else in Sunny changes.
+ * the 3D robot) never depends on which model answers. Sunny 2.0: OpenAI is the brain (OPENAI_API_KEY, models from
+ * sunny.ts settings). Gemini and Claude are no longer in the reply path; they answer only if the owner lists them
+ * explicitly in ASSISTANT_PROVIDERS (e.g. "openai,gemini"). Gemini's free speech recognition (voice) is separate and
+ * unaffected (see gemini.ts / the STT route).
  */
 export type ChatTurn = { role: 'user' | 'assistant'; text: string };
 export type ProviderInput = {
@@ -23,6 +24,10 @@ export type ProviderInput = {
   onText?: (delta: string) => void;
   /** Each model call's token counts, as the provider reported them (cost accounting). */
   onUsage?: (u: ModelUsage) => void;
+  /** Which OpenAI model answers and its limits (model routing in sunny.ts). */
+  route: { model: string; fallback?: string; effort: Effort; maxTokens: number; maxTokensData: number; cacheKey: string };
+  /** Each model round's timing (speed metrics). */
+  onRound?: (t: RoundTiming) => void;
 };
 export type AiProvider = {
   id: 'gemini' | 'anthropic' | 'openai';
@@ -74,11 +79,31 @@ const anthropic: AiProvider = {
   },
 };
 
-const ALL: AiProvider[] = [gemini, anthropic];
+const openai: AiProvider = {
+  id: 'openai',
+  ready: () => !!openaiKey(),
+  async reply({ system, history, ctx, step, signal, onText, onUsage, route, onRound }) {
+    const done = collector();
+    const reply = await openaiChat(
+      system,
+      history,
+      toolsFor(ctx),
+      async (tool, input) => {
+        const result = await step(tool, input);
+        done.add(result);
+        return result.content;
+      },
+      { ...route, onText, signal, onUsage, onRound },
+    );
+    return { reply, actions: done.actions };
+  },
+};
 
-/** The providers that can answer now, in the configured order (Gemini first by default). */
+const ALL: AiProvider[] = [openai, gemini, anthropic];
+
+/** The providers that can answer now, in the configured order (OpenAI only by default). */
 export function configuredProviders(): AiProvider[] {
-  const order = (process.env.ASSISTANT_PROVIDERS || 'gemini,anthropic').split(',').map((s) => s.trim());
+  const order = (process.env.ASSISTANT_PROVIDERS || 'openai').split(',').map((s) => s.trim());
   return order.map((id) => ALL.find((p) => p.id === id)).filter((p): p is AiProvider => !!p && p.ready());
 }
 

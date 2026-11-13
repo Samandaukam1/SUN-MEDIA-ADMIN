@@ -25,6 +25,7 @@ import {
   rescheduleAgentItem,
   restoreAgentVersion,
   retryAgentJob,
+  allowAgentOverBudget,
   runAgentResearch,
   setAgentProfileStatus,
   toggleCampaign,
@@ -47,6 +48,7 @@ type Act =
   | { kind: 'campaign'; id: string; active: boolean }
   | { kind: 'retry'; jobId: string }
   | { kind: 'cancel'; jobId: string }
+  | { kind: 'allowOver'; itemId: string }
   | { kind: 'dismissTrend'; id: string };
 
 function run(a: Act): Promise<AgentResult> {
@@ -71,6 +73,8 @@ function run(a: Act): Promise<AgentResult> {
       return retryAgentJob(a.jobId);
     case 'cancel':
       return cancelAgentJob(a.jobId);
+    case 'allowOver':
+      return allowAgentOverBudget(a.itemId);
     case 'dismissTrend':
       return dismissAgentTrend(a.id);
   }

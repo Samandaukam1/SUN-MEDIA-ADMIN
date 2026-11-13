@@ -89,6 +89,7 @@ const profileSchema = z.object({
   monthly_budget_usd: z.string().transform((v) => (v.trim() === '' ? null : Number(v.replace(',', '.')))).pipe(z.number().min(0).max(100000).nullable()),
   image_quality: z.enum(['low', 'medium', 'high']),
   image_tier: z.enum(['premium', 'fast']),
+  cost_mode: z.enum(['economy', 'balanced', 'premium']),
   colors: z.record(z.string(), z.string()),
   brief_session_id: z.string().transform((v) => (isUuid(v) ? v : null)),
 });
@@ -134,6 +135,7 @@ function readProfileForm(fd: FormData) {
     monthly_budget_usd: s('monthly_budget_usd'),
     image_quality: (['low', 'medium', 'high'].includes(s('image_quality')) ? s('image_quality') : 'medium') as 'low' | 'medium' | 'high',
     image_tier: s('image_tier') === 'fast' ? 'fast' : 'premium',
+    cost_mode: (['economy', 'balanced', 'premium'].includes(s('cost_mode')) ? s('cost_mode') : 'balanced') as 'economy' | 'balanced' | 'premium',
     colors,
     brief_session_id: s('brief_session_id'),
   });
@@ -600,6 +602,27 @@ export async function retryAgentJob(jobId: string): Promise<AgentResult> {
   return { ok: true, message: 'Qayta navbatga qo‘yildi.' };
 }
 
+/**
+ * The admin's explicit "make it anyway" for ONE post that a per-post or per-job cost limit stopped (the estimate was
+ * shown in its error). Covers the next run only (the pipeline clears it); monthly and daily money caps still apply.
+ */
+export async function allowAgentOverBudget(itemId: string): Promise<AgentResult> {
+  const me = await requireAgents();
+  if (!isUuid(itemId)) return { ok: false, message: 'Topilmadi.' };
+  const { data: item } = await db().from('agent_items').select('id, status, last_error, current_version_id').eq('id', itemId).maybeSingle();
+  if (!item || item.status !== 'limit_reached') return { ok: false, message: 'Bu material limit sababli to‘xtamagan.' };
+  if (await activeJob(itemId)) return { ok: false, message: 'Bu material ustida ish allaqachon bor.' };
+  const { data: j } = await db().from('agent_jobs').select('*').eq('item_id', itemId).in('status', ['failed', 'cancelled']).order('created_at', { ascending: false }).limit(1).maybeSingle();
+  if (!j) return { ok: false, message: 'Qayta boshlanadigan ish topilmadi.' };
+  await db().from('agent_items').update({ allow_over_budget: true, status: 'generating', last_error: null }).eq('id', itemId);
+  const payload = { ...((j.payload ?? {}) as Record<string, unknown>), failures: 0 };
+  await db().from('agent_jobs').insert({ item_id: j.item_id, profile_id: j.profile_id, kind: j.kind, priority: 6, payload: payload as Json, idempotency_key: `${j.kind}:over:${j.id}:${randomBytes(3).toString('hex')}`, created_by: me.userId });
+  await db().from('agent_review_comments').insert({ item_id: itemId, version_id: item.current_version_id, body: `Limitdan oshishga ruxsat berildi (${(item.last_error ?? '').slice(0, 300)})`, author: me.userId });
+  await kick();
+  revalidatePath(`/agents/kontent/${itemId}`);
+  return { ok: true, message: 'Ruxsat berildi — bitta ish uchun navbatga qo‘yildi.' };
+}
+
 export async function cancelAgentJob(jobId: string): Promise<AgentResult> {
   await requireAgents();
   if (!isUuid(jobId)) return { ok: false, message: 'Topilmadi.' };
@@ -688,6 +711,10 @@ export async function saveAgentSettings(_: ActionState, fd: FormData): Promise<A
   await requireAgents();
   const n = (k: string, lo: number, hi: number, def: number) => Math.min(hi, Math.max(lo, Number(fd.get(k) ?? def) || def));
   const budget = String(fd.get('monthly_budget_usd') ?? '').trim();
+  const money = (k: string) => {
+    const v = String(fd.get(k) ?? '').trim();
+    return v === '' ? null : Math.max(0, Number(v.replace(',', '.')) || 0);
+  };
   const { error } = await db()
     .from('agent_settings')
     .update({
@@ -702,6 +729,9 @@ export async function saveAgentSettings(_: ActionState, fd: FormData): Promise<A
       research_weekday: n('research_weekday', 1, 7, 1),
       story_safe_top: n('story_safe_top', 0, 600, 250),
       story_safe_bottom: n('story_safe_bottom', 0, 700, 340),
+      max_images_per_item: n('max_images_per_item', 1, 100, 8),
+      max_job_cost_usd: money('max_job_cost_usd'),
+      daily_budget_usd: money('daily_budget_usd'),
     })
     .eq('id', 1);
   if (error) return { status: 'error', message: 'Saqlab bo‘lmadi.' };

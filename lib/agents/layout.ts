@@ -160,7 +160,7 @@ export function bodyBlocks(lines: BodyLine[]): BodyBlock[] {
     if (last?.kind === 'list') last.items.push({ text: l.text, marker: l.marker });
     else out.push({ kind: 'list', inline: false, items: [{ text: l.text, marker: l.marker }] });
   }
-  for (const b of out) if (b.kind === 'list') b.inline = b.items.length >= 3 && b.items.every((i) => [...i.text].length <= 22);
+  for (const b of out) if (b.kind === 'list') b.inline = b.items.length >= 4 && b.items.every((i) => [...i.text].length <= 22);
   return out;
 }
 

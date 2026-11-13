@@ -89,8 +89,22 @@ export type BudgetState = {
   agency: { todayImages: number; monthImages: number; monthCost: number | null; dailyLimit: number; monthlyLimit: number; budgetUsd: number | null };
 };
 
-export function budgetCheck(s: BudgetState, imagesNeeded: number): { ok: true; warnings: string[] } | { ok: false; reason: string } {
+/**
+ * One job's own guards: paid pictures one post may use (regenerations and edits included), the estimated cost one job
+ * may reach, and the agency's daily money cap. The first two the admin may lift for one post on purpose
+ * (`allowOver`); the money caps never.
+ */
+export type JobGuard = { itemImages: number; itemLimit: number; estimate: number | null; maxJobCost: number | null; todayCost: number | null; dailyBudget: number | null; allowOver: boolean };
+
+const usd = (n: number) => `$${n.toFixed(2)}`;
+
+export function budgetCheck(s: BudgetState, imagesNeeded: number, job?: JobGuard): { ok: true; warnings: string[] } | { ok: false; reason: string; overridable?: boolean } {
   if (s.profile.emergency) return { ok: false, reason: 'Mijoz uchun favqulodda to‘xtatish yoqilgan.' };
+  if (job && job.dailyBudget !== null && job.todayCost !== null && job.todayCost >= job.dailyBudget) return { ok: false, reason: `Agentlikning kunlik AI budjeti (${usd(job.dailyBudget)}) tugadi.` };
+  if (job && !job.allowOver && job.itemImages + imagesNeeded > job.itemLimit)
+    return { ok: false, overridable: true, reason: `Bu material uchun rasm chegarasi (${job.itemLimit}) yetmaydi: ishlatilgan ${job.itemImages}, kerak ${imagesNeeded}${job.estimate !== null ? ` (taxminan ${usd(job.estimate)})` : ''}. Davom ettirish uchun admin ruxsat berishi kerak.` };
+  if (job && !job.allowOver && job.maxJobCost !== null && job.estimate !== null && job.estimate > job.maxJobCost)
+    return { ok: false, overridable: true, reason: `Taxminiy narx ${usd(job.estimate)} — bitta ish chegarasidan (${usd(job.maxJobCost)}) yuqori. Davom ettirish uchun admin ruxsat berishi kerak.` };
   if (s.profile.monthImages + imagesNeeded > s.profile.imageLimit) return { ok: false, reason: `Mijozning oylik rasm limiti (${s.profile.imageLimit}) yetmaydi: ishlatilgan ${s.profile.monthImages}, kerak ${imagesNeeded}.` };
   if (s.agency.todayImages + imagesNeeded > s.agency.dailyLimit) return { ok: false, reason: `Agentlikning kunlik rasm limiti (${s.agency.dailyLimit}) yetmaydi.` };
   if (s.agency.monthImages + imagesNeeded > s.agency.monthlyLimit) return { ok: false, reason: `Agentlikning oylik rasm limiti (${s.agency.monthlyLimit}) yetmaydi.` };

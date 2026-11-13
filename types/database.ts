@@ -353,6 +353,7 @@ export type Database = {
           published_manually_at: string | null
           published_by: string | null
           publish_note: string | null
+          allow_over_budget: boolean
         }
         Insert: {
           attempts?: number
@@ -378,6 +379,7 @@ export type Database = {
           published_manually_at?: string | null
           published_by?: string | null
           publish_note?: string | null
+          allow_over_budget?: boolean
         }
         Update: {
           attempts?: number
@@ -403,6 +405,7 @@ export type Database = {
           published_manually_at?: string | null
           published_by?: string | null
           publish_note?: string | null
+          allow_over_budget?: boolean
         }
         Relationships: [
           {
@@ -519,6 +522,7 @@ export type Database = {
           image_quality: string
           image_tier: string
           brief_session_id: string | null
+          cost_mode: string
         }
         Insert: {
           address?: string | null
@@ -569,6 +573,7 @@ export type Database = {
           image_quality?: string
           image_tier?: string
           brief_session_id?: string | null
+          cost_mode?: string
         }
         Update: {
           address?: string | null
@@ -619,6 +624,7 @@ export type Database = {
           image_quality?: string
           image_tier?: string
           brief_session_id?: string | null
+          cost_mode?: string
         }
         Relationships: [
           {
@@ -1106,6 +1112,9 @@ export type Database = {
           revision_warn: number
           story_safe_top: number
           story_safe_bottom: number
+          max_images_per_item: number
+          max_job_cost_usd: number | null
+          daily_budget_usd: number | null
         }
         Insert: {
           daily_ai_limit?: number
@@ -1124,6 +1133,9 @@ export type Database = {
           revision_warn?: number
           story_safe_top?: number
           story_safe_bottom?: number
+          max_images_per_item?: number
+          max_job_cost_usd?: number | null
+          daily_budget_usd?: number | null
         }
         Update: {
           daily_ai_limit?: number
@@ -1142,6 +1154,9 @@ export type Database = {
           revision_warn?: number
           story_safe_top?: number
           story_safe_bottom?: number
+          max_images_per_item?: number
+          max_job_cost_usd?: number | null
+          daily_budget_usd?: number | null
         }
         Relationships: []
       }
@@ -10436,6 +10451,41 @@ export type Database = {
           p_who: string
         }
         Returns: number
+      }
+      assistant_latency_report: {
+        Args: { p_days?: number }
+        Returns: {
+          path: string
+          model: string
+          replies: number
+          failed: number
+          stopped: number
+          first_p50: number | null
+          first_p95: number | null
+          total_p50: number | null
+          total_p95: number | null
+          prep_p50: number | null
+          tool_p50: number | null
+          with_tools: number
+        }[]
+      }
+      assistant_reply_record: {
+        Args: {
+          p_audience: string
+          p_path: string
+          p_provider: string
+          p_model: string
+          p_first_ms: number
+          p_total_ms: number
+          p_prep_ms?: number
+          p_api_ms?: number
+          p_tool_ms?: number
+          p_tool_calls?: number
+          p_rounds?: number
+          p_failed?: boolean
+          p_stopped?: boolean
+        }
+        Returns: undefined
       }
       assistant_spend: {
         Args: { p_member: boolean; p_who: string }

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 
@@ -27,6 +29,19 @@ const body = z.object({
   earlier: z.array(z.string().max(400)).max(20).optional(),
 });
 const MAX_TEXT = 2000;
+
+/**
+ * The same question from the same person while the first one is still being answered (a double tap, a resent voice
+ * command) is not paid for twice. Per server instance; the entry ends with the answer, or after 30 s at most.
+ */
+const inFlight = new Map<string, number>();
+function claim(key: string): boolean {
+  const now = Date.now();
+  if ((inFlight.get(key) ?? 0) > now) return false;
+  if (inFlight.size > 2000) for (const [k, until] of inFlight) if (until <= now) inFlight.delete(k);
+  inFlight.set(key, now + 30_000);
+  return true;
+}
 
 function failure(error: unknown): { status: number; error: string } {
   if (error instanceof AiNotConfiguredError) return { status: 503, error: 'Yordamchi hali ulanmagan.' };
@@ -63,6 +78,9 @@ export async function POST(request: NextRequest) {
   if (rateLimited(`chat:${ipKey}`, limit, 10 * 60_000)) {
     return NextResponse.json({ error: 'Juda ko‘p xabar yubordingiz. Bir necha daqiqadan so‘ng davom etamiz.' }, { status: 429, headers });
   }
+  const dup = `${ipKey}:${createHash('sha256').update(`${history.length}|${history[history.length - 1].text}`).digest('hex').slice(0, 24)}`;
+  if (!claim(dup)) return NextResponse.json({ error: 'Bu savolga javob hozir tayyorlanmoqda.' }, { status: 409, headers });
+  const release = () => inFlight.delete(dup);
 
   if (!parsed.data.stream) {
     try {
@@ -71,6 +89,8 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       const { status, error: message } = failure(error);
       return NextResponse.json({ error: message }, { status, headers });
+    } finally {
+      release();
     }
   }
 
@@ -98,6 +118,8 @@ export async function POST(request: NextRequest) {
         send({ t: 'done', ...result, audience: ctx.audience });
       } catch (error) {
         send({ t: 'error', error: failure(error).error });
+      } finally {
+        release();
       }
       try {
         controller.close();

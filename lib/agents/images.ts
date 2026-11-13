@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { imageCost } from '@/lib/openai-prices';
+
 /**
  * OpenAI Images API (server only): POST /v1/images/generations and /v1/images/edits with the documented parameters
  * (model, prompt, size, quality, output_format, background, moderation, n; edits: images[], mask). GPT image models
@@ -21,10 +23,16 @@ export function imageConfig() {
     const v = Number(process.env[n]);
     return Number.isFinite(v) && v > 0 ? v : null;
   };
+  const q = (v: string | undefined, d: ImageQuality): ImageQuality => (v === 'low' || v === 'medium' || v === 'high' ? v : d);
   return {
     key: process.env.OPENAI_API_KEY?.trim() || null,
-    premium: process.env.OPENAI_IMAGE_MODEL?.trim() || 'gpt-image-2.6-sunburst',
+    // Chosen on purpose (Premium mode); the everyday model for Balanced / Economy. If the economic model is not open to
+    // the key, the premium one answers (and the panel shows it).
+    premium: process.env.CONTENT_PREMIUM_IMAGE_MODEL?.trim() || process.env.OPENAI_IMAGE_MODEL?.trim() || 'gpt-image-2.6-sunburst',
+    economy: process.env.CONTENT_IMAGE_MODEL?.trim() || 'gpt-image-2',
     fast: process.env.OPENAI_IMAGE_EDIT_MODEL?.trim() || 'gpt-image-2.6-flare',
+    quality: q(process.env.CONTENT_IMAGE_QUALITY?.trim(), 'medium'),
+    previewQuality: q(process.env.CONTENT_PREVIEW_QUALITY?.trim(), 'low'),
     // Standard portrait size every GPT image model accepts; the composer crops it to the exact 9:16 / 4:5 canvas.
     size: process.env.OPENAI_IMAGE_SIZE?.trim() || '1024x1536',
     // USD per 1M image tokens, if the owner set them (cost is recorded only when known).
@@ -35,12 +43,15 @@ export function imageConfig() {
 
 export const imagesReady = () => !!imageConfig().key;
 
-function usageOf(body: Record<string, unknown>): ImageUsage {
-  const u = (body.usage ?? {}) as { input_tokens?: number; output_tokens?: number };
+/** Tokens as OpenAI reported them; cost from OpenAI's list prices (lib/openai-prices.ts) or the owner's override. */
+export function usageOf(body: Record<string, unknown>, model: string): ImageUsage {
+  const u = (body.usage ?? {}) as { input_tokens?: number; output_tokens?: number; input_tokens_details?: { text_tokens?: number; image_tokens?: number } };
   const input = Number.isFinite(u.input_tokens) ? Number(u.input_tokens) : 0;
   const output = Number.isFinite(u.output_tokens) ? Number(u.output_tokens) : 0;
   const { priceIn, priceOut } = imageConfig();
-  return { input, output, costUsd: priceIn !== null && priceOut !== null ? Number(((input * priceIn + output * priceOut) / 1e6).toFixed(6)) : null };
+  if (priceIn !== null && priceOut !== null) return { input, output, costUsd: Number(((input * priceIn + output * priceOut) / 1e6).toFixed(6)) };
+  const d = u.input_tokens_details ?? {};
+  return { input, output, costUsd: imageCost(model, { input, output, textInput: Number.isFinite(d.text_tokens) ? Number(d.text_tokens) : null, imageInput: Number.isFinite(d.image_tokens) ? Number(d.image_tokens) : null }) };
 }
 
 type Fetch = typeof fetch;
@@ -102,19 +113,25 @@ async function call(
     }
     const b64 = ((json.data as { b64_json?: string }[] | undefined) ?? [])[0]?.b64_json;
     if (!b64) return { ok: false, kind: 'server', message: 'OpenAI rasm qaytarmadi.' };
-    return { ok: true, png: Buffer.from(b64, 'base64'), model, usage: usageOf(json), size: String(json.size ?? size) };
+    return { ok: true, png: Buffer.from(b64, 'base64'), model, usage: usageOf(json, model), size: String(json.size ?? size) };
   }
   return last;
 }
 
-export function generateImage(
-  a: { prompt: string; tier: 'premium' | 'fast'; quality: ImageQuality; model?: string },
+export async function generateImage(
+  a: { prompt: string; tier: 'premium' | 'fast' | 'economy'; quality: ImageQuality; model?: string },
   opts?: { fetchImpl?: Fetch; timeoutMs?: number; sleep?: (ms: number) => Promise<unknown> },
 ): Promise<ImageResult> {
   const cfg = imageConfig();
-  const model = a.model || (a.tier === 'fast' ? cfg.fast : cfg.premium);
-  const payload = { model, prompt: a.prompt.slice(0, 32_000), n: 1, size: cfg.size, quality: a.quality, output_format: 'png', background: 'opaque', moderation: 'auto' };
-  return call('generations', () => ({ body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } }), model, cfg.size, opts);
+  const model = a.model || (a.tier === 'fast' ? cfg.fast : a.tier === 'economy' ? cfg.economy : cfg.premium);
+  const send = (m: string) => {
+    const payload = { model: m, prompt: a.prompt.slice(0, 32_000), n: 1, size: cfg.size, quality: a.quality, output_format: 'png', background: 'opaque', moderation: 'auto' };
+    return call('generations', () => ({ body: JSON.stringify(payload), headers: { 'Content-Type': 'application/json' } }), m, cfg.size, opts);
+  };
+  const r = await send(model);
+  // The economic model not open to this key: the premium model draws instead (no image was billed for the refusal).
+  if (!r.ok && r.kind === 'model' && a.tier === 'economy' && !a.model && cfg.premium !== model) return send(cfg.premium);
+  return r;
 }
 
 /** Edits an existing picture (the first image); further images are references. An optional mask limits the area. */

@@ -327,3 +327,102 @@ test('image prompt: layout words never reach the image model (no fake cards or c
     assert.match(p, /Do not draw empty cards, panels/);
   }
 });
+
+const cost = await import('../lib/agents/cost.ts');
+const prices = await import('../lib/openai-prices.ts');
+
+test('render plan: AI picture only where a scene adds value; a carousel pays for one picture in Balanced, Premium for each', () => {
+  const kinds = (plan) => plan.map((p) => (p.kind === 'reuse' ? `reuse${p.from}` : p.kind));
+  // Balanced, a scene family: slide 1 AI, middle slides re-frame it, CTA slide is a brand composition.
+  assert.deepEqual(kinds(cost.renderPlan({ kind: 'carousel', frames: 4, mode: 'balanced', family: 'storytelling' })), ['ai', 'reuse0', 'reuse0', 'template']);
+  assert.equal(cost.aiFrames(cost.renderPlan({ kind: 'carousel', frames: 4, mode: 'balanced', family: 'storytelling' })), 1);
+  // Typography / price / minimal / info designs: no paid picture at all.
+  for (const family of ['editorial', 'promo_poster', 'minimal_luxury', 'infographic']) {
+    assert.equal(cost.aiFrames(cost.renderPlan({ kind: 'carousel', frames: 4, mode: 'balanced', family })), 0, family);
+    assert.equal(cost.aiFrames(cost.renderPlan({ kind: 'story', frames: 1, mode: 'balanced', family })), 0, family);
+  }
+  // A Story with the client's product photo: the real photo on a brand composition, no AI picture.
+  assert.deepEqual(kinds(cost.renderPlan({ kind: 'story', frames: 1, mode: 'balanced', family: 'product_hero', productFrames: [true] })), ['template']);
+  assert.deepEqual(kinds(cost.renderPlan({ kind: 'story', frames: 1, mode: 'balanced', family: 'seasonal' })), ['ai']);
+  // The hero is the first frame without a product.
+  assert.deepEqual(kinds(cost.renderPlan({ kind: 'carousel', frames: 3, mode: 'economy', family: 'service_benefits', productFrames: [true, false, false] })), ['template', 'ai', 'template'], 'product slide and CTA slide are brand compositions');
+  assert.deepEqual(kinds(cost.renderPlan({ kind: 'carousel', frames: 5, mode: 'economy', family: 'service_benefits', productFrames: [true, false, false, false, false] })), ['template', 'ai', 'reuse1', 'reuse1', 'template']);
+  // Premium: the 1.0 behaviour, chosen on purpose.
+  assert.equal(cost.aiFrames(cost.renderPlan({ kind: 'carousel', frames: 4, mode: 'premium', family: 'editorial' })), 4);
+  assert.deepEqual([cost.qualityFor('economy', { quality: 'medium', previewQuality: 'low' }, 'high'), cost.qualityFor('balanced', { quality: 'medium', previewQuality: 'low' }, 'high'), cost.qualityFor('premium', { quality: 'medium', previewQuality: 'low' }, 'high')], ['low', 'medium', 'high']);
+});
+
+test('job guards: per-post picture cap and per-job cost need the admin; money caps never move; nothing invented', () => {
+  const s = { profile: { monthImages: 0, monthCost: 0, imageLimit: 100, budgetUsd: null, emergency: false }, agency: { todayImages: 0, monthImages: 0, monthCost: 0, dailyLimit: 80, monthlyLimit: 600, budgetUsd: null } };
+  const g = (o = {}) => ({ itemImages: 0, itemLimit: 8, estimate: 0.04, maxJobCost: null, todayCost: 0, dailyBudget: null, allowOver: false, ...o });
+  assert.equal(ins.budgetCheck(s, 1, g()).ok, true);
+  const capped = ins.budgetCheck(s, 2, g({ itemImages: 7 }));
+  assert.equal(capped.ok, false);
+  assert.equal(capped.overridable, true);
+  assert.match(capped.reason, /taxminan \$0\.04/);
+  assert.equal(ins.budgetCheck(s, 2, g({ itemImages: 7, allowOver: true })).ok, true, 'the admin allowed this one post');
+  const pricey = ins.budgetCheck(s, 4, g({ estimate: 0.16, maxJobCost: 0.1 }));
+  assert.deepEqual([pricey.ok, pricey.overridable], [false, true]);
+  assert.equal(ins.budgetCheck(s, 4, g({ estimate: null, maxJobCost: 0.1 })).ok, true, 'unknown estimate: the count limits still apply, no guessed cost');
+  const day = ins.budgetCheck(s, 1, g({ todayCost: 5, dailyBudget: 5, allowOver: true }));
+  assert.deepEqual([day.ok, day.overridable], [false, undefined], 'the daily money cap is not lifted by a per-post approval');
+});
+
+test('prices: OpenAI list prices (2026-11-13) turn reported tokens into an estimate; unknown models get none', () => {
+  assert.equal(prices.textCost('gpt-6-luna', { input: 1245, output: 1554 }), 0.000901);
+  assert.equal(prices.textCost('gpt-6.1-sol', { input: 1171, output: 820 }), 0.010542);
+  assert.equal(prices.textCost('gpt-6-luna', { input: 2000, cached: 1500, output: 100 }), 0.000115, 'cached input at the cached rate');
+  // The smoke test's Story picture: 453 text-input and 1 132 image-output tokens.
+  assert.equal(prices.imageCost('gpt-image-2.6-sunburst', { input: 453, output: 1132 }), 0.036225);
+  assert.equal(prices.imageCost('gpt-image-2', { input: 453, output: 1132 }), prices.imageCost('gpt-image-2.6-sunburst', { input: 453, output: 1132 }), 'same per-token price');
+  assert.equal(prices.imageCost('gpt-image-2', { input: 1500, output: 1100, textInput: 300, imageInput: 1200 }), 0.0441);
+  assert.equal(prices.textCost('some-unknown-model', { input: 10, output: 10 }), null);
+  assert.equal(prices.textCost('gpt-6-luna', { input: 1e6, output: 0 }, { OPENAI_PRICE_GPT_6_LUNA_IN: '0.2' }), 0.2, 'env override');
+});
+
+test('image models: Balanced / Economy use CONTENT_IMAGE_MODEL; if the key cannot use it, the premium model answers once', async () => {
+  process.env.OPENAI_API_KEY = 'sk-test-not-real';
+  delete process.env.OPENAI_IMAGE_PRICE_INPUT_PER_1M;
+  delete process.env.OPENAI_IMAGE_PRICE_OUTPUT_PER_1M;
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+  const seen = [];
+  const r = await images.generateImage({ prompt: 'scene', tier: 'economy', quality: 'low' }, {
+    fetchImpl: async (url, init) => {
+      const body = JSON.parse(init.body);
+      seen.push(body.model);
+      if (body.model === 'gpt-image-2') return new Response(JSON.stringify({ error: { code: 'model_not_found' } }), { status: 404 });
+      return new Response(JSON.stringify({ data: [{ b64_json: png.toString('base64') }], usage: { input_tokens: 400, output_tokens: 272, input_tokens_details: { text_tokens: 400, image_tokens: 0 } } }));
+    },
+    sleep: async () => {},
+  });
+  assert.deepEqual(seen, ['gpt-image-2', 'gpt-image-2.6-sunburst']);
+  assert.equal(r.ok, true);
+  assert.equal(r.model, 'gpt-image-2.6-sunburst');
+  assert.equal(r.usage.costUsd, 0.01016, 'list-price estimate from the reported tokens');
+});
+
+test('cost report: per client paid pictures, edits, regenerations, AI-free frames, average per picture, budget left', () => {
+  const usage = [
+    { profile_id: 'A', item_id: 'i1', kind: 'text', model: 'gpt-6-luna', images: 0, cost_usd: '0.001', input_tokens: 1, output_tokens: 1 },
+    { profile_id: 'A', item_id: 'i1', kind: 'image', model: 'gpt-image-2', images: 1, cost_usd: '0.036', input_tokens: 1, output_tokens: 1 },
+    { profile_id: 'A', item_id: 'i2', kind: 'image_edit', model: 'gpt-image-2.6-flare', images: 1, cost_usd: '0.04', input_tokens: 1, output_tokens: 1 },
+    { profile_id: 'A', item_id: 'i2', kind: 'image', model: 'gpt-image-2', images: 0, cost_usd: null, input_tokens: 0, output_tokens: 0 },
+    { profile_id: 'B', item_id: 'i3', kind: 'text', model: 'gpt-6-luna', images: 0, cost_usd: null, input_tokens: 1, output_tokens: 1 },
+  ];
+  const versions = [
+    { profile_id: 'A', change_kind: 'generate', bg_models: ['gpt-image-2', 'reuse:1', 'reuse:1', 'template'] },
+    { profile_id: 'A', change_kind: 'layout_edit', bg_models: ['gpt-image-2', 'reuse:1', 'reuse:1', 'template'] },
+    { profile_id: 'A', change_kind: 'regenerate', bg_models: ['template'] },
+  ];
+  const r = cost.costReport(usage, versions, [{ id: 'A', monthly_budget_usd: '0.09', monthly_image_limit: 100 }, { id: 'B', monthly_budget_usd: null, monthly_image_limit: 0 }]);
+  const a = r.clients.find((c) => c.profileId === 'A');
+  assert.deepEqual([a.images, a.edits, a.regenerations, a.requests, a.freeFrames], [1, 1, 1, 3, 4], 'a failed request counts as a request, not a picture; layout edits do not re-count free frames');
+  assert.deepEqual(a.models.sort(), ['gpt-image-2', 'gpt-image-2.6-flare']);
+  assert.equal(a.perImage, 0.038);
+  assert.equal(Number(a.total.toFixed(3)), 0.077);
+  assert.equal(a.remaining, 0.013);
+  assert.equal(a.warn, 'Oylik budjetning 80% dan oshdi');
+  const b = r.clients.find((c) => c.profileId === 'B');
+  assert.deepEqual([b.total, b.perImage, b.remaining], [null, null, null], 'unknown cost stays unknown');
+  assert.deepEqual(r.top.map((t) => t.itemId), ['i2', 'i1']);
+});

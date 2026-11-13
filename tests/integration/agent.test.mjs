@@ -29,6 +29,9 @@ process.env.SITE_GATE_SECRET = 'agent-test-secret';
 if (stack?.SECRET_KEY) process.env.SUPABASE_SECRET_KEY = stack.SECRET_KEY;
 // The model is simulated below (no AI key or quota is used): the engine, tools and database are the real ones.
 process.env.GEMINI_API_KEY = 'simulated';
+// Sunny 2.0 answers with OpenAI by default; these tests drive the engine and tools through the simulated Gemini
+// provider, so it is listed explicitly (the OpenAI tool loop has its own tests in tests/assistant-providers.test.mjs).
+process.env.ASSISTANT_PROVIDERS = 'gemini';
 delete process.env.ANTHROPIC_API_KEY;
 
 const { runAction, openToken, localTime, today } = await import('../../lib/assistant/agent.ts');

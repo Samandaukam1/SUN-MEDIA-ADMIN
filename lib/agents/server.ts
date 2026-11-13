@@ -51,6 +51,9 @@ export async function loadSettings(): Promise<AgentSettings> {
       daily_ai_limit: 150,
       regen_limit: 4,
       research_weekday: 1,
+      max_images_per_item: 8,
+      max_job_cost_usd: null,
+      daily_budget_usd: null,
       updated_at: new Date().toISOString(),
     }
   );

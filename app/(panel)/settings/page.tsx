@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation';
 
 import { PageHeader } from '@/components/panel/PageHeader';
 import { AlertRules, type AlertRule } from '@/components/settings/AlertRules';
-import { AssistantAiSettings, type ModelUse } from '@/components/settings/AssistantAiSettings';
+import { AssistantAiSettings, type ModelUse, type Speed } from '@/components/settings/AssistantAiSettings';
+import { sunnyConfig } from '@/lib/assistant/sunny';
 import { SettingsForm } from '@/components/settings/SettingsForm';
 import { Card } from '@/components/ui/Card';
 import { can, isSystemOwner, requireStaff } from '@/lib/auth';
@@ -17,10 +18,11 @@ export default async function SettingsPage() {
   if (!['settings.manage', 'employees.manage', 'notifications.manage'].some((p) => can(context, p))) redirect('/no-access?reason=permission');
   const supabase = await createClient();
   const owner = isSystemOwner(context);
-  const [{ data, error }, rulesRes, usageRes] = await Promise.all([
+  const [{ data, error }, rulesRes, usageRes, speedRes] = await Promise.all([
     supabase.from('app_settings').select('key, value'),
     supabase.from('deadline_alert_rules').select('id, name, target, offset_minutes, recipients, task_types, is_active').eq('target', 'task').order('offset_minutes'),
     owner ? supabase.rpc('assistant_usage_report', { p_days: 31 }) : null,
+    owner ? supabase.rpc('assistant_latency_report', { p_days: 7 }) : null,
   ]);
   if (error) throw error;
   if (rulesRes.error) throw rulesRes.error;
@@ -49,6 +51,10 @@ export default async function SettingsPage() {
   const usage = usageRes?.data ?? [];
   const num = (v: unknown, d: number) => (typeof v === 'number' ? v : d);
   const pricing = get('assistant.pricing');
+  // Sunny 2.0: the models and limits in force (server env + the owner's saved values), real speed, the key's models.
+  const sunny = sunnyConfig(process.env, get('assistant.config'));
+  const speed: Speed[] = (speedRes?.data ?? []).map((r) => ({ path: r.path, model: r.model, replies: Number(r.replies), failed: Number(r.failed), stopped: Number(r.stopped), firstP50: r.first_p50, firstP95: r.first_p95, totalP50: r.total_p50, totalP95: r.total_p95, prepP50: r.prep_p50, toolP50: r.tool_p50 }));
+  const status = get('ai.models_status') as { checked_at?: string; models?: { role: string; model: string; ok: boolean; message: string }[] } | undefined;
 
   return (
     <div>
@@ -74,7 +80,7 @@ export default async function SettingsPage() {
         <section className="mt-10 max-w-5xl">
           <h2 className="text-lg font-semibold tracking-tight">Sunny AI</h2>
           <p className="mt-1 mb-4 max-w-2xl text-sm text-muted">
-            Faqat AI kerak bo‘lgan savollar hisoblanadi; aniq buyruqlar (vazifalarim, keldim, brifing) va robot harakatlari tekin. Tokenlar provayder bergan hisob bo‘yicha.
+            Sunny OpenAI orqali javob beradi. Faqat AI kerak bo‘lgan savollar hisoblanadi; salomlashish, aniq buyruqlar (vazifalarim, keldim, brifing) va robot harakatlari tekin. Tokenlar va vaqtlar — haqiqiy o‘lchov.
           </p>
           <Card>
             <AssistantAiSettings
@@ -83,6 +89,10 @@ export default async function SettingsPage() {
               pricing={pricing && typeof pricing === 'object' && !Array.isArray(pricing) ? (pricing as Record<string, { input?: number; output?: number; cached?: number }>) : {}}
               today={sum(usage.filter((r) => r.day === today))}
               month={sum(usage.filter((r) => r.day.slice(0, 7) === today.slice(0, 7)))}
+              config={sunny}
+              speed={speed}
+              models={status?.models ?? []}
+              checkedAt={status?.checked_at ?? null}
             />
           </Card>
         </section>

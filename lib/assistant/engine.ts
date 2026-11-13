@@ -1,7 +1,9 @@
 import 'server-only';
 
 import { AiFailedError, AiNotConfiguredError } from '@/lib/ai';
-import { BUDGET_SPENT, budgetGate, recordUsage } from './budget';
+import { BUDGET_SPENT, budgetGate, recordReply, recordUsage, sunnySettings } from './budget';
+import { compactHistory, greetingReply, roughTokens, routeModel } from './sunny';
+import { toolsFor } from './tools';
 import type { ModelUsage } from './gemini';
 import { memoryCandidate, suggestionLine } from './suggest';
 import { agencyKnowledge, budgetHints } from './knowledge';
@@ -40,6 +42,8 @@ Javob sifati:
 - Suhbatdoshning biznesiga moslab gapir (restoran, klinika, do‘kon...): unga aynan nima foyda berishini ayt.
 - Har javob oxirida bitta aniq keyingi qadam yoki bitta savol bo‘lsin.
 - Salomlashishni faqat birinchi javobda qil, keyin takrorlama. "Albatta!", "Ajoyib savol!" kabi bo‘sh so‘zlar ishlatma.
+- O‘zingni "sun’iy intellekt" yoki "AI yordamchi" deb qayta-qayta tanishtirma — sen Sunnysan; faqat so‘ralsa ayt.
+- Ozgina hazil o‘rinli bo‘lsa mayli, lekin hurmat va aniqlik birinchi. Imlo xatosi yoki og‘zaki gap bilan yozilgan savolni ham tushun.
 - Emoji juda kam (ko‘pi bilan bitta).
 - Bilmagan narsangni (narx, muddat, kafolat, chegirma) o‘ylab topma — "aniq hisobni menejerimiz beradi" de va ariza qoldirishni taklif qil.
 - SUN MEDIA’dan boshqa mavzularda suhbatni muloyimlik bilan agentlik xizmatlariga qaytar.
@@ -109,15 +113,17 @@ async function systemPrompt(ctx: AssistantContext, name: string | null, lastQues
   const now = new Date().toLocaleString('uz-UZ', { timeZone: 'Asia/Tashkent', dateStyle: 'full', timeStyle: 'short' });
   const role = ctx.audience === 'public' ? SALES : ctx.audience === 'staff' ? STAFF : CLIENT;
   const [hints, memory, style, seen] = await Promise.all([ctx.audience === 'public' ? budgetHints() : Promise.resolve([]), memoryContext(ctx), styleContext(lastQuestion), seeFocus(ctx, page?.focus)]);
+  // The stable part first (persona, role, knowledge, manner), so OpenAI's prompt cache reuses it across questions;
+  // the time, memory and page — different every time — come after it.
   return [
     PERSONA,
     role,
-    `Hozir: ${now} (Toshkent), bugungi sana ${agencyDateKey()}.${name ? ` Suhbatdosh: ${name}.` : ''}`,
-    ctx.audience === 'staff' ? `Sanalar: ${nextDays()}.` : '',
-    hints.length ? `Byudjetni bilmasa, tariflardan birini taklif qil: ${hints.join('; ')}.` : '',
     '# SUN MEDIA haqida bilimlar\n' + (await agencyKnowledge()),
+    hints.length ? `Byudjetni bilmasa, tariflardan birini taklif qil: ${hints.join('; ')}.` : '',
     // Phase 5: how it speaks to this person, the owner's style, and what it remembers (data, never instructions).
     socialPrompt(ctx.audience, ctx.owner),
+    `Hozir: ${now} (Toshkent), bugungi sana ${agencyDateKey()}.${name ? ` Suhbatdosh: ${name}.` : ''}`,
+    ctx.audience === 'staff' ? `Sanalar: ${nextDays()}.` : '',
     style,
     memory,
     // The manner only (Qitmir mode): tools, permissions and confirmations above stay exactly the same.
@@ -134,9 +140,10 @@ async function systemPrompt(ctx: AssistantContext, name: string | null, lastQues
 }
 
 /**
- * One assistant reply from the configured AI providers (see providers.ts: Gemini first; Claude when its key is set;
- * OpenAI can be added there later). Tools loop until the model answers in text. `onText` receives the reply as it is
- * written; `signal` stops it when the visitor does.
+ * One assistant reply. Greetings and exact commands are answered by the system itself (instant, free); everything else
+ * goes to OpenAI (providers.ts) on the everyday or — for real analysis — the advanced model, with the recent part of the
+ * conversation only. Tools loop until the model answers in text. `onText` receives the reply as it is written;
+ * `signal` stops it when the person does. Every reply's real timings are recorded (P50 / P95 in Sozlamalar).
  */
 export async function assistantReply(
   history: ChatTurn[],
@@ -152,6 +159,15 @@ export async function assistantReply(
     earlier,
   }: { onText?: (delta: string) => void; onStep?: (e: StepEvent) => void; signal?: AbortSignal; mode?: AssistantMode; feeling?: Feeling; page?: PageContext; earlier?: string[] } = {},
 ): Promise<{ reply: string; actions: AssistantAction[] }> {
+  const t0 = Date.now();
+  let firstMs: number | null = null;
+  const userOnText = onText;
+  onText = (delta: string) => {
+    if (firstMs === null && delta) firstMs = Date.now() - t0;
+    userOnText?.(delta);
+  };
+  let toolMs = 0;
+  let toolCalls = 0;
   // Every change attempted in this turn, as the system reported it (mission mode: the person sees each one's real state).
   const mission: MissionStep[] = [];
   // Holographic cards (§34): the facts of the last list Sunny read, shown by the robot in a voice conversation.
@@ -172,23 +188,36 @@ export async function assistantReply(
   };
   const step = async (tool: string, input: Record<string, unknown>) => {
     onStep?.({ phase: 'start', name: tool, label: toolLabel(tool) });
+    const ts = Date.now();
     const result = await runTool(tool, input, ctx);
+    toolMs += Date.now() - ts;
+    toolCalls++;
     onStep?.({ phase: 'end', name: tool, ok: result.ok !== false, write: !!result.write });
     const change = isWrite(tool) ? stepOf(tool, result.content) : null;
     if (change) mission.push(change);
     if (!isWrite(tool)) deck = cardsFor(tool, result.content, taskHref, ctx.audience === 'public' ? undefined : actFor(tool, input)) ?? deck;
     return result;
   };
+  const local = async <T>(out: T): Promise<T> => {
+    await recordReply(ctx, { path: 'local', firstMs, totalMs: Date.now() - t0, toolMs: toolCalls ? toolMs : null, toolCalls });
+    return out;
+  };
+  // A bare greeting or wake word: Sunny answers at once, no AI call.
+  const hello = greetingReply(history[history.length - 1]?.text ?? '', ctx.audience);
+  if (hello) {
+    onText?.(hello);
+    return local({ reply: hello, actions: [] });
+  }
   // An exact command (attendance, my tasks, shootings, a page) is done by the system's own tool, without the AI.
   const route = routeCommand(history[history.length - 1]?.text ?? '', ctx.audience);
   if (route && 'say' in route) {
     onText?.(route.say);
-    return { reply: route.say, actions: route.link ? [{ type: 'link', ...route.link }] : [] };
+    return local({ reply: route.say, actions: route.link ? [{ type: 'link' as const, ...route.link }] : [] });
   }
   if (route && 'link' in route) {
     const reply = `Mana, ${route.link.label} sahifasi.`;
     onText?.(reply);
-    return { reply, actions: [{ type: 'link', ...route.link }] };
+    return local({ reply, actions: [{ type: 'link' as const, ...route.link }] });
   }
   if (route) {
     const result = await step(route.tool, route.input);
@@ -206,26 +235,66 @@ export async function assistantReply(
       reply = mode === 'qitmir' && out.ok && !out.waiting ? quip(out.text, route.tool, true) : out.text;
     }
     onText?.(reply);
-    return { reply, actions };
+    return local({ reply, actions });
   }
   const providers = configuredProviders();
   if (!providers.length) throw new AiNotConfiguredError();
   // Only questions that need the AI count against the person's daily share (exact commands above are free).
-  const gate = await budgetGate(ctx);
+  const [gate, cfg] = await Promise.all([budgetGate(ctx), sunnySettings()]);
+  if (!cfg.enabled) throw new AiFailedError('AI javoblari hozir o‘chirilgan (administrator sozlamasi). Aniq buyruqlar ishlayveradi: "vazifalarim", "keldim", "brifing".');
   if (gate === 'daily') throw new AiFailedError(ctx.audience === 'public' ? BUDGET_SPENT.public : BUDGET_SPENT.member);
   if (gate === 'money') throw new AiFailedError(ctx.audience === 'public' ? BUDGET_SPENT.moneyPublic : BUDGET_SPENT.money);
   const lastText = history[history.length - 1]?.text ?? '';
   // What the person literally said: a message the model composed itself is shown to them before it goes to a group.
   ctx.said = lastText;
-  const [system, saved] = await Promise.all([systemPrompt(ctx, name, lastText, mode, feeling, page, earlier), savedNotes(ctx)]);
+  // Model routing (no extra AI call) and the recent part of the conversation only.
+  const pick = routeModel(lastText, ctx.audience, cfg);
+  const budgetChars = Math.round(cfg.maxInputTokens * 3.6);
+  const compact = compactHistory(history, cfg.maxHistory, Math.round(budgetChars * 0.45));
+  const thread = [...(earlier ?? []), ...compact.dropped].slice(-12);
+  const [system, saved] = await Promise.all([systemPrompt(ctx, name, lastText, mode, feeling, page, thread), savedNotes(ctx)]);
+  // Still over the request cap with this person's tools: fewer old messages go along.
+  const fixed = system.length + JSON.stringify(toolsFor(ctx)).length;
+  const sent = roughTokens(fixed + compact.history.reduce((n, m) => n + m.text.length, 0)) > cfg.maxInputTokens ? compactHistory(compact.history, cfg.maxHistory, Math.max(1200, budgetChars - fixed)).history : compact.history;
+  const prepMs = Date.now() - t0;
+  let apiMs = 0;
+  let rounds = 0;
   let failure: unknown;
   for (const provider of providers) {
     // One that fails before writing anything hands over to the next; one that already wrote part of a reply does not
     // (the visitor would see half an answer twice).
     let wrote = false;
     const usage: ModelUsage[] = [];
+    const timing = { model: pick.model };
+    const route = {
+      model: pick.model,
+      fallback: pick.tier === 'complex' ? cfg.primary : undefined,
+      effort: cfg.effort,
+      maxTokens: pick.tier === 'complex' ? Math.max(cfg.maxOutput, cfg.maxOutputData) : cfg.maxOutput,
+      maxTokensData: cfg.maxOutputData,
+      cacheKey: `sunny-${ctx.audience}-${pick.tier}`,
+    };
+    const record = (failed: boolean) =>
+      Promise.all([
+        recordUsage(ctx, provider.id, usage),
+        recordReply(ctx, { path: pick.tier, provider: provider.id, model: usage.at(-1)?.model ?? timing.model, firstMs, totalMs: Date.now() - t0, prepMs, apiMs, toolMs: toolCalls ? toolMs : null, toolCalls, rounds, failed, stopped: !!signal?.aborted }),
+      ]);
     try {
-      const answered = await provider.reply({ system, history, ctx, step, signal, onText: (d) => ((wrote = true), onText?.(d)), onUsage: (u) => usage.push(u) });
+      const answered = await provider.reply({
+        system,
+        history: sent,
+        ctx,
+        step,
+        signal,
+        onText: (d) => ((wrote = true), onText?.(d)),
+        onUsage: (u) => usage.push(u),
+        route,
+        onRound: (r) => {
+          apiMs += r.ms;
+          rounds++;
+          timing.model = r.model;
+        },
+      });
       const out = deck ? { ...answered, actions: [...answered.actions, deck] } : answered;
       // Two or more changes: the system's own account follows the model's words, so a partial failure is never hidden.
       const ledger = missionLedger(mission);
@@ -233,13 +302,13 @@ export async function assistantReply(
       const offer = !mission.length && !out.actions.some((a) => a.type === 'confirm') && saved ? memoryCandidate(lastText, saved) : null;
       const card = offer ? proposal(ctx, 'remember', { text: offer.text, ...(offer.replaces ? { replaces: offer.replaces.id } : {}) }, offer.replaces ? `Eslatma yangilanadi: «${offer.text}».` : `Eslab qolinadi: «${offer.text}».`) : null;
       const extra = [ledger, card && offer ? suggestionLine(offer) : ''].filter(Boolean).join('\n\n');
-      await recordUsage(ctx, provider.id, usage);
+      await record(false);
       if (!extra) return out;
       const tail = `${out.reply.trim() ? '\n\n' : ''}${extra}`;
       onText?.(tail);
       return { ...out, reply: out.reply + tail, actions: card ? [...out.actions, card] : out.actions };
     } catch (error) {
-      await recordUsage(ctx, provider.id, usage);
+      await record(!signal?.aborted);
       failure = error;
       if (wrote || signal?.aborted) throw error;
       console.error(`[assistant] ${provider.id} failed, trying the next provider:`, error instanceof Error ? error.message : error);

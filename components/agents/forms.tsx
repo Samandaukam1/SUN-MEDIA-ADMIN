@@ -64,6 +64,7 @@ export type ProfileValues = {
   monthly_budget_usd: number | null;
   image_quality: string;
   image_tier: string;
+  cost_mode: string;
   brief_session_id: string | null;
 };
 
@@ -195,7 +196,12 @@ export function ProfileForm({ initial, today, clients, briefs }: { initial?: Pro
           <option value="medium">O‘rta</option>
           <option value="high">Yuqori</option>
         </SelectInput>
-        <SelectInput label="Rasm modeli" name="image_tier" defaultValue={v?.image_tier ?? 'premium'}>
+        <SelectInput label="Xarajat rejimi" name="cost_mode" defaultValue={v?.cost_mode ?? 'balanced'} hint="Muvozanatli: AI rasm faqat sahna kerak bo‘lganda, karuselda bittagina; qolgani brend shabloni">
+          <option value="economy">Tejamkor — shablon va mijoz fotolari, AI rasm kamdan-kam</option>
+          <option value="balanced">Muvozanatli (tavsiya)</option>
+          <option value="premium">Premium — har kadrga yangi AI rasm</option>
+        </SelectInput>
+        <SelectInput label="Premium rejim modeli" name="image_tier" defaultValue={v?.image_tier ?? 'premium'}>
           <option value="premium">Premium (batafsil)</option>
           <option value="fast">Tez</option>
         </SelectInput>
@@ -419,7 +425,7 @@ export function MetricsForm({ itemId }: { itemId: string }) {
   );
 }
 
-export function SettingsForm({ s }: { s: { automation_enabled: boolean; prepare_lead_hours: number; late_grace_minutes: number; daily_ai_limit: number; daily_image_limit: number; monthly_image_limit: number; monthly_budget_usd: number | null; revision_warn: number; research_weekday: number; story_safe_top: number; story_safe_bottom: number } }) {
+export function SettingsForm({ s }: { s: { automation_enabled: boolean; prepare_lead_hours: number; late_grace_minutes: number; daily_ai_limit: number; daily_image_limit: number; monthly_image_limit: number; monthly_budget_usd: number | null; revision_warn: number; research_weekday: number; story_safe_top: number; story_safe_bottom: number; max_images_per_item: number; max_job_cost_usd: number | null; daily_budget_usd: number | null } }) {
   const [state, formAction] = useActionState<ActionState, FormData>(saveAgentSettings, idle);
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -447,8 +453,11 @@ export function SettingsForm({ s }: { s: { automation_enabled: boolean; prepare_
         <TextInput label="Kunlik AI matn chaqiruvlari" name="daily_ai_limit" type="number" min={0} defaultValue={s.daily_ai_limit} />
         <TextInput label="Kunlik rasm limiti" name="daily_image_limit" type="number" min={0} defaultValue={s.daily_image_limit} />
         <TextInput label="Oylik rasm limiti" name="monthly_image_limit" type="number" min={0} defaultValue={s.monthly_image_limit} />
-        <TextInput label="Oylik budjet ($)" name="monthly_budget_usd" defaultValue={s.monthly_budget_usd ?? ''} hint="Narxlar .env’da berilsa, shu summadan oshganda to‘xtaydi" />
+        <TextInput label="Oylik budjet ($)" name="monthly_budget_usd" defaultValue={s.monthly_budget_usd ?? ''} hint="OpenAI rasmiy narxlari bo‘yicha taxminiy xarajat" />
         <TextInput label="Qayta yaratishlar soni ogohlantirishi" name="revision_warn" type="number" min={1} defaultValue={s.revision_warn} />
+        <TextInput label="Bitta material uchun AI rasm (jami)" name="max_images_per_item" type="number" min={1} max={100} defaultValue={s.max_images_per_item} hint="Qayta yaratish va tahrirlar bilan birga" />
+        <TextInput label="Bitta ish taxminiy narxi, $ (ixtiyoriy)" name="max_job_cost_usd" defaultValue={s.max_job_cost_usd ?? ''} hint="Oshsa — admin ruxsatisiz yuborilmaydi" />
+        <TextInput label="Kunlik AI budjeti, $ (ixtiyoriy)" name="daily_budget_usd" defaultValue={s.daily_budget_usd ?? ''} />
       </Card>
       <StateNotice state={state} />
       <div>

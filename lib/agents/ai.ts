@@ -248,13 +248,15 @@ export async function agentResearch(a: { profileId: string; system: string; user
 // ---------------------------------------------------------------------------------------------------------------
 // Model availability (settings page): nothing generated.
 // ---------------------------------------------------------------------------------------------------------------
-export async function modelsStatus() {
+export async function modelsStatus(sunny?: { primary: string; complex: string }) {
   const cfg = aiConfig();
   const img = imageConfig();
   if (!cfg.key) return { configured: false, models: [] as { role: string; model: string; ok: boolean; message: string }[] };
   const list = [
+    ...(sunny ? [{ role: 'Sunny (kundalik)', model: sunny.primary }, { role: 'Sunny (murakkab so‘rov)', model: sunny.complex }] : []),
     { role: 'Kontent (matn, reja)', model: cfg.models.content },
     { role: 'Strategiya (kreativ paket, tadqiqot)', model: cfg.models.strategy },
+    { role: 'Rasm (tejamkor / muvozanatli)', model: img.economy },
     { role: 'Rasm (premium)', model: img.premium },
     { role: 'Rasm (tez / tahrir)', model: img.fast },
   ];

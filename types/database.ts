@@ -523,6 +523,8 @@ export type Database = {
           image_tier: string
           brief_session_id: string | null
           cost_mode: string
+          carousel_enabled: boolean
+          story_times: string[]
         }
         Insert: {
           address?: string | null
@@ -574,6 +576,8 @@ export type Database = {
           image_tier?: string
           brief_session_id?: string | null
           cost_mode?: string
+          carousel_enabled?: boolean
+          story_times?: string[]
         }
         Update: {
           address?: string | null
@@ -625,6 +629,8 @@ export type Database = {
           image_tier?: string
           brief_session_id?: string | null
           cost_mode?: string
+          carousel_enabled?: boolean
+          story_times?: string[]
         }
         Relationships: [
           {
@@ -10383,6 +10389,7 @@ export type Database = {
         Returns: number
       }
       agent_recover: { Args: never; Returns: number }
+      agents_drop_unstarted_carousels: { Args: { p_profile: string }; Returns: number }
       agents_enqueue_due: { Args: never; Returns: number }
       agents_kick: { Args: never; Returns: undefined }
       agent_consume_worker_token: { Args: { p_hash: string }; Returns: boolean }

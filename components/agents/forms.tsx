@@ -53,6 +53,8 @@ export type ProfileValues = {
   forbidden: string | null;
   colors: Record<string, string>;
   stories_per_day: number;
+  carousel_enabled: boolean;
+  story_times: string[];
   carousel_slides: number;
   carousel_every_days: number;
   active_weekdays: number[];
@@ -171,6 +173,22 @@ export function ProfileForm({ initial, today, clients, briefs }: { initial?: Pro
         <div className="sm:col-span-3">
           <SectionTitle>Jadval va budjet</SectionTitle>
         </div>
+        <div className="sm:col-span-3">
+          <Checkbox
+            label="Karusel ham yaratilsin"
+            name="carousel_enabled"
+            description="O‘chirilsa — bu mijoz uchun faqat Story; rejalashtirilgan, hali boshlanmagan karusellar bekor qilinadi."
+            defaultChecked={v?.carousel_enabled ?? true}
+          />
+        </div>
+        <TextInput
+          label="Story vaqtlari (har biri alohida)"
+          name="story_times"
+          defaultValue={(v?.story_times ?? []).map((t) => t.slice(0, 5)).join(', ')}
+          placeholder="09:00, 13:00, 19:00"
+          hint="Nechta vaqt yozilsa — kuniga shuncha Story. Bo‘sh: quyidagi son va vaqtdan 3 soat oraliq bilan."
+          error={e.story_times}
+        />
         <TextInput label="Kunlik Story soni" name="stories_per_day" type="number" min={1} max={10} defaultValue={v?.stories_per_day ?? 1} error={e.stories_per_day} />
         <TextInput label="Story vaqti" name="story_time" type="time" defaultValue={v?.story_time?.slice(0, 5) ?? '10:00'} />
         <TextInput label="Karusel vaqti" name="post_time" type="time" defaultValue={v?.post_time?.slice(0, 5) ?? '18:00'} />

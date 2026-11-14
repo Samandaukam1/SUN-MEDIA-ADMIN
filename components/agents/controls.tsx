@@ -121,13 +121,13 @@ function useAct() {
   return { pending, r, go };
 }
 
-export function GenerateNow({ profileId }: { profileId: string }) {
+export function GenerateNow({ profileId, carousel = true }: { profileId: string; carousel?: boolean }) {
   const router = useRouter();
   const { pending, r, go } = useAct();
   return (
     <div>
       <div className="flex flex-wrap gap-2">
-        {(['story', 'carousel'] as const).map((k) => (
+        {(carousel ? (['story', 'carousel'] as const) : (['story'] as const)).map((k) => (
           <Button key={k} type="button" variant="secondary" loading={pending} onClick={() => go(() => generateAgentNow(profileId, k), (res) => ((res as { itemId?: string }).itemId ? router.push(`/agents/kontent/${(res as { itemId?: string }).itemId}`) : null))}>
             {k === 'story' ? 'Story yaratish' : 'Karusel yaratish'}
           </Button>

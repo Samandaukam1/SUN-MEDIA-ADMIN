@@ -92,7 +92,7 @@ export default async function AgentProfile({ params, searchParams }: { params: P
         {header}
         <Card className="flex flex-col gap-4">
           <SectionTitle>Boshqaruv</SectionTitle>
-          <GenerateNow profileId={id} />
+          <GenerateNow profileId={id} carousel={p.carousel_enabled} />
           <div className="flex flex-wrap gap-2">
             {p.status === 'active' ? <ActionButton act={{ kind: 'status', profileId: id, action: 'pause' }}>Pauza</ActionButton> : <ActionButton act={{ kind: 'status', profileId: id, action: 'resume' }}>Davom ettirish</ActionButton>}
             {p.emergency_pause ? (

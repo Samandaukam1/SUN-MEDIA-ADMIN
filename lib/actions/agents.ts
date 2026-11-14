@@ -78,6 +78,13 @@ const profileSchema = z.object({
   cta: text(200),
   forbidden: text(2000),
   stories_per_day: z.coerce.number().int().min(1, '1–10').max(10, '1–10'),
+  carousel_enabled: z.boolean(),
+  /** Each Story's own time, "09:00, 13:00, 19:00" (empty: stories_per_day from story_time, 3 hours apart). */
+  story_times: z
+    .string()
+    .transform((v) => [...new Set(v.split(/[,;\s]+/).map((t) => t.trim()).filter(Boolean))])
+    .pipe(z.array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Vaqt HH:MM ko‘rinishida bo‘lsin (masalan 09:00, 13:00)')).max(10, 'Ko‘pi bilan 10 ta vaqt'))
+    .transform((a) => a.sort()),
   carousel_slides: z.coerce.number().int().min(2, '2–10').max(10, '2–10'),
   carousel_every_days: z.coerce.number().int().min(1, '1–14').max(14, '1–14'),
   active_weekdays: z.array(z.number().int().min(1).max(7)).min(1, 'Kamida bitta kun'),
@@ -124,6 +131,8 @@ function readProfileForm(fd: FormData) {
     cta: s('cta'),
     forbidden: s('forbidden'),
     stories_per_day: s('stories_per_day') || 1,
+    carousel_enabled: fd.get('carousel_enabled') === 'on',
+    story_times: s('story_times'),
     carousel_slides: s('carousel_slides') || 4,
     carousel_every_days: s('carousel_every_days') || 2,
     active_weekdays: fd.getAll('weekday').map((x) => Number(x)).filter((n) => n >= 1 && n <= 7),
@@ -147,7 +156,7 @@ export async function createAgentProfile(_: ActionState, fd: FormData): Promise<
   if (!parsed.success) return { status: 'error', message: 'Formadagi xatolarni tuzating.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
   const { data, error } = await db()
     .from('agent_profiles')
-    .insert({ ...parsed.data, colors: parsed.data.colors as Json, created_by: me.userId })
+    .insert({ ...parsed.data, ...(parsed.data.story_times.length ? { stories_per_day: parsed.data.story_times.length } : {}), colors: parsed.data.colors as Json, created_by: me.userId })
     .select('id')
     .single();
   if (error) return { status: 'error', message: error.code === '23505' ? 'Bu Instagram profili allaqachon qo‘shilgan.' : 'Saqlab bo‘lmadi.' };
@@ -160,8 +169,12 @@ export async function updateAgentProfile(id: string, _: ActionState, fd: FormDat
   if (!isUuid(id)) return { status: 'error', message: 'Profil topilmadi.' };
   const parsed = readProfileForm(fd);
   if (!parsed.success) return { status: 'error', message: 'Formadagi xatolarni tuzating.', fieldErrors: fieldErrorsFrom(parsed.error.issues) };
-  const { error } = await db().from('agent_profiles').update({ ...parsed.data, colors: parsed.data.colors as Json }).eq('id', id);
+  // Story times set → the number of times is the number of Stories a day.
+  const data = { ...parsed.data, ...(parsed.data.story_times.length ? { stories_per_day: parsed.data.story_times.length } : {}) };
+  const { error } = await db().from('agent_profiles').update({ ...data, colors: parsed.data.colors as Json }).eq('id', id);
   if (error) return { status: 'error', message: error.code === '23505' ? 'Bu Instagram profili boshqa mijozda bor.' : 'Saqlab bo‘lmadi.' };
+  // Story only: carousels planned earlier and not started are removed (generated ones stay).
+  if (!parsed.data.carousel_enabled) await db().rpc('agents_drop_unstarted_carousels', { p_profile: id });
   await db().rpc('agents_plan', { p_profile: id, p_days: 3 });
   revalidatePath(`/agents/profillar/${id}`);
   return { status: 'success', message: 'Saqlandi.' };
@@ -423,8 +436,9 @@ async function activeJob(itemId: string) {
 export async function generateAgentNow(profileId: string, kind: 'story' | 'carousel'): Promise<AgentResult & { itemId?: string }> {
   const me = await requireAgents();
   if (!isUuid(profileId) || !['story', 'carousel'].includes(kind)) return { ok: false, message: 'Topilmadi.' };
-  const { data: p } = await db().from('agent_profiles').select('id, status, emergency_pause').eq('id', profileId).maybeSingle();
+  const { data: p } = await db().from('agent_profiles').select('id, status, emergency_pause, carousel_enabled').eq('id', profileId).maybeSingle();
   if (!p || p.status === 'archived') return { ok: false, message: 'Mijoz topilmadi.' };
+  if (kind === 'carousel' && !p.carousel_enabled) return { ok: false, message: 'Bu mijoz uchun faqat Story (karusel sozlamada o‘chirilgan).' };
   if (p.emergency_pause) return { ok: false, message: 'Bu mijoz uchun favqulodda to‘xtatish yoqilgan.' };
   const today = agencyDateKey();
   const { data: rows } = await db().from('agent_items').select('slot').eq('profile_id', profileId).eq('kind', kind).eq('target_date', today);

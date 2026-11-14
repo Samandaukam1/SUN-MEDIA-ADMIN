@@ -14,7 +14,7 @@ const STATUS = { active: { label: 'Faol', tone: 'success' }, paused: { label: 'P
 export default async function AgentProfiles({ searchParams }: { searchParams: Promise<{ yangi?: string }> }) {
   const sp = await searchParams;
   const [{ data: profiles }, { data: logos }, { data: clients }, { data: briefs }] = await Promise.all([
-    db().from('agent_profiles').select('id, name, instagram_username, industry, status, emergency_pause, stories_per_day, carousel_every_days').neq('status', 'archived').order('name'),
+    db().from('agent_profiles').select('id, name, instagram_username, industry, status, emergency_pause, stories_per_day, carousel_every_days, carousel_enabled, story_times').neq('status', 'archived').order('name'),
     db().from('agent_assets').select('profile_id, storage_path').eq('kind', 'logo').is('archived_at', null),
     db().from('clients').select('id, name').order('name').limit(500),
     db().from('brief_sessions').select('id, company_hint, completed_at, prospect:prospects(name)').eq('status', 'completed').order('completed_at', { ascending: false }).limit(50),
@@ -58,7 +58,7 @@ export default async function AgentProfiles({ searchParams }: { searchParams: Pr
                       <p className="truncate font-semibold">{p.name}</p>
                       <p className="truncate text-[12.5px] text-muted">{[p.instagram_username ? `@${p.instagram_username}` : null, p.industry].filter(Boolean).join(' · ') || '—'}</p>
                       <p className="text-[12px] text-subtle">
-                        {p.stories_per_day} Story/kun · karusel har {p.carousel_every_days} kunda
+                        {p.story_times.length ? `${p.story_times.length} Story/kun (${p.story_times.map((t) => t.slice(0, 5)).join(', ')})` : `${p.stories_per_day} Story/kun`} · {p.carousel_enabled ? `karusel har ${p.carousel_every_days} kunda` : 'faqat Story'}
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
